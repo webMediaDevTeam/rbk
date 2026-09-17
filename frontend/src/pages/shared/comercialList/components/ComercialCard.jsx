@@ -1,7 +1,7 @@
 import { Pencil, Power, Trash2 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
-import UserAvatar from '../../components/UserAvatar.jsx'
-import RowMenu from '../../components/RowMenu.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import RowMenu from '@/pages/shared/components/RowMenu.jsx'
 
 export default function ComercialCard({ comercial, onAvatarClick, onToggleStatus, onDelete, canDelete, onEdit }) {
   const profil = comercial.profil

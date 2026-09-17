@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { clearSession, getToken } from '../lib/auth.js'
+import { clearSession, getToken } from '@/lib/auth.js'
 
 const api = axios.create({
   baseURL: `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/v1`,

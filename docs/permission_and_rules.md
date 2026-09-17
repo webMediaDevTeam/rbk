@@ -22,3 +22,6 @@
   * If 1 month passes in the "Boîte Vocale" state without resolution, the client becomes available to other commercials and is permanently blocked from the original commercial.
 * **Case "Blacklist":** The client is immediately blocked and becomes unavailable to all commercials.
 * **Case "Unblacklist":** When an Admin unblocks a client, the client becomes fully available again and all previous reservations are cleared.
+
+
+yes and no and black list and boit vocal are client resavrtion and clation sataus when some one  od one ofthe same thme in the histoy page for all of them add note optional 

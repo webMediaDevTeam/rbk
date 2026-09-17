@@ -5,7 +5,7 @@ import {
   updateEntrepriseApi,
   deleteEntrepriseApi,
   toggleEntrepriseStatusApi,
-} from '../../../api/admin.api.js'
+} from '@/api/admin.api.js'
 
 export function useEntrepriseList(params = {}) {
   return useQuery({

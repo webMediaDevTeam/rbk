@@ -1,13 +1,20 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Home } from 'lucide-react'
-import ClientTable from '../ClientList/components/ClientTable.jsx'
-import Pagination from '../../shared/users/components/Pagination.jsx'
-import { api } from '../../../api/client.js'
+import { useIsDesktop } from '@/hooks/use-mobile.js'
+import ClientTable from '@/pages/comercial/ClientList/components/ClientTable.jsx'
+import ClientCard from '@/pages/comercial/ClientList/components/ClientCard.jsx'
+import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import { api } from '@/api/client.js'
 import { useQuery } from '@tanstack/react-query'
 
 export default function MesClientsPage() {
+  const navigate = useNavigate()
+  const isDesktop = useIsDesktop()
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [sortBy, setSortBy] = useState('created_at')
+  const [sortOrder, setSortOrder] = useState('desc')
 
   const { data, isLoading } = useQuery({
     queryKey: ['mes-clients', currentPage, rowsPerPage],
@@ -16,6 +23,15 @@ export default function MesClientsPage() {
 
   const clients = data?.data?.clients ?? []
   const total = data?.data?.pagination?.total ?? 0
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(column)
+      setSortOrder('asc')
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -34,8 +50,18 @@ export default function MesClientsPage() {
 
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
+      ) : isDesktop ? (
+        <ClientTable
+          clients={clients}
+          sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
+          onViewDetail={(c) => navigate(`/mes-clients/${c.id}`)}
+        />
       ) : (
-        <ClientTable clients={clients} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {clients.map((c) => (
+            <ClientCard key={c.id} client={c} onViewDetail={(cl) => navigate(`/mes-clients/${cl.id}`)} />
+          ))}
+        </div>
       )}
 
       <Pagination

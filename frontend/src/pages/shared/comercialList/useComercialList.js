@@ -6,7 +6,7 @@ import {
   deleteCommercialApi,
   toggleCommercialStatusApi,
   statistiquesCommerciauxApi,
-} from '../../../api/entreprise.api.js'
+} from '@/api/entreprise.api.js'
 
 export function useComercialList(params = {}) {
   return useQuery({

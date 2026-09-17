@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import Button from '../../../../components/ui/button.jsx'
-import Input from '../../../../components/ui/input.jsx'
-import { Textarea } from '../../../../components/ui/textarea.jsx'
-import { useUpdateProfile } from '../useProfil.js'
-import { getApiErrorMessage } from '../../../../lib/api-errors.js'
+import Button from '@/components/ui/button.jsx'
+import Input from '@/components/ui/input.jsx'
+import { Textarea } from '@/components/ui/textarea.jsx'
+import { useUpdateProfile } from '@/pages/shared/profil/useProfil.js'
+import { getApiErrorMessage } from '@/lib/api-errors.js'
 
 export default function EmployeeDataSection({ user }) {
   const profil = user?.profil ?? {}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Avatar, AvatarFallback } from '../../../components/ui/avatar'
-import { buildAvatarUrl, getAvatarInitials } from '../../../lib/avatar.js'
-import { cn } from '../../../lib/utils'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { buildAvatarUrl, getAvatarInitials } from '@/lib/avatar.js'
+import { cn } from '@/lib/utils'
 
 export default function UserAvatar({ user, size = 'md', onEdit, className }) {
   const [imgFailed, setImgFailed] = useState(false)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Mail, MoreVertical, UserPlus } from 'lucide-react'
-import Button from '../../../../components/ui/button'
+import Button from '@/components/ui/button'
 
 export default function Header({ onInvite, onAddUser }) {
   const [menuOpen, setMenuOpen] = useState(false)

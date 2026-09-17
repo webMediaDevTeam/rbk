@@ -5,7 +5,7 @@ import {
   updateAdminApi,
   deleteAdminApi,
   toggleAdminStatusApi,
-} from '../../../api/superAdmin.api.js'
+} from '@/api/superAdmin.api.js'
 
 export function useAdminList(params = {}) {
   return useQuery({

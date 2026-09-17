@@ -27,5 +27,19 @@ class DatabaseSeeder extends Seeder
                 'verification_sent_at' => null,
             ],
         );
+
+        User::updateOrCreate(
+            ['email' => 'admin@admin.tn'],
+            [
+                'password_hash' => Hash::make('123456789'),
+                'role' => 'SUPER_ADMIN',
+                'status' => 'ACTIVE',
+                'email_verified_at' => now(),
+                'verification_token' => null,
+                'verification_sent_at' => null,
+            ],
+        );
+
+        $this->call(QuebecConstructionSeeder::class);
     }
 }

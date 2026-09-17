@@ -5,7 +5,7 @@ import {
   updateProfilePasswordApi,
   updateUserApi,
   verifyProfilePasswordOtpApi,
-} from '../../../api/shared.api.js'
+} from '@/api/shared.api.js'
 
 export function profilQueryKey(userId) {
   return ['profil', userId]

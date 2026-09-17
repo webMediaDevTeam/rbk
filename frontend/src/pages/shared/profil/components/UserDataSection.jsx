@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import Badge from '../../../../components/ui/badge.jsx'
-import Button from '../../../../components/ui/button.jsx'
-import Input from '../../../../components/ui/input.jsx'
+import Badge from '@/components/ui/badge.jsx'
+import Button from '@/components/ui/button.jsx'
+import Input from '@/components/ui/input.jsx'
 import { ROLE_LABELS } from './SettingsSidebar.jsx'
-import { useUpdateProfile } from '../useProfil.js'
-import { getApiErrorMessage } from '../../../../lib/api-errors.js'
+import { useUpdateProfile } from '@/pages/shared/profil/useProfil.js'
+import { getApiErrorMessage } from '@/lib/api-errors.js'
 
 export default function UserDataSection({ user, role }) {
   const [values, setValues] = useState({

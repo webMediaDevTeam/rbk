@@ -1,5 +1,5 @@
 import { jsx, jsxs } from "react/jsx-runtime";
-import { cn } from "../lib/utils";
+import { cn } from "@/lib/utils";
 function Logo({ className, ...props }) {
   return /* @__PURE__ */ jsxs(
     "svg",

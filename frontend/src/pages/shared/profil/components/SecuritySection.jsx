@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { AlertCircle, CheckCircle2, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react'
-import Button from '../../../../components/ui/button.jsx'
-import Input from '../../../../components/ui/input.jsx'
+import Button from '@/components/ui/button.jsx'
+import Input from '@/components/ui/input.jsx'
 import {
   InputOTP,
   InputOTPGroup,
   InputOTPSlot,
-} from '../../../../components/ui/input-otp.jsx'
+} from '@/components/ui/input-otp.jsx'
 import {
   useSendProfilePasswordOtp,
   useUpdateProfilePassword,
   useVerifyProfilePasswordOtp,
-} from '../useProfil.js'
-import { getApiErrorMessage } from '../../../../lib/api-errors.js'
+} from '@/pages/shared/profil/useProfil.js'
+import { getApiErrorMessage } from '@/lib/api-errors.js'
 
 const MIN_PASSWORD_LENGTH = 8
 

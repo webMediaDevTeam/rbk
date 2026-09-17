@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Client extends Model
@@ -19,33 +18,26 @@ class Client extends Model
         'categories_id',
         'rbq_data',
         'status',
-        
         'is_blacklisted',
-        // Licence
+        'blocked_until',
         'licence_number',
         'licence_propre',
         'intervenant_name',
         'licence_status',
-        // Identification
         'neq',
         'full_address',
         'municipality',
         'administrative_region',
         'phone',
         'email',
-        // Répondants
         'respondent_count',
         'respondents',
-        // Catégories
         'sub_category_count',
         'authorized_categories',
-        // Cautionnement
         'surety_company',
         'surety_amount',
-        // Dates
         'licence_start_date',
         'licence_end_date',
-        // Représentant
         'representative_name',
     ];
 
@@ -62,17 +54,8 @@ class Client extends Model
             'surety_amount' => 'decimal:2',
             'licence_start_date' => 'date',
             'licence_end_date' => 'date',
+            'blocked_until' => 'datetime',
         ];
-    }
-
-    public function enterprise(): BelongsTo
-    {
-        return $this->belongsTo(Enterprise::class);
-    }
-
-    public function assignedComercial(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'assigned_comercial_id');
     }
 
     public function reservations(): HasMany
@@ -80,8 +63,28 @@ class Client extends Model
         return $this->hasMany(Reservation::class);
     }
 
+    public function activeReservation()
+    {
+        return $this->hasOne(Reservation::class)->latest('created_at');
+    }
+
+    public function callOutcomes(): HasMany
+    {
+        return $this->hasMany(CallOutcome::class);
+    }
+
     public function notes(): HasMany
     {
         return $this->hasMany(Note::class);
+    }
+
+    public function getEnterpriseNameAttribute(): ?string
+    {
+        return $this->rbq_data['entreprise_name'] ?? null;
+    }
+
+    public function getNameAttribute(): ?string
+    {
+        return $this->rbq_data['name'] ?? null;
     }
 }

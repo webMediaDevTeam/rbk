@@ -1,5 +1,5 @@
 import { Check, Moon, Monitor, Sun } from 'lucide-react'
-import { useTheme } from '../../../../context/theme-provider.jsx'
+import { useTheme } from '@/context/theme-provider.jsx'
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Clair', description: 'Utiliser un thème clair.', icon: Sun },

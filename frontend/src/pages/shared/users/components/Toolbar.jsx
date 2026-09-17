@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Filter, LayoutGrid, List, X } from 'lucide-react'
-import Button from '../../../../components/ui/button'
-import Input from '../../../../components/ui/input'
-import Select from '../../../../components/ui/select'
+import Button from '@/components/ui/button'
+import Input from '@/components/ui/input'
+import Select from '@/components/ui/select'
 
 const STATUS_OPTIONS = ['Active', 'Suspended', 'Invited']
 const ROLE_OPTIONS = ['Admin', 'Manager', 'Cashier']

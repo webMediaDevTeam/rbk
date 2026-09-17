@@ -1,3 +1,3 @@
-import StatusBadge from '../../components/StatusBadge.jsx'
+import StatusBadge from '@/pages/shared/components/StatusBadge.jsx'
 
 export default StatusBadge

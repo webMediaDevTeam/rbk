@@ -1,4 +1,4 @@
-import Badge from '../../../../components/ui/badge.jsx'
+import Badge from '@/components/ui/badge.jsx'
 
 export default function ClientStatusBadge({ status, isBlacklisted }) {
   if (isBlacklisted) {
@@ -6,14 +6,20 @@ export default function ClientStatusBadge({ status, isBlacklisted }) {
   }
 
   const variants = {
-    ACTIVE: 'success',
-    INACTIVE: 'secondary',
+    AVAILABLE: 'success',
+    RESERVED: 'warning',
+    VOICEMAIL: 'info',
+    BLOCKED: 'destructive',
+    BLACKLISTED: 'destructive',
     ARCHIVED: 'outline',
   }
 
   const labels = {
-    ACTIVE: 'Actif',
-    INACTIVE: 'Inactif',
+    AVAILABLE: 'Disponible',
+    RESERVED: 'Réservé',
+    VOICEMAIL: 'Boîte vocale',
+    BLOCKED: 'Bloqué',
+    BLACKLISTED: 'Liste noire',
     ARCHIVED: 'Archivé',
   }
 

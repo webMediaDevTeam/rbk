@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import SearchBar from '../../../../components/ui/search-bar.jsx'
-import Select from '../../../../components/ui/select'
-import { api } from '../../../../api/client.js'
+import SearchBar from '@/components/ui/search-bar.jsx'
+import Select from '@/components/ui/select'
+import { api } from '@/api/client.js'
 
 export default function ClientToolbar({
   search,

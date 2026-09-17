@@ -1,9 +1,9 @@
 import { Pencil, Power, Trash2 } from 'lucide-react'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import StatusBadge from './StatusBadge'
-import RowMenu from '../../../shared/components/RowMenu.jsx'
-import SortHeader from '../../../shared/components/SortHeader.jsx'
-import UserAvatar from '../../../shared/components/UserAvatar.jsx'
+import RowMenu from '@/pages/shared/components/RowMenu.jsx'
+import SortHeader from '@/pages/shared/components/SortHeader.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
 
 export default function AdminTable({ admins, sortBy, sortOrder, onSort, onToggleStatus, onDelete, onAvatarClick, onEdit }) {
   return (

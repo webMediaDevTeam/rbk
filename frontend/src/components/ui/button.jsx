@@ -1,4 +1,5 @@
-import { cn } from '../../lib/utils'
+import { Slot } from '@radix-ui/react-slot'
+import { cn } from '@/lib/utils'
 
 const variants = {
   default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
@@ -21,10 +22,13 @@ export default function Button({
   variant = 'default',
   size = 'md',
   className,
+  asChild = false,
   ...props
 }) {
+  const Comp = asChild ? Slot : 'button'
+
   return (
-    <button
+    <Comp
       className={cn(
         'inline-flex items-center justify-center font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
         variants[variant],

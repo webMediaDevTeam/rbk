@@ -8,7 +8,7 @@ import SecuritySection from './components/SecuritySection.jsx'
 import EmployeeDataSection from './components/EmployeeDataSection.jsx'
 import EnterpriseDataSection from './components/EnterpriseDataSection.jsx'
 import ThemeSection from './components/ThemeSection.jsx'
-import { useAuth } from '../../../context/AuthContext.jsx'
+import { useAuth } from '@/context/AuthContext.jsx'
 import { useProfil, profilQueryKey } from './useProfil.js'
 
 export default function ProfilPage() {

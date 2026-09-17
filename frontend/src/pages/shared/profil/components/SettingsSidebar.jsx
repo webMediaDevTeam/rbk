@@ -1,5 +1,5 @@
 import { Camera, User, ShieldCheck, Building2, Briefcase, Palette } from 'lucide-react'
-import { cn } from '../../../../lib/utils'
+import { cn } from '@/lib/utils'
 
 export const ROLE_LABELS = {
   SUPER_ADMIN: 'Super Admin',

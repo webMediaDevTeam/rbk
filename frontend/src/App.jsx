@@ -12,6 +12,7 @@ import {
   Building2,
   ShieldCheck,
   List,
+  Bell,
 } from 'lucide-react'
 
 const ROLE_NAV = {
@@ -90,7 +91,7 @@ const ROLE_NAV = {
       items: [
         { title: 'Tous les clients', path: '/clients', icon: List },
         { title: 'Mes clients', path: '/mes-clients', icon: List },
-        { title: 'Réserver', path: '/reserve-clients', icon: List },
+        { title: 'Rappels', path: '/reminders', icon: Bell },
       ],
     },
     {

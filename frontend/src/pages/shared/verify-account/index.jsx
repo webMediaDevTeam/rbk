@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertCircle, CheckCircle, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Shield } from "lucide-react";
 import { toast } from "sonner";
-import { useTheme } from "../../../context/theme-provider";
-import faviconLight from "../../../assets/brand-icons/rbq_favicon_inverted_white_bg.svg";
-import faviconDark from "../../../assets/brand-icons/rbq_favicon_black_white.svg";
-import { resendVerificationApi, verifyAccountApi } from "../../../api/auth.api";
-import { getApiErrorMessage, getApiFieldErrors } from "../../../lib/api-errors";
+import { useTheme } from "@/context/theme-provider";
+import faviconLight from "@/assets/brand-icons/rbq_favicon_inverted_white_bg.svg";
+import faviconDark from "@/assets/brand-icons/rbq_favicon_black_white.svg";
+import { resendVerificationApi, verifyAccountApi } from "@/api/auth.api";
+import { getApiErrorMessage, getApiFieldErrors } from "@/lib/api-errors";
 
 export default function VerifyAccountPage() {
   const navigate = useNavigate();

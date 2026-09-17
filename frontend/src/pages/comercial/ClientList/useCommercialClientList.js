@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   listCommercialClientsApi,
   getCommercialClientApi,
-} from '../../../api/commercial.api.js'
+} from '@/api/commercial.api.js'
 
 export function useCommercialClientList(params = {}) {
   return useQuery({

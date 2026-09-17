@@ -53,9 +53,12 @@ class User extends Authenticatable
         return $this->hasOne(Employee::class);
     }
 
-    public function assignedClients(): HasMany
+    public function assignedClients()
     {
-        return $this->hasMany(Client::class, 'assigned_comercial_id');
+        return Client::whereHas('reservations', function ($q) {
+            $q->where('comercial_id', $this->id)
+              ->where('expires_at', '>', now());
+        });
     }
 
     public function createdReservations(): HasMany

@@ -23,12 +23,10 @@ class ReservationController extends Controller
 
         $count = (int) $request->input('count', 1);
 
-        // Determine expires_at
         $now = Carbon::now();
         $expires = null;
 
         if ($quick = $request->input('quick')) {
-            // quick like '1j', '2j', '1w'
             if (preg_match('/^(\d+)([hjw])$/i', $quick, $m)) {
                 $num = (int) $m[1];
                 $unit = strtolower($m[2]);
@@ -52,12 +50,18 @@ class ReservationController extends Controller
             return response()->json(['success' => false, 'message' => 'Invalid duration provided.'], 422);
         }
 
+        $user = $request->user();
+
         $reserved = 0;
         $conflicts = [];
 
-        // Candidate clients: not blacklisted and without active reservations
-        $candidatesQuery = Client::where('is_blacklisted', false)
-            ->whereDoesntHave('reservations', fn($q) => $q->where('expires_at', '>', $now))
+        $candidatesQuery = Client::where('status', 'AVAILABLE')
+            ->where('is_blacklisted', false)
+            ->where(fn($q) => $q->whereNull('blocked_until')->orWhere('blocked_until', '<', $now))
+            ->whereDoesntHave('reservations')
+            ->whereDoesntHave('callOutcomes', fn($q) => $q
+                ->where('comercial_id', $user->id)
+                ->whereIn('outcome', ['NON', 'BOITE_VOCALE']))
             ->orderBy('created_at');
 
         $candidates = $candidatesQuery->limit($count * 3)->get();
@@ -67,12 +71,10 @@ class ReservationController extends Controller
 
             DB::beginTransaction();
             try {
-                // lock the client row
                 $c = Client::where('id', $client->id)->lockForUpdate()->first();
 
-                $active = $c->reservations()->where('expires_at', '>', $now)->first();
+                $active = $c->reservations()->latest('created_at')->first();
                 if ($active) {
-                    // conflict
                     $conflicts[] = [
                         'client_id' => $c->id,
                         'name' => $c->rbq_data['name'] ?? null,
@@ -84,19 +86,19 @@ class ReservationController extends Controller
                     continue;
                 }
 
-                // create reservation
-                $reservation = Reservation::create([
+                Reservation::create([
                     'client_id' => $c->id,
-                    'comercial_id' => $request->user()->id,
+                    'comercial_id' => $user->id,
                     'status' => 'RESERVED',
                     'expires_at' => $expires,
                 ]);
+
+                $c->update(['status' => 'RESERVED']);
 
                 $reserved++;
                 DB::commit();
             } catch (\Throwable $e) {
                 DB::rollBack();
-                // treat as conflict
                 $conflicts[] = [
                     'client_id' => $client->id,
                     'name' => $client->rbq_data['name'] ?? null,

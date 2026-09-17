@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, ImagePlus, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import Button from '../../../components/ui/button.jsx'
-import { cn } from '../../../lib/utils.js'
-import { uploadUserAvatarApi } from '../../../api/shared.api.js'
-import { getApiErrorMessage } from '../../../lib/api-errors.js'
-import { buildAvatarUrl } from '../../../lib/avatar.js'
+import Button from '@/components/ui/button.jsx'
+import { cn } from '@/lib/utils.js'
+import { uploadUserAvatarApi } from '@/api/shared.api.js'
+import { getApiErrorMessage } from '@/lib/api-errors.js'
+import { buildAvatarUrl } from '@/lib/avatar.js'
 
 const MAX_SIZE_MB = 2
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']

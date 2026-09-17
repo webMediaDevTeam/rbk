@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, LogOut, Moon, Monitor, Sun, UserRound } from "lucide-react";
-import { useTheme } from "../../context/theme-provider";
-import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "@/context/theme-provider";
+import { useAuth } from "@/context/AuthContext";
 
 function useDropdown() {
   const [open, setOpen] = useState(false);

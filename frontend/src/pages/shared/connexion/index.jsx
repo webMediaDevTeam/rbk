@@ -3,20 +3,20 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
-import { useTheme } from "../../../context/theme-provider";
-import { useAuth } from "../../../context/AuthContext";
-import faviconLight from "../../../assets/brand-icons/rbq_favicon_inverted_white_bg.svg";
-import faviconDark from "../../../assets/brand-icons/rbq_favicon_black_white.svg";
-import { useConnexion } from "../../../hooks/useConnexion";
-import { useForgotPassword } from "../../../hooks/useForgotPassword";
+import { useTheme } from "@/context/theme-provider";
+import { useAuth } from "@/context/AuthContext";
+import faviconLight from "@/assets/brand-icons/rbq_favicon_inverted_white_bg.svg";
+import faviconDark from "@/assets/brand-icons/rbq_favicon_black_white.svg";
+import { useConnexion } from "@/hooks/useConnexion";
+import { useForgotPassword } from "@/hooks/useForgotPassword";
 import {
   resetForgotPasswordApi,
   sendLoginOtpApi,
   verifyForgotPasswordOtpApi,
   verifyLoginOtpApi,
-} from "../../../api/auth.api";
-import { getApiErrorMessage, getApiFieldErrors } from "../../../lib/api-errors";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "../../../components/ui/input-otp";
+} from "@/api/auth.api";
+import { getApiErrorMessage, getApiFieldErrors } from "@/lib/api-errors";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 const MODES = [
   { id: "connexion", label: "Connexion" },

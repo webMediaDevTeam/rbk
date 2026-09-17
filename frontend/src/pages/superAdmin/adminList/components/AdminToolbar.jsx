@@ -1,5 +1,5 @@
-import SearchBar from '../../../../components/ui/search-bar.jsx'
-import Select from '../../../../components/ui/select'
+import SearchBar from '@/components/ui/search-bar.jsx'
+import Select from '@/components/ui/select'
 
 export default function AdminToolbar({
   search,

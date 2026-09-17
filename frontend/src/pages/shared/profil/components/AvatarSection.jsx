@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Image } from 'lucide-react'
-import Button from '../../../../components/ui/button.jsx'
-import UserAvatar from '../../components/UserAvatar.jsx'
-import AvatarUpdateModal from '../../components/AvatarUpdateModal.jsx'
-import { buildAvatarUrl } from '../../../../lib/avatar.js'
+import Button from '@/components/ui/button.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal.jsx'
+import { buildAvatarUrl } from '@/lib/avatar.js'
 
 export default function AvatarSection({ user, queryKey }) {
   const [open, setOpen] = useState(false)

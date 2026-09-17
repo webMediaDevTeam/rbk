@@ -1,5 +1,5 @@
 import { MoreHorizontal } from 'lucide-react'
-import { Avatar, AvatarFallback } from '../../../../components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import StatusBadge from './StatusBadge'
 import RoleBadge from './RoleBadge'
 

@@ -1,16 +1,19 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Home } from 'lucide-react'
-import { useAuth } from '../../../context/AuthContext.jsx'
-import { useDebouncedValue } from '../../../hooks/use-debounced-value.js'
-import { useIsDesktop } from '../../../hooks/use-mobile.js'
+import { useAuth } from '@/context/AuthContext.jsx'
+import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
+import { useIsDesktop } from '@/hooks/use-mobile.js'
 import { useCommercialClientList } from './useCommercialClientList.js'
 import ClientTable from './components/ClientTable.jsx'
+import ClientCard from './components/ClientCard.jsx'
 import ClientToolbar from './components/ClientToolbar.jsx'
-import Pagination from '../../shared/users/components/Pagination.jsx'
-import ReservationModal from '../fileDAttente/components/ReservationModal.jsx'
-import Button from '../../../components/ui/button.jsx'
+import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import ReservationModal from './components/ReservationModal.jsx'
+import Button from '@/components/ui/button.jsx'
 
 export default function ClientListPage() {
+  const navigate = useNavigate()
   const { canAccess } = useAuth()
   const isDesktop = useIsDesktop()
   const [search, setSearch] = useState('')
@@ -73,11 +76,18 @@ export default function ClientListPage() {
 
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
-      ) : (
+      ) : isDesktop ? (
         <ClientTable
           clients={clients}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
+          onViewDetail={(c) => navigate(`/clients/${c.id}`)}
         />
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {clients.map((c) => (
+            <ClientCard key={c.id} client={c} onViewDetail={(cl) => navigate(`/clients/${cl.id}`)} />
+          ))}
+        </div>
       )}
 
       <Pagination

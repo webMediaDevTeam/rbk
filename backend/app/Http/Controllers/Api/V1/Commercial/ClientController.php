@@ -11,16 +11,12 @@ class ClientController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        // Return all clients (not scoped to the requesting comercial/enterprise)
-        $query = Client::with(['enterprise']);
+        $query = Client::query();
 
-        // Allow filtering by a single category id (sent as `category_id`)
         if ($categoryId = $request->input('category_id')) {
-            // match any client who has this category id in the JSON `categories_id` column
             $query->whereJsonContains('categories_id', $categoryId);
         }
 
-        // Search by client fields
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
@@ -33,11 +29,10 @@ class ClientController extends Controller
             });
         }
 
-        // Enforce only non-blacklisted, available clients for commercial listing
         $query->where('is_blacklisted', false)
-              ->where('status', 'AVAILABLE');
+              ->where('status', 'AVAILABLE')
+              ->whereDoesntHave('reservations');
 
-        // Sorting
         $sortable = [
             'name'        => 'rbq_data->name',
             'email'       => 'email',
@@ -76,18 +71,13 @@ class ClientController extends Controller
         ]);
     }
 
-    /**
-     * Return clients currently reserved by the authenticated comercial.
-     */
     public function mine(Request $request): JsonResponse
     {
         $user = $request->user();
-        $now = \Illuminate\Support\Carbon::now();
 
-        $query = Client::with(['enterprise'])
-            ->whereHas('reservations', function ($q) use ($user, $now) {
-                $q->where('comercial_id', $user->id)
-                  ->where('expires_at', '>', $now);
+        $query = Client::query()
+            ->whereHas('reservations', function ($q) use ($user) {
+                $q->where('comercial_id', $user->id);
             });
 
         $perPage = min((int) $request->input('per_page', 20), 100);
@@ -111,10 +101,7 @@ class ClientController extends Controller
 
     public function show(Request $request, string $id): JsonResponse
     {
-        $user = $request->user();
-
-        $client = Client::with(['enterprise', 'assignedComercial', 'reservations', 'notes'])
-            ->where('assigned_comercial_id', $user->id)
+        $client = Client::with(['reservations.comercial', 'notes', 'callOutcomes.comercial'])
             ->find($id);
 
         if (!$client) {
@@ -135,7 +122,7 @@ class ClientController extends Controller
     protected function formatClient(Client $client, bool $detailed = false): array
     {
         $name = $client->rbq_data['name'] ?? '—';
-        $enterpriseName = $client->enterprise?->name ?? '—';
+        $enterpriseName = $client->rbq_data['entreprise_name'] ?? '—';
 
         $base = [
             'id' => $client->id,
@@ -154,6 +141,17 @@ class ClientController extends Controller
         ];
 
         if ($detailed) {
+            $activeReservation = $client->reservations
+                ->sortByDesc('created_at')
+                ->first();
+
+            $myReservation = $client->reservations
+                ->where('comercial_id', auth()->id())
+                ->sortByDesc('created_at')
+                ->first();
+
+            $assignedCommercial = $activeReservation?->comercial;
+
             $base = array_merge($base, [
                 'neq' => $client->neq,
                 'full_address' => $client->full_address,
@@ -170,10 +168,35 @@ class ClientController extends Controller
                 'surety_company' => $client->surety_company,
                 'surety_amount' => $client->surety_amount,
                 'representative_name' => $client->representative_name,
-                'assigned_comercial_id' => $client->assigned_comercial_id,
-                'enterprise_id' => $client->enterprise_id,
+                'enterprise_id' => $client->rbq_data['entreprise_id'] ?? null,
+                'assigned_comercial' => $assignedCommercial ? [
+                    'id' => $assignedCommercial->id,
+                    'email' => $assignedCommercial->email,
+                    'first_name' => $assignedCommercial->first_name,
+                    'last_name' => $assignedCommercial->last_name,
+                ] : null,
                 'reservations_count' => $client->reservations_count ?? $client->reservations()->count(),
                 'notes_count' => $client->notes_count ?? $client->notes()->count(),
+                'blocked_until' => $client->blocked_until,
+                'call_outcomes' => $client->callOutcomes->map(fn ($o) => [
+                    'id' => $o->id,
+                    'outcome' => $o->outcome,
+                    'note' => $o->note,
+                    'recall_amount' => $o->recall_amount,
+                    'recall_unit' => $o->recall_unit,
+                    'created_at' => $o->created_at,
+                    'comercial' => $o->comercial ? [
+                        'id' => $o->comercial->id,
+                        'first_name' => $o->comercial->first_name,
+                        'last_name' => $o->comercial->last_name,
+                    ] : null,
+                ]),
+                'my_reservation' => $myReservation ? [
+                    'id' => $myReservation->id,
+                    'expires_at' => $myReservation->expires_at,
+                    'rappel_after' => $myReservation->rappel_after,
+                    'rappel_type' => $myReservation->rappel_type,
+                ] : null,
             ]);
         }
 

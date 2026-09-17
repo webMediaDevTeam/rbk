@@ -6,7 +6,7 @@ import {
   useFormState
 } from "react-hook-form";
 import { Slot } from "@radix-ui/react-slot";
-import { cn } from "../../lib/utils";
+import { cn } from "@/lib/utils";
 import { Label } from "./label";
 const Form = FormProvider;
 const FormFieldContext = React.createContext(

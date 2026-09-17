@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-.PHONY: help dev up build logs migrate seed migrate-seed down stop restart artisan frontend-watch links
+.PHONY: help dev up build logs migrate seed migrate-seed down stop restart artisan frontend-watch links install
 
 help:
 	@echo "Make targets:"
@@ -10,19 +10,20 @@ help:
 	@echo "  migrate        Run Laravel migrations inside backend container"
 	@echo "  seed           Run Laravel db:seed inside backend container"
 	@echo "  migrate-seed   Run migrations then seed"
+	@echo "  install        Install backend vendor dependencies (composer install)"
 	@echo "  frontend-watch Run frontend dev server (inside container)"
 	@echo "  down|stop      Stop and remove containers"
 	@echo "  restart        Restart services"
 	@echo "  artisan CMD=... Run arbitrary artisan command in backend"
 	@echo "  links          Print common service URLs and connection info"
 
-dev:
+dev: install
 	@echo "Starting full stack (foreground) with hot reload..."
 	@$(MAKE) links
 	@echo "Bringing up frontend (Vite) and backend-dev (artisan serve) with hot reload"
 	docker compose up --build frontend backend-dev
 
-up:
+up: install
 	@echo "Starting stack in background..."
 	docker compose up -d --build
 	@$(MAKE) links
@@ -37,17 +38,22 @@ logs:
 	docker compose logs -f
 	@$(MAKE) links
 
-migrate:
+install:
+	@echo "Installing backend dependencies (composer install)..."
+	docker compose run --rm backend composer install --no-interaction --prefer-dist
+	@$(MAKE) links
+
+migrate: install
 	@echo "Running migrations inside backend container..."
 	docker compose run --rm backend php artisan migrate --force
 	@$(MAKE) links
 
-seed:
+seed: install
 	@echo "Running db:seed inside backend container..."
 	docker compose run --rm backend php artisan db:seed --force
 	@$(MAKE) links
 
-migrate-seed:
+migrate-seed: install
 	@echo "Running migrate then seed inside backend container..."
 	docker compose run --rm backend sh -c "php artisan migrate --force && php artisan db:seed --force"
 	@$(MAKE) links
@@ -65,7 +71,7 @@ restart:
 	@echo "Restarting services..."
 	docker compose restart
 
-artisan:
+artisan: install
 	@if [ -z "$(cmd)" ]; then \
 		echo "Usage: make artisan cmd=\"route:list\""; exit 1; \
 	fi

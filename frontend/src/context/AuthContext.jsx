@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { clearSession, getStoredUser, setSession, homeForRole, hasPermission, canAccess, outranks } from '../lib/auth.js'
+import { clearSession, getStoredUser, setSession, homeForRole, hasPermission, canAccess, outranks } from '@/lib/auth.js'
 
 const AuthContext = createContext(null)
 

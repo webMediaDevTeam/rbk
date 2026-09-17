@@ -1,0 +1,99 @@
+import Badge from '@/components/ui/badge.jsx'
+
+function DetailRow({ label, value }) {
+  return (
+    <div>
+      <span className="text-muted-foreground text-xs">{label}</span>
+      <p className="text-sm text-foreground">{value ?? '—'}</p>
+    </div>
+  )
+}
+
+function DetailSection({ title, children }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">{title}</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+export default function ClientDetailsTab({ client }) {
+  return (
+    <div className="space-y-6">
+      <DetailSection title="Identification">
+        <DetailRow label="E-mail" value={client.email} />
+        <DetailRow label="Téléphone" value={client.phone} />
+        <DetailRow label="NEQ" value={client.neq} />
+        <DetailRow label="Municipalité" value={client.municipality} />
+        <DetailRow label="Région administrative" value={client.administrative_region} />
+        <DetailRow label="Adresse complète" value={client.full_address} />
+      </DetailSection>
+
+      <DetailSection title="Licence">
+        <DetailRow label="Numéro de licence" value={client.licence_number} />
+        <DetailRow label="Statut" value={client.licence_status} />
+        <DetailRow label="Intervenant" value={client.intervenant_name} />
+        <DetailRow label="Licence propre" value={client.licence_propre ? 'Oui' : 'Non'} />
+        <DetailRow
+          label="Date de début"
+          value={client.licence_start_date ? new Date(client.licence_start_date).toLocaleDateString('fr-FR') : null}
+        />
+        <DetailRow
+          label="Date de fin"
+          value={client.licence_end_date ? new Date(client.licence_end_date).toLocaleDateString('fr-FR') : null}
+        />
+      </DetailSection>
+
+      {client.authorized_categories && client.authorized_categories.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Catégories</h3>
+          <div className="flex flex-wrap gap-1.5">
+            {client.authorized_categories.map((cat, i) => (
+              <Badge key={i} variant="info">{cat}</Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <DetailSection title="Cautionnement">
+        <DetailRow label="Compagnie" value={client.surety_company} />
+        <DetailRow
+          label="Montant"
+          value={client.surety_amount != null
+            ? new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' }).format(client.surety_amount)
+            : null}
+        />
+      </DetailSection>
+
+      {client.respondents && client.respondents.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">
+            Répondants ({client.respondent_count})
+          </h3>
+          <div className="space-y-2">
+            {client.respondents.map((r, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <span className="font-medium">{r.name}</span>
+                {r.role && <span className="text-xs text-muted-foreground">({r.role})</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <DetailSection title="Représentant">
+        <DetailRow label="Représentant" value={client.representative_name} />
+      </DetailSection>
+
+      {(client.reservations_count != null || client.notes_count != null) && (
+        <DetailSection title="Activité">
+          <DetailRow label="Réservations" value={client.reservations_count} />
+          <DetailRow label="Notes" value={client.notes_count} />
+        </DetailSection>
+      )}
+    </div>
+  )
+}

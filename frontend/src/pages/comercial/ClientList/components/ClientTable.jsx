@@ -1,9 +1,11 @@
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../../components/ui/table'
+import { Eye } from 'lucide-react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import ClientStatusBadge from './ClientStatusBadge'
-import SortHeader from '../../../shared/components/SortHeader.jsx'
-import UserAvatar from '../../../shared/components/UserAvatar.jsx'
+import SortHeader from '@/pages/shared/components/SortHeader.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import RowMenu from '@/pages/shared/components/RowMenu.jsx'
 
-export default function ClientTable({ clients, sortBy, sortOrder, onSort }) {
+export default function ClientTable({ clients, sortBy, sortOrder, onSort, onViewDetail }) {
   return (
     <div className="rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
       <Table>
@@ -52,9 +54,16 @@ export default function ClientTable({ clients, sortBy, sortOrder, onSort }) {
               <TableCell><ClientStatusBadge status={c.status} isBlacklisted={c.is_blacklisted} /></TableCell>
               <TableCell className="text-muted-foreground">{c.licence_end_date ? new Date(c.licence_end_date).toLocaleDateString('fr-FR') : '—'}</TableCell>
               <TableCell className="text-right">
-                <div className="flex items-center justify-end gap-1">
-                  <span className="text-xs text-muted-foreground">{c.is_blacklisted ? '⛔' : '✓'}</span>
-                </div>
+                <RowMenu>
+                  {(closeMenu) => (
+                    <button
+                      onClick={() => { onViewDetail?.(c); closeMenu() }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Voir détail
+                    </button>
+                  )}
+                </RowMenu>
               </TableCell>
             </TableRow>
           ))}

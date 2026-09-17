@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import Button from '../../../components/ui/button.jsx'
-import Input from '../../../components/ui/input.jsx'
-import { createUserApi } from '../../../api/shared.api.js'
-import { getApiErrorMessage } from '../../../lib/api-errors.js'
+import Button from '@/components/ui/button.jsx'
+import Input from '@/components/ui/input.jsx'
+import { createUserApi } from '@/api/shared.api.js'
+import { getApiErrorMessage } from '@/lib/api-errors.js'
 
 export default function EnterpriseCreateModal({ open, onClose, queryKey }) {
   const qc = useQueryClient()

@@ -91,7 +91,7 @@ services:
       REVERB_HOST: 0.0.0.0
       REVERB_PORT: 8080
       REDIS_CLIENT: predis
-    command: sh -c "php artisan serve --host=0.0.0.0 --port=8000"
+    command: sh -c "cd /var/www/html/public && php -S 0.0.0.0:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
     ports:
       - "8000:8000"
     networks:

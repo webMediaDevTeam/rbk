@@ -19,6 +19,7 @@ class Reservation extends Model
         'status',
         'rappel_after',
         'rappel_type',
+        'recall_at',
         'expires_at',
     ];
 
@@ -26,6 +27,7 @@ class Reservation extends Model
     {
         return [
             'expires_at' => 'datetime',
+            'recall_at' => 'datetime',
         ];
     }
 

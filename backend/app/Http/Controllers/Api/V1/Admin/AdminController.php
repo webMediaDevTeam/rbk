@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\CallOutcome;
 use App\Models\Client;
 use App\Models\Enterprise;
 use App\Models\User;
 use App\Support\AccountVerificationLinks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class AdminController extends Controller
@@ -63,9 +65,7 @@ class AdminController extends Controller
 
     public function listeNoire(Request $request): JsonResponse
     {
-        $clients = Client::where('is_blacklisted', true)
-            ->with('enterprise')
-            ->get();
+        $clients = Client::where('is_blacklisted', true)->get();
 
         return response()->json([
             'clients' => $clients,
@@ -76,14 +76,26 @@ class AdminController extends Controller
     {
         $client = Client::findOrFail($id);
 
-        $client->update([
-            'status' => 'AVAILABLE',
-            'is_blacklisted' => false,
-        ]);
+        return DB::transaction(function () use ($client, $request) {
+            $client->update([
+                'status' => 'AVAILABLE',
+                'is_blacklisted' => false,
+                'blocked_until' => null,
+            ]);
 
-        return response()->json([
-            'message' => 'Client débloqué avec succès.',
-            'client' => $client->fresh(),
-        ]);
+            $client->reservations()->delete();
+
+            CallOutcome::create([
+                'client_id' => $client->id,
+                'comercial_id' => $request->user()->id,
+                'outcome' => 'UNBLACKLIST',
+                'note' => 'Client débloqué par un administrateur.',
+            ]);
+
+            return response()->json([
+                'message' => 'Client débloqué avec succès.',
+                'client' => $client->fresh(),
+            ]);
+        });
     }
 }
