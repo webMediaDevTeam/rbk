@@ -15,6 +15,9 @@ Route::post('auth/forgot-password/reset', [AuthController::class, 'resetForgotPa
 Route::post('auth/verify-account', [AuthController::class, 'verifyAccount']);
 Route::post('auth/resend-verification', [AuthController::class, 'resendVerification']);
 
+// Public: category list used by frontend filters
+Route::get('categories', [\App\Http\Controllers\Api\V1\Shared\CategoryController::class, 'index']);
+
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);

@@ -6,6 +6,9 @@ import ComercialListPage from '../pages/shared/comercialList/index.jsx'
 import AdminListPage from '../pages/superAdmin/adminList/index.jsx'
 import VerifyAccountPage from '../pages/shared/verify-account/index.jsx'
 import ConnexionPage from '../pages/shared/connexion/index.jsx'
+import ClientListPage from '../pages/comercial/ClientList/index.jsx'
+import MesClientsPage from '../pages/comercial/MesClients/index.jsx'
+import ReserveClientsPage from '../pages/comercial/fileDAttente/index.jsx'
 
 export default function AppRoutes() {
   return (
@@ -15,6 +18,9 @@ export default function AppRoutes() {
       <Route path="/profil" element={<ProfilPage />} />
       <Route path="/entreprises" element={<EntrepriseListPage />} />
       <Route path="/commerciaux" element={<ComercialListPage />} />
+      <Route path="/clients" element={<ClientListPage />} />
+      <Route path="/mes-clients" element={<MesClientsPage />} />
+      <Route path="/reserve-clients" element={<ReserveClientsPage />} />
       <Route path="/admins" element={<AdminListPage />} />
       <Route path="/connexion" element={<ConnexionPage />} />
       <Route path="/verify-account" element={<VerifyAccountPage />} />

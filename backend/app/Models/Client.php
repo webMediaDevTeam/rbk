@@ -15,12 +15,11 @@ class Client extends Model
     public const UPDATED_AT = null;
 
     protected $fillable = [
-        'enterprise_id',
         'categories',
         'categories_id',
         'rbq_data',
         'status',
-        'assigned_comercial_id',
+        
         'is_blacklisted',
         // Licence
         'licence_number',

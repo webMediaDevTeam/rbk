@@ -86,6 +86,14 @@ const ROLE_NAV = {
       ],
     },
     {
+      title: 'Clients',
+      items: [
+        { title: 'Tous les clients', path: '/clients', icon: List },
+        { title: 'Mes clients', path: '/mes-clients', icon: List },
+        { title: 'Réserver', path: '/reserve-clients', icon: List },
+      ],
+    },
+    {
       title: 'Mon compte',
       items: [
         { title: 'Profil', path: '/profil', icon: UserRound },
