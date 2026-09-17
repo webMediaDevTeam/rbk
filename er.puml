@@ -1,0 +1,132 @@
+@startuml
+' Styling
+skinparam monochrome false
+skinparam shadowing false
+skinparam class {
+    BackgroundColor White
+    ArrowColor #00417D
+    BorderColor #00417D
+}
+
+hide empty members
+
+' Enums
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  ENTREPRISE
+  COMERCIAL
+}
+
+enum ClientStatus {
+  AVAILABLE
+  RESERVED
+  BOITE_VOCALE
+  YES
+  NO
+  BLACK_LISTED
+}
+
+enum RappelType {
+  MINUTE
+  HEURE
+  JOUR
+  SEMAINE
+  MOIS
+}
+
+enum NoteType {
+  CALL_LOG
+  TASK
+  GENERAL_NOTE
+}
+
+' Core Entities
+entity "users" as users {
+  * id : UUID <<PK>>
+  --
+  * email : VARCHAR
+  * password_hash : VARCHAR
+  * role : Role
+  * created_at : TIMESTAMP
+}
+
+entity "enterprises" as enterprises {
+  * id : UUID <<PK>>
+  --
+  * user_id : UUID <<FK>>
+  * name : VARCHAR
+  tax_number : VARCHAR
+  phone : VARCHAR
+  address : TEXT
+  logo : VARCHAR
+  created_at : TIMESTAMP
+}
+
+entity "employees" as employees {
+  * id : UUID <<PK>>
+  --
+  * user_id : UUID <<FK>>
+  enterprise_id : UUID <<FK>>
+  first_name : VARCHAR
+  last_name : VARCHAR
+  phone : VARCHAR
+  image_dp : VARCHAR
+  additional_info : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "categories" as categories {
+  * id : UUID <<PK>>
+  --
+  * name : VARCHAR
+  description : TEXT
+  created_at : TIMESTAMP
+}
+
+entity "clients" as clients {
+  * id : UUID <<PK>>
+  --
+  enterprise_id : UUID <<FK>>
+  categories : JSONB
+  rbq_data : JSONB
+  * status : ClientStatus
+  assigned_comercial_id : UUID <<FK>>
+  is_blacklisted : BOOLEAN
+  created_at : TIMESTAMP
+}
+
+entity "reservations" as reservations {
+  * id : UUID <<PK>>
+  --
+  * client_id : UUID <<FK>>
+  * comercial_id : UUID <<FK>>
+  * status : ClientStatus
+  rappel_after : INT
+  rappel_type : RappelType
+  expires_at : TIMESTAMP
+  created_at : TIMESTAMP
+}
+
+entity "notes" as notes {
+  * id : UUID <<PK>>
+  --
+  * client_id : UUID <<FK>>
+  * comercial_id : UUID <<FK>>
+  * type : NoteType
+  * content : TEXT
+  due_date : TIMESTAMP
+  call_duration_seconds : INT
+  created_at : TIMESTAMP
+}
+
+' Relationships
+users ||--o| employees : "commercial profile"
+users ||--o| enterprises : "entreprise/admin profile"
+enterprises ||--o{ employees : "manages"
+enterprises ||--o{ clients : "owns"
+
+clients ||--o{ reservations : "tracking lockouts/blocks"
+clients ||--o{ notes : "history"
+
+@enduml
