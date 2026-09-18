@@ -1,4 +1,4 @@
-```yaml
+
 name: Test SSH Connection
 
 on:
@@ -28,4 +28,3 @@ jobs:
             -p 22 \
             "$SSH_USER@$SSH_HOST" \
             'echo "SSH connection OK"; echo "=== OS ==="; uname -a; cat /etc/os-release'
-```
