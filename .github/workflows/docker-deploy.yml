@@ -1,4 +1,4 @@
-
+```yaml
 name: Test SSH Connection
 
 on:
@@ -22,9 +22,13 @@ jobs:
           echo "=== Testing SSH connection ==="
 
           sshpass -p "$SSH_PASSWORD" ssh \
+            -vvv \
+            -o PreferredAuthentications=password \
+            -o PubkeyAuthentication=no \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=30 \
             -p 22 \
             "$SSH_USER@$SSH_HOST" \
             'echo "SSH connection OK"; echo "=== OS ==="; uname -a; cat /etc/os-release'
+```
