@@ -1,16 +1,18 @@
-
-name: Test SSH Connection
+name: Deploy Docker to Plesk
 
 on:
   push:
-    branches: [master]
+    branches: [ master ]
 
 jobs:
-  test-ssh:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test SSH
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install sshpass and run remote deployment
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
@@ -18,13 +20,24 @@ jobs:
         run: |
           sudo apt-get install -y sshpass
 
-          echo "=== SSH TEST ==="
+          echo "=== Starting Deployment ==="
 
           sshpass -p "$SSH_PASSWORD" ssh \
-            -tt \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=30 \
             -p 22 \
             "$SSH_USER@$SSH_HOST" \
-            'echo SSH_OK; exit 0'
+            'bash -s' << 'EOF'
+              # Navigate to your project directory on the Plesk server
+              cd /var/www/vhosts/crmzdig.test-webmedia.site/httpdocs
+
+              echo "Pulling latest changes from repository..."
+              git pull origin master
+
+              echo "Restarting Docker containers..."
+              docker compose down
+              docker compose up -d --build
+
+              echo "Deployment completed successfully!"
+EOF
