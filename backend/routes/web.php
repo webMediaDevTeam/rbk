@@ -4,7 +4,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    return response()->file(public_path('index.html'));
 });
 
 Route::get('/static/{path?}', function (?string $path = null) {
@@ -29,3 +29,8 @@ Route::get('/static/{path?}', function (?string $path = null) {
 
     return response()->file($filePath, ['Content-Type' => $mime]);
 })->where('path', '.*');
+
+// SPA catch-all: serve index.html for all non-API, non-static routes
+Route::get('/{any}', function () {
+    return response()->file(public_path('index.html'));
+})->where('any', '^(?!api|static|build|favicon).*');
