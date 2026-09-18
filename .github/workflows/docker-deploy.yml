@@ -1,4 +1,4 @@
-
+```yaml
 name: Test SSH Connection
 
 on:
@@ -10,18 +10,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test SSH and OS
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: 22
-          timeout: 30s
-          command_timeout: 1m
-          script: |
-            echo "SSH connection OK"
-            echo "=== Remote OS ==="
-            uname -a
-            echo "=== OS Information ==="
-            cat /etc/os-release
+      - name: Test SSH connection
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+
+          echo "=== Testing SSH connection ==="
+
+          sshpass -p "$SSH_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=30 \
+            -p 22 \
+            "$SSH_USER@$SSH_HOST" \
+            'echo "SSH connection OK"; echo "=== OS ==="; uname -a; cat /etc/os-release'
+```
