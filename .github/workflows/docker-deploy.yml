@@ -12,20 +12,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check server environment
+      - name: Run remote deployment
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
         run: |
           sudo apt-get install -y sshpass
-
-          echo "=== Checking Git and Docker ==="
-
-          sshpass -p "$SSH_PASSWORD" ssh \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o ConnectTimeout=30 \
-            -p 22 \
-            "$SSH_USER@$SSH_HOST" \
-            "which git || echo 'Git missing'; which docker || echo 'Docker missing'; which docker-compose || docker compose version || echo 'Docker Compose missing'"
+          sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 22 "$SSH_USER@$SSH_HOST" \
+            "cd /var/www/vhosts/crmzdig.test-webmedia.site/httpdocs && git pull origin master && docker compose down && docker compose up -d --build"
