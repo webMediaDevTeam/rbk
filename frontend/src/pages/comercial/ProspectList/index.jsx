@@ -4,15 +4,15 @@ import { ChevronRight, Home } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
-import { useCommercialClientList } from './useCommercialClientList.js'
-import ClientTable from './components/ClientTable.jsx'
-import ClientCard from './components/ClientCard.jsx'
-import ClientToolbar from './components/ClientToolbar.jsx'
+import { useCommercialProspectList } from './useCommercialProspectList.js'
+import ProspectTable from './components/ProspectTable.jsx'
+import ProspectCard from './components/ProspectCard.jsx'
+import ProspectToolbar from './components/ProspectToolbar.jsx'
 import Pagination from '@/pages/shared/users/components/Pagination.jsx'
 import ReservationModal from './components/ReservationModal.jsx'
 import Button from '@/components/ui/button.jsx'
 
-export default function ClientListPage() {
+export default function ProspectListPage() {
   const navigate = useNavigate()
   const { canAccess } = useAuth()
   const isDesktop = useIsDesktop()
@@ -26,7 +26,7 @@ export default function ClientListPage() {
   const debouncedSearch = useDebouncedValue(search, 400)
   const searchParam = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined
 
-  const { data, isLoading } = useCommercialClientList({
+  const { data, isLoading } = useCommercialProspectList({
     search: searchParam,
     category_id: categories || undefined,
     page: currentPage,
@@ -56,20 +56,20 @@ export default function ClientListPage() {
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">Mes clients</span>
+        <span className="font-medium text-foreground">Prospects</span>
       </nav>
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Liste de tous les clients</h1>
-          <p className="text-sm text-muted-foreground mt-1">Visualisez et gérez tous les clients disponibles.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Liste de tous les prospects</h1>
+          <p className="text-sm text-muted-foreground mt-1">Visualisez et gérez tous les prospects disponibles.</p>
         </div>
         <div>
           <Button variant="default" onClick={() => setShowReserve(true)}>Réserver</Button>
         </div>
       </div>
 
-      <ClientToolbar
+      <ProspectToolbar
         search={search} setSearch={setSearch}
         categories={categories} setCategories={(c) => { setCategories(c); setCurrentPage(1) }}
       />
@@ -77,15 +77,15 @@ export default function ClientListPage() {
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
       ) : isDesktop ? (
-        <ClientTable
+        <ProspectTable
           clients={clients}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
-          onViewDetail={(c) => navigate(`/clients/${c.id}`)}
+          onViewDetail={(c) => navigate(`/prospects/${c.id}`)}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {clients.map((c) => (
-            <ClientCard key={c.id} client={c} onViewDetail={(cl) => navigate(`/clients/${cl.id}`)} />
+            <ProspectCard key={c.id} client={c} onViewDetail={(cl) => navigate(`/prospects/${cl.id}`)} />
           ))}
         </div>
       )}

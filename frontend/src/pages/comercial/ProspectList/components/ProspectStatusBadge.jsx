@@ -1,6 +1,6 @@
 import Badge from '@/components/ui/badge.jsx'
 
-export default function ClientStatusBadge({ status, isBlacklisted }) {
+export default function ProspectStatusBadge({ status, isBlacklisted }) {
   if (isBlacklisted) {
     return <Badge variant="destructive">Liste noire</Badge>
   }
@@ -9,6 +9,7 @@ export default function ClientStatusBadge({ status, isBlacklisted }) {
     AVAILABLE: 'success',
     RESERVED: 'warning',
     VOICEMAIL: 'info',
+    INJOINABLE: 'info',
     BLOCKED: 'destructive',
     BLACKLISTED: 'destructive',
     ARCHIVED: 'outline',
@@ -18,6 +19,7 @@ export default function ClientStatusBadge({ status, isBlacklisted }) {
     AVAILABLE: 'Disponible',
     RESERVED: 'Réservé',
     VOICEMAIL: 'Boîte vocale',
+    INJOINABLE: 'Injoignable',
     BLOCKED: 'Bloqué',
     BLACKLISTED: 'Liste noire',
     ARCHIVED: 'Archivé',

@@ -2,8 +2,8 @@ import { X } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/context/theme-provider";
 import { useRemindersCount } from "@/pages/comercial/ClientDetail/useOutcomes.js";
-import faviconLight from "@/assets/brand-icons/rbq_1_1_app_icon_app_icon.svg";
-import faviconDark from "@/assets/brand-icons/rbq_1_1_app_icon_inverted_white_bg.svg";
+import faviconLight from "@/assets/icons/light_logo.svg";
+import faviconDark from "@/assets/icons/dark_logo.svg";
 
 const SIDEBAR_WIDTH = 256;
 const SIDEBAR_COLLAPSED_WIDTH = 64;
@@ -34,8 +34,8 @@ export default function Sidebar({ navGroups, collapsed, mobileOpen, onClose }) {
       <div className="sidebar__brand">
         <img src={logoSrc} alt="RBQ" className="sidebar__logo" />
         <div className="sidebar__brand-text">
-          <span className="sidebar__title">RBQ</span>
-          <span className="sidebar__subtitle">AI Voice</span>
+          <span className="sidebar__title">Zdig IA</span>
+          
         </div>
         {mobileOpen && (
           <button
@@ -60,14 +60,20 @@ export default function Sidebar({ navGroups, collapsed, mobileOpen, onClose }) {
                 <button
                   key={item.path}
                   onClick={() => handleNav(item.path)}
-                  className={`sidebar__item ${isActive ? "sidebar__item--active" : ""}`}
+                  className={`sidebar__item ${isActive ? "sidebar__item--active" : ""} ${item.path === "/reminders" && remindersCount > 0 ? "sidebar__item--has-notifications" : ""}`}
                   title={collapsed ? item.title : undefined}
                 >
                   <Icon className="sidebar__icon" />
                   <span className="sidebar__label">{item.title}</span>
                   {item.path === "/reminders" && remindersCount > 0 && (
-                    <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-bold text-white">
-                      {remindersCount}
+                    <span
+                      className="sidebar__notification"
+                      aria-label={`${remindersCount} reminder${remindersCount === 1 ? "" : "s"}`}
+                      title={`${remindersCount} reminder${remindersCount === 1 ? "" : "s"}`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {remindersCount > 99 ? "99+" : remindersCount}
                     </span>
                   )}
                 </button>

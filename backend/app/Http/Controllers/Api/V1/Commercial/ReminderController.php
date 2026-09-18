@@ -15,7 +15,7 @@ class ReminderController extends Controller
 
         $reservations = Reservation::where('comercial_id', $user->id)
             ->whereNotNull('recall_at')
-            ->whereHas('client', fn ($q) => $q->where('status', 'VOICEMAIL'))
+            ->whereHas('client', fn ($q) => $q->whereIn('status', ['VOICEMAIL', 'INJOINABLE']))
             ->with('client:id,rbq_data,status,phone,email,municipality')
             ->orderBy('recall_at', 'asc')
             ->get();
@@ -43,7 +43,7 @@ class ReminderController extends Controller
         $count = Reservation::where('comercial_id', $request->user()->id)
             ->whereNotNull('recall_at')
             ->where('recall_at', '<=', now())
-            ->whereHas('client', fn ($q) => $q->where('status', 'VOICEMAIL'))
+            ->whereHas('client', fn ($q) => $q->whereIn('status', ['VOICEMAIL', 'INJOINABLE']))
             ->count();
 
         return response()->json([

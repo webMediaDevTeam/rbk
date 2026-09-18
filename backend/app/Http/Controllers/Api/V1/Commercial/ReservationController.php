@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Commercial;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
+use App\Models\ReservationGroup;
 use App\Models\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,9 +13,41 @@ use Illuminate\Support\Carbon;
 
 class ReservationController extends Controller
 {
+    public function pendingCount(Request $request): JsonResponse
+    {
+        $count = Reservation::pendingFor($request->user()->id)->count();
+
+        return response()->json([
+            'success' => true,
+            'data' => ['count' => $count],
+        ]);
+    }
+
+    public function releasePending(Request $request): JsonResponse
+    {
+        return DB::transaction(function () use ($request) {
+            $reservations = Reservation::pendingFor($request->user()->id)->get();
+
+            $released = 0;
+            foreach ($reservations as $reservation) {
+                $client = $reservation->client;
+                $reservation->delete();
+                $client->update(['status' => 'AVAILABLE']);
+                $released++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "$released prospect(s) retourné(s) à disponible.",
+                'data' => ['released' => $released],
+            ]);
+        });
+    }
+
     public function store(Request $request): JsonResponse
     {
         $request->validate([
+            'group_name' => 'required|string|max:255',
             'count' => 'required|integer|min:1|max:1000',
             'quick' => 'nullable|string',
             'amount' => 'nullable|integer|min:1',
@@ -22,6 +55,7 @@ class ReservationController extends Controller
         ]);
 
         $count = (int) $request->input('count', 1);
+        $groupName = $request->input('group_name');
 
         $now = Carbon::now();
         $expires = null;
@@ -51,6 +85,13 @@ class ReservationController extends Controller
         }
 
         $user = $request->user();
+
+        $group = ReservationGroup::create([
+            'comercial_id' => $user->id,
+            'name' => $groupName,
+            'total' => $count,
+            'reserved_count' => 0,
+        ]);
 
         $reserved = 0;
         $conflicts = [];
@@ -89,6 +130,7 @@ class ReservationController extends Controller
                 Reservation::create([
                     'client_id' => $c->id,
                     'comercial_id' => $user->id,
+                    'reservation_group_id' => $group->id,
                     'status' => 'RESERVED',
                     'expires_at' => $expires,
                 ]);
@@ -108,9 +150,17 @@ class ReservationController extends Controller
             }
         }
 
+        $group->update(['reserved_count' => $reserved]);
+
         return response()->json([
             'success' => true,
             'data' => [
+                'group' => [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'total' => $group->total,
+                    'reserved_count' => $reserved,
+                ],
                 'requested' => $count,
                 'reserved' => $reserved,
                 'conflicts' => $conflicts,

@@ -16,6 +16,7 @@ class Reservation extends Model
     protected $fillable = [
         'client_id',
         'comercial_id',
+        'reservation_group_id',
         'status',
         'rappel_after',
         'rappel_type',
@@ -39,5 +40,23 @@ class Reservation extends Model
     public function comercial(): BelongsTo
     {
         return $this->belongsTo(User::class, 'comercial_id');
+    }
+
+    public static function pendingFor(string $comercialId, ?string $groupId = null)
+    {
+        $query = static::query()
+            ->where('comercial_id', $comercialId);
+
+        if ($groupId) {
+            $query->where('reservation_group_id', $groupId);
+        }
+
+        return $query->whereHas('client', function ($q) {
+            $q->whereIn('status', ['VOICEMAIL', 'INJOINABLE'])
+              ->orWhere(function ($q2) {
+                  $q2->where('status', 'RESERVED')
+                     ->whereDoesntHave('callOutcomes');
+              });
+        });
     }
 }

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1\Commercial;
 
 use App\Http\Controllers\Controller;
+use App\Models\CallOutcome;
 use App\Models\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
@@ -117,6 +119,38 @@ class ClientController extends Controller
                 'client' => $this->formatClient($client, true),
             ],
         ]);
+    }
+
+    public function blacklist(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'note' => 'required|string|max:5000',
+        ]);
+
+        $user = $request->user();
+        $client = Client::findOrFail($id);
+
+        return DB::transaction(function () use ($client, $user, $validated) {
+            CallOutcome::create([
+                'client_id' => $client->id,
+                'comercial_id' => $user->id,
+                'outcome' => 'BLACKLIST',
+                'note' => $validated['note'],
+            ]);
+
+            $client->update([
+                'status' => 'BLACKLISTED',
+                'is_blacklisted' => true,
+                'blocked_until' => null,
+            ]);
+
+            $client->reservations()->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Client mis en liste noire.',
+            ]);
+        });
     }
 
     protected function formatClient(Client $client, bool $detailed = false): array

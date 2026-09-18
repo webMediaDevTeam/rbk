@@ -1,4 +1,4 @@
-import { Phone, CheckSquare, FileText, Trash2, PhoneIncoming, PhoneMissed, Voicemail, Ban, UserCheck } from 'lucide-react'
+import { Phone, CheckSquare, FileText, Trash2, PhoneIncoming, PhoneMissed, Voicemail, PhoneOff } from 'lucide-react'
 import Badge from '@/components/ui/badge.jsx'
 import { useDeleteNote } from '../useNotes.js'
 import { toast } from 'sonner'
@@ -43,17 +43,11 @@ const OUTCOME_CONFIG = {
     variant: 'warning',
     nodeClass: 'bg-amber-500',
   },
-  BLACKLIST: {
-    icon: Ban,
-    label: 'Blacklist',
-    variant: 'destructive',
-    nodeClass: 'bg-gray-800 dark:bg-gray-200',
-  },
-  UNBLACKLIST: {
-    icon: UserCheck,
-    label: 'Débloqué',
-    variant: 'success',
-    nodeClass: 'bg-emerald-600',
+  INJOINABLE: {
+    icon: PhoneOff,
+    label: 'Injoignable',
+    variant: 'info',
+    nodeClass: 'bg-blue-500',
   },
 }
 
@@ -80,7 +74,8 @@ function formatRelativeDate(dateStr) {
 }
 
 function RecallInfo({ outcome }) {
-  if (outcome.outcome !== 'BOITE_VOCALE' || !outcome.recall_amount) return null
+  if (outcome.outcome !== 'BOITE_VOCALE' && outcome.outcome !== 'INJOINABLE') return null
+  if (!outcome.recall_amount) return null
   const units = { MINUTE: 'min', HEURE: 'h', JOUR: 'j', SEMAINE: 'sem', MOIS: 'mois' }
   return (
     <span className="text-xs text-muted-foreground">

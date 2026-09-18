@@ -40,7 +40,7 @@ export default function RemindersPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={(e) => { e.preventDefault(); navigate('/clients') }} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        <a href="#" onClick={(e) => { e.preventDefault(); navigate('/prospects') }} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />

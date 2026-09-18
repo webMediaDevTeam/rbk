@@ -3,7 +3,7 @@ import SearchBar from '@/components/ui/search-bar.jsx'
 import Select from '@/components/ui/select'
 import { api } from '@/api/client.js'
 
-export default function ClientToolbar({
+export default function ProspectToolbar({
   search,
   setSearch,
   categories,
@@ -30,8 +30,8 @@ export default function ClientToolbar({
         inputProps={{
           value: search,
           onChange: (e) => setSearch(e.target.value),
-          placeholder: 'Rechercher clients... (min 3 chars)',
-          'aria-label': 'Rechercher clients',
+          placeholder: 'Rechercher prospects... (min 3 chars)',
+          'aria-label': 'Rechercher prospects',
         }}
       />
       {/* status filter removed - server enforces AVAILABLE for commercial listing */}

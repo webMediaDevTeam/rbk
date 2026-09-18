@@ -17,10 +17,10 @@ class OutcomeController extends Controller
     public function store(Request $request, string $clientId): JsonResponse
     {
         $validated = $request->validate([
-            'outcome' => 'required|in:OUI,NON,BOITE_VOCALE,BLACKLIST',
-            'note' => 'nullable|string|max:5000',
+            'outcome' => 'required|in:OUI,NON,BOITE_VOCALE,INJOINABLE',
+            'note' => 'required|string|max:5000',
             'recall_amount' => 'nullable|integer|min:1',
-            'recall_unit' => 'nullable|string|in:MINUTE,HEURE,JOUR,SEMAINE,MOIS',
+            'recall_unit' => 'nullable|string|in:MINUTE,HEURE,JOUR,SEMAINE',
         ]);
 
         $user = $request->user();
@@ -36,21 +36,14 @@ class OutcomeController extends Controller
 
         $outcome = $validated['outcome'];
 
-        if (in_array($outcome, ['OUI', 'BOITE_VOCALE']) && !$hasReservation) {
+        if (in_array($outcome, ['OUI', 'BOITE_VOCALE', 'INJOINABLE']) && !$hasReservation) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous devez réserver ce client avant de changer son statut.',
             ], 422);
         }
 
-        if ($outcome === 'BLACKLIST' && !($hasReservation && $hasCall)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'La mise en liste noire nécessite une réservation active et un appel précédent.',
-            ], 422);
-        }
-
-        if (!in_array($outcome, ['OUI', 'BOITE_VOCALE', 'BLACKLIST']) && !$hasReservation && !$hasCall) {
+        if (!in_array($outcome, ['OUI', 'BOITE_VOCALE', 'INJOINABLE']) && !$hasReservation && !$hasCall) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous devez avoir une réservation ou un historique d\'appel pour ce client.',
@@ -75,10 +68,10 @@ class OutcomeController extends Controller
                 ->first();
 
             match ($outcome) {
-                'OUI' => $this->handleOui($client, $reservation),
+                'OUI' => $this->handleOui($client, $reservation, $validated),
                 'NON' => $this->handleNon($client, $reservation),
-                'BOITE_VOCALE' => $this->handleBoiteVocale($client, $reservation, $validated),
-                'BLACKLIST' => $this->handleBlacklist($client, $reservation),
+                'BOITE_VOCALE' => $this->handleRecall($client, $reservation, $validated, 'VOICEMAIL'),
+                'INJOINABLE' => $this->handleRecall($client, $reservation, $validated, 'INJOINABLE'),
             };
 
             return response()->json([
@@ -87,11 +80,10 @@ class OutcomeController extends Controller
                     'OUI' => 'Client confirmé. Réservation maintenue.',
                     'NON' => 'Client refusé. Indisponible pour 3 mois.',
                     'BOITE_VOCALE' => 'Rappel configuré.',
-                    'BLACKLIST' => 'Client mis en liste noire.',
+                    'INJOINABLE' => 'Rappel configuré.',
                 },
                 'data' => [
                     'client_status' => $client->fresh()->status,
-                    'is_blacklisted' => $client->fresh()->is_blacklisted,
                 ],
             ]);
         });
@@ -135,12 +127,28 @@ class OutcomeController extends Controller
         });
     }
 
-    private function handleOui(Client $client, ?Reservation $reservation): void
+    private function handleOui(Client $client, ?Reservation $reservation, array $validated): void
     {
         $client->update(['status' => 'RESERVED']);
 
         if ($reservation) {
             $reservation->update(['expires_at' => Carbon::now()->addYear()]);
+
+            if (!empty($validated['recall_amount']) && !empty($validated['recall_unit'])) {
+                $amount = $validated['recall_amount'];
+                $unit = $validated['recall_unit'];
+                $recallAt = match ($unit) {
+                    'MINUTE' => Carbon::now()->addMinutes($amount),
+                    'HEURE' => Carbon::now()->addHours($amount),
+                    'JOUR' => Carbon::now()->addDays($amount),
+                    'SEMAINE' => Carbon::now()->addWeeks($amount),
+                };
+                $reservation->update([
+                    'rappel_after' => $amount,
+                    'rappel_type' => $unit,
+                    'recall_at' => $recallAt,
+                ]);
+            }
         }
     }
 
@@ -154,11 +162,9 @@ class OutcomeController extends Controller
         if ($reservation) {
             $reservation->delete();
         }
-
-        $this->checkAutoBlacklist($client);
     }
 
-    private function handleBoiteVocale(Client $client, ?Reservation $reservation, array $validated): void
+    private function handleRecall(Client $client, ?Reservation $reservation, array $validated, string $status): void
     {
         $amount = $validated['recall_amount'] ?? 1;
         $unit = $validated['recall_unit'] ?? 'JOUR';
@@ -168,10 +174,9 @@ class OutcomeController extends Controller
             'HEURE' => Carbon::now()->addHours($amount),
             'JOUR' => Carbon::now()->addDays($amount),
             'SEMAINE' => Carbon::now()->addWeeks($amount),
-            'MOIS' => Carbon::now()->addMonths($amount),
         };
 
-        $client->update(['status' => 'VOICEMAIL']);
+        $client->update(['status' => $status]);
 
         if ($reservation) {
             $reservation->update([
@@ -179,36 +184,6 @@ class OutcomeController extends Controller
                 'rappel_type' => $unit,
                 'recall_at' => $recallAt,
                 'expires_at' => Carbon::now()->addMonth(),
-            ]);
-        }
-    }
-
-    private function handleBlacklist(Client $client, ?Reservation $reservation): void
-    {
-        $client->update([
-            'status' => 'BLACKLISTED',
-            'is_blacklisted' => true,
-            'blocked_until' => null,
-        ]);
-
-        $client->reservations()->delete();
-    }
-
-    private function checkAutoBlacklist(Client $client): void
-    {
-        $nonCount = CallOutcome::where('client_id', $client->id)
-            ->where('outcome', 'NON')
-            ->distinct('comercial_id')
-            ->count();
-
-        $activeCommercials = User::where('role', 'COMERCIAL')
-            ->where('status', 'ACTIVE')
-            ->count();
-
-        if ($nonCount >= $activeCommercials && $activeCommercials > 0) {
-            $client->update([
-                'is_blacklisted' => true,
-                'status' => 'BLACKLISTED',
             ]);
         }
     }

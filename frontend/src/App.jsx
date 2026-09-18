@@ -87,10 +87,10 @@ const ROLE_NAV = {
       ],
     },
     {
-      title: 'Clients',
+      title: 'Prospects',
       items: [
-        { title: 'Tous les clients', path: '/clients', icon: List },
-        { title: 'Mes clients', path: '/mes-clients', icon: List },
+        { title: 'Tous les prospects', path: '/prospects', icon: List },
+        { title: 'Mes listes', path: '/mes-listes', icon: List },
         { title: 'Rappels', path: '/reminders', icon: Bell },
       ],
     },

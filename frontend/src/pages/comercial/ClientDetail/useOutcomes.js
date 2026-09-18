@@ -11,10 +11,10 @@ export function useStoreOutcome() {
   return useMutation({
     mutationFn: ({ clientId, ...payload }) => storeOutcomeApi(clientId, payload),
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ['commercial-client', variables.clientId] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospect', variables.clientId] })
       qc.invalidateQueries({ queryKey: ['client-notes', variables.clientId] })
-      qc.invalidateQueries({ queryKey: ['commercial-clients'] })
-      qc.invalidateQueries({ queryKey: ['mes-clients'] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
+      qc.invalidateQueries({ queryKey: ['reservation-groups'] })
       qc.invalidateQueries({ queryKey: ['reminders'] })
       qc.invalidateQueries({ queryKey: ['reminders-count'] })
     },
@@ -26,9 +26,9 @@ export function useReleaseClient() {
   return useMutation({
     mutationFn: (clientId) => releaseClientApi(clientId),
     onSuccess: (_data, clientId) => {
-      qc.invalidateQueries({ queryKey: ['commercial-client', clientId] })
-      qc.invalidateQueries({ queryKey: ['commercial-clients'] })
-      qc.invalidateQueries({ queryKey: ['mes-clients'] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospect', clientId] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
+      qc.invalidateQueries({ queryKey: ['reservation-groups'] })
     },
   })
 }

@@ -1,11 +1,10 @@
 import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import ClientStatusBadge from './ClientStatusBadge'
+import ProspectStatusBadge from './ProspectStatusBadge'
 import SortHeader from '@/pages/shared/components/SortHeader.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
-import RowMenu from '@/pages/shared/components/RowMenu.jsx'
 
-export default function ClientTable({ clients, sortBy, sortOrder, onSort, onViewDetail }) {
+export default function ProspectTable({ clients, sortBy, sortOrder, onSort, onViewDetail }) {
   return (
     <div className="rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
       <Table>
@@ -13,7 +12,7 @@ export default function ClientTable({ clients, sortBy, sortOrder, onSort, onView
           <TableRow className="bg-background hover:bg-background">
             <TableHead>
               <SortHeader column="name" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
-                Client
+Prospect
               </SortHeader>
             </TableHead>
             <TableHead>
@@ -38,7 +37,11 @@ export default function ClientTable({ clients, sortBy, sortOrder, onSort, onView
         </TableHeader>
         <TableBody>
           {clients.map((c) => (
-            <TableRow key={c.id}>
+            <TableRow
+              key={c.id}
+              className="cursor-pointer hover:bg-muted/50 transition-colors"
+              onClick={() => onViewDetail?.(c)}
+            >
               <TableCell>
                 <div className="flex items-center gap-2.5">
                   <UserAvatar user={c} size="sm" />
@@ -51,26 +54,23 @@ export default function ClientTable({ clients, sortBy, sortOrder, onSort, onView
               <TableCell className="text-muted-foreground">{c.email ?? '—'}</TableCell>
               <TableCell className="text-muted-foreground">{c.phone ?? '—'}</TableCell>
               <TableCell className="text-muted-foreground">{c.municipality ?? '—'}</TableCell>
-              <TableCell><ClientStatusBadge status={c.status} isBlacklisted={c.is_blacklisted} /></TableCell>
+              <TableCell><ProspectStatusBadge status={c.status} isBlacklisted={c.is_blacklisted} /></TableCell>
               <TableCell className="text-muted-foreground">{c.licence_end_date ? new Date(c.licence_end_date).toLocaleDateString('fr-FR') : '—'}</TableCell>
               <TableCell className="text-right">
-                <RowMenu>
-                  {(closeMenu) => (
-                    <button
-                      onClick={() => { onViewDetail?.(c); closeMenu() }}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <Eye className="h-3.5 w-3.5" /> Voir détail
-                    </button>
-                  )}
-                </RowMenu>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onViewDetail?.(c) }}
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                  aria-label="Voir détail"
+                >
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                </button>
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
       {clients.length === 0 && (
-        <div className="h-24 flex items-center justify-center text-muted-foreground">Aucun client trouvé.</div>
+        <div className="h-24 flex items-center justify-center text-muted-foreground">Aucun prospect trouvé.</div>
       )}
     </div>
   )

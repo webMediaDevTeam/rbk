@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Lock, Mail } from "lucide-react";
+import { AlertCircle, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Lock, LogIn, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/context/theme-provider";
 import { useAuth } from "@/context/AuthContext";
-import faviconLight from "@/assets/brand-icons/rbq_favicon_inverted_white_bg.svg";
-import faviconDark from "@/assets/brand-icons/rbq_favicon_black_white.svg";
+import faviconLight from "@/assets/icons/light_logo.svg";
+import faviconDark from "@/assets/icons/dark_logo.svg";
 import { useConnexion } from "@/hooks/useConnexion";
 import { useForgotPassword } from "@/hooks/useForgotPassword";
 import {
@@ -19,8 +19,8 @@ import { getApiErrorMessage, getApiFieldErrors } from "@/lib/api-errors";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 const MODES = [
-  { id: "connexion", label: "Connexion" },
-  { id: "forgot", label: "Mot de passe oublié" },
+  { id: "password", label: "Par Mot De Passe", icon: Lock },
+  { id: "otp", label: "Par Code", icon: Mail },
 ];
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -47,6 +47,7 @@ export default function ConnexionPage() {
   const [localError, setLocalError] = useState(null);
   const [canResendForgotOtp, setCanResendForgotOtp] = useState(false);
   const [canResendLoginOtp, setCanResendLoginOtp] = useState(false);
+  const [loginOtpSent, setLoginOtpSent] = useState(false);
 
   const completeLogin = ({ utilisateur }) => {
     toast.success("Connexion réussie.");
@@ -79,6 +80,7 @@ export default function ConnexionPage() {
     setForgotStep("email");
     setLoginMethod("password");
     setLoginOtp("");
+    setLoginOtpSent(false);
     setForgotOtp("");
     setPasswordResetToken("");
     setCanResendForgotOtp(false);
@@ -91,6 +93,16 @@ export default function ConnexionPage() {
     resetForgotPassword.reset();
   };
 
+  const switchLoginMethod = (id) => {
+    setLocalError(null);
+    setLoginOtp("");
+    setLoginOtpSent(false);
+    setCanResendLoginOtp(false);
+    sendLoginOtp.reset();
+    verifyLoginOtp.reset();
+    setLoginMethod(id);
+  };
+
   const sendLoginCode = () => {
     setLocalError(null);
     setCanResendLoginOtp(false);
@@ -99,8 +111,8 @@ export default function ConnexionPage() {
       {
         onSuccess: (data) => {
           toast.success(data?.message ?? "Code de connexion envoyé.");
-          setLoginMethod("otp");
           setLoginOtp("");
+          setLoginOtpSent(true);
         },
         onError: (err) => setLocalError(getApiErrorMessage(err)),
       }
@@ -175,34 +187,46 @@ export default function ConnexionPage() {
     <>
       <div className="auth-card">
         <div className="auth-card-logo">
-          <img src={logoSrc} alt="RBK" className="auth-card-logo__img" />
+          <img src={logoSrc} alt="Zdig IA" className="auth-card-logo__img" />
         </div>
 
         <div className="auth-heading">
           <h1 className="auth-heading__title">
-            Bienvenue sur <strong>RBK</strong>
+            Bienvenue sur <strong>Zdig IA</strong>
           </h1>
-          <p className="auth-heading__subtitle">
-            {mode === "connexion"
-              ? "Connectez-vous avec votre mot de passe ou recevez un code OTP par email."
-              : "Réinitialisez votre mot de passe avec un code OTP envoyé par email."}
-          </p>
+                      {mode !== "connexion"&&
+            (<p className="auth-heading__subtitle">Réinitialisez votre mot de passe avec un code envoyé par email.</p>)
+              }
         </div>
 
-        <div className="auth-role-switch" role="tablist" aria-label="Choix du mode" data-active={mode === "connexion" ? 0 : 1}>
-          {MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="tab"
-              aria-selected={mode === m.id}
-              onClick={() => switchMode(m.id)}
-              className={`auth-role-switch__btn ${mode === m.id ? "auth-role-switch__btn--active" : ""}`}
+        {mode === "connexion" && (
+          <>
+            <div className="auth-switch-badge">
+              <LogIn size={14} />
+              <span>Connexion</span>
+            </div>
+            <div
+              className="auth-role-switch"
+              role="tablist"
+              aria-label="Choix du mode de connexion"
+              data-active={loginMethod === "password" ? 0 : 1}
             >
-              {m.label}
-            </button>
-          ))}
-        </div>
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={loginMethod === m.id}
+                  onClick={() => switchLoginMethod(m.id)}
+                  className={`auth-role-switch__btn ${loginMethod === m.id ? "auth-role-switch__btn--active" : ""}`}
+                >
+                  <m.icon size={14} />
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {mode === "connexion" && (
           <form
@@ -210,6 +234,10 @@ export default function ConnexionPage() {
             onSubmit={(e) => {
               e.preventDefault();
               if (loginMethod === "otp") {
+                if (!loginOtpSent) {
+                  sendLoginCode();
+                  return;
+                }
                 verifyLoginOtp.mutate(
                   { email, code: loginOtp },
                   {
@@ -240,7 +268,7 @@ export default function ConnexionPage() {
                   id="auth-email"
                   type="email"
                   className="auth-input"
-                  placeholder="agent@rbk-prospecting.ca"
+                  placeholder="agent@ZdigIA.ca"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -253,14 +281,9 @@ export default function ConnexionPage() {
 
             {loginMethod === "password" && (
               <div className="auth-field">
-                <div className="auth-field__row">
-                  <label className="auth-field__label" htmlFor="auth-password">
-                    Mot de Passe
-                  </label>
-                  <button type="button" className="auth-forgot" onClick={() => switchMode("forgot")}>
-                    Mot de passe oublié ?
-                  </button>
-                </div>
+                <label className="auth-field__label" htmlFor="auth-password">
+                  Mot de Passe
+                </label>
                 <div className="auth-input-wrap">
                   <Lock className="auth-input-wrap__icon" size={20} />
                   <input
@@ -285,19 +308,46 @@ export default function ConnexionPage() {
               </div>
             )}
 
-            {loginMethod === "otp" && (
+            {loginMethod === "otp" && !loginOtpSent && (
               <div className="auth-field">
-                <label className="auth-field__label">Code OTP</label>
-                <InputOTP maxLength={6} value={loginOtp} onChange={setLoginOtp} disabled={verifyLoginOtp.isPending}>
-                  <InputOTPGroup>
-                    {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} />)}
-                  </InputOTPGroup>
-                </InputOTP>
-                {canResendLoginOtp && (
-                  <button type="button" className="auth-forgot" onClick={sendLoginCode}>
-                    Renvoyer le code
-                  </button>
-                )}
+                <p className="auth-otp-hint">
+                  Entrez votre courriel professionnel puis cliquez sur
+                  <strong> « Envoyer le code » </strong>
+                  pour recevoir votre code de vérification.
+                </p>
+              </div>
+            )}
+
+            {loginMethod === "otp" && loginOtpSent && (
+              <div className="auth-field">
+                <label className="auth-field__label">Code de vérification</label>
+                <div className="auth-otp-wrap">
+                  <InputOTP
+                    maxLength={6}
+                    value={loginOtp}
+                    onChange={setLoginOtp}
+                    disabled={verifyLoginOtp.isPending || sendLoginOtp.isPending}
+                  >
+                    <InputOTPGroup>
+                      {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} />)}
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <p className="auth-otp-hint">
+                  Un code à 6 chiffres a été envoyé à <strong>{email}</strong>.
+                </p>
+                <button
+                  type="button"
+                  className="auth-forgot"
+                  onClick={sendLoginCode}
+                  disabled={sendLoginOtp.isPending || !email}
+                >
+                  {sendLoginOtp.isPending
+                    ? "Envoi du code…"
+                    : canResendLoginOtp
+                      ? "Renvoyer le code"
+                      : "Recevoir un nouveau code"}
+                </button>
               </div>
             )}
 
@@ -313,46 +363,41 @@ export default function ConnexionPage() {
               </label>
             </div>
 
-            <div className="auth-submit-wrap">
-              <button
-                type="submit"
-                className="auth-submit"
-                disabled={connexion.isPending || verifyLoginOtp.isPending || (loginMethod === "otp" && loginOtp.length !== 6)}
-              >
-                {connexion.isPending || verifyLoginOtp.isPending ? (
-                  <span className="auth-submit__spinner">
-                    <Loader2 size={16} className="animate-spin" />
-                    Connexion en cours…
+<div className="auth-submit-wrap">
+                <button
+                  type="submit"
+                  className="auth-submit"
+                  disabled={
+                    connexion.isPending
+                    || verifyLoginOtp.isPending
+                    || sendLoginOtp.isPending
+                    || (loginMethod === "otp" && loginOtpSent && loginOtp.length !== 6)
+                  }
+                >
+                  {connexion.isPending || verifyLoginOtp.isPending || sendLoginOtp.isPending ? (
+                    <span className="auth-submit__spinner">
+                      <Loader2 size={16} className="animate-spin" />
+                      {sendLoginOtp.isPending && loginMethod === "otp" && !loginOtpSent
+                        ? "Envoi du code…"
+                        : "Connexion en cours…"}
+                    </span>
+                  ) : (
+                    <span>
+                      {loginMethod === "otp"
+                        ? loginOtpSent
+                          ? "Valider le code"
+                          : "Envoyer le code"
+                        : "Se Connecter"}
+                    </span>
+                  )}
+                  <span className="auth-submit__arrow" aria-hidden="true">
+                    <ArrowRight size={16} />
                   </span>
-                ) : (
-                  <span>{loginMethod === "otp" ? "Valider le code" : "Se Connecter"}</span>
-                )}
-                <span className="auth-submit__arrow" aria-hidden="true">
-                  <ArrowRight size={16} />
-                </span>
-              </button>
-            </div>
+                </button>
+              </div>
 
-            <div className="auth-divider">
-              <span>OU</span>
-            </div>
-
-            <button
-              type="button"
-              className="auth-sso"
-              disabled={sendLoginOtp.isPending || !email}
-              onClick={loginMethod === "otp" ? () => setLoginMethod("password") : sendLoginCode}
-            >
-              {sendLoginOtp.isPending ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Envoi du code…
-                </>
-              ) : loginMethod === "otp" ? (
-                "Connexion avec mot de passe"
-              ) : (
-                "Connexion par email"
-              )}
+            <button type="button" className="auth-forgot-link" onClick={() => switchMode("forgot")}>
+              Mot de passe oublié ?
             </button>
           </form>
         )}
@@ -385,7 +430,7 @@ export default function ConnexionPage() {
                       id="auth-reset-email"
                       type="email"
                       className="auth-input"
-                      placeholder="agent@rbk-prospecting.ca"
+                      placeholder="agent@ZdigIA.ca"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
                       required
@@ -415,12 +460,17 @@ export default function ConnexionPage() {
             {forgotStep === "otp" && (
               <form className="auth-form" onSubmit={submitForgotOtp}>
                 <div className="auth-field">
-                  <label className="auth-field__label">Code OTP</label>
-                  <InputOTP maxLength={6} value={forgotOtp} onChange={setForgotOtp} disabled={verifyForgotOtp.isPending}>
-                    <InputOTPGroup>
-                      {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} />)}
-                    </InputOTPGroup>
-                  </InputOTP>
+                  <label className="auth-field__label">Code de vérification</label>
+                  <div className="auth-otp-wrap">
+                    <InputOTP maxLength={6} value={forgotOtp} onChange={setForgotOtp} disabled={verifyForgotOtp.isPending}>
+                      <InputOTPGroup>
+                        {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} />)}
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <p className="auth-otp-hint">
+                    Un code à 6 chiffres a été envoyé à <strong>{resetEmail}</strong>. Vérifiez votre boîte de réception.
+                  </p>
                 </div>
 
                 <div className="auth-submit-wrap">
@@ -440,7 +490,7 @@ export default function ConnexionPage() {
                 </div>
 
                 {canResendForgotOtp && (
-                  <button type="button" className="auth-sso" onClick={() => forgot.mutate({ email: resetEmail })}>
+                  <button type="button" className="auth-forgot-link" onClick={() => forgot.mutate({ email: resetEmail })}>
                     Renvoyer le code
                   </button>
                 )}

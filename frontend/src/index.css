@@ -465,7 +465,7 @@ a {
 
 .sidebar__item {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   width: 100%;
   min-width: 0;
   align-items: center;
@@ -482,11 +482,35 @@ a {
   transition: background 120ms ease, color 120ms ease;
 }
 
+.sidebar__notification {
+  display: inline-flex;
+  min-width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  border: 2px solid var(--sidebar);
+  border-radius: 999px;
+  background: #ff5d6c;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 5px;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px rgb(255 93 108 / 25%), 0 2px 6px rgb(0 0 0 / 18%);
+}
+
+.sidebar__item--has-notifications:not(.sidebar__item--active) {
+  background: color-mix(in oklab, #ff5d6c 7%, transparent);
+}
+
 .sidebar--collapsed .sidebar__group {
   align-items: center;
 }
 
 .sidebar--collapsed .sidebar__item {
+  position: relative;
   display: flex;
   width: 36px;
   align-items: center;
@@ -495,6 +519,25 @@ a {
   padding: 8px;
   margin-left: auto;
   margin-right: auto;
+}
+
+.sidebar--collapsed .sidebar__notification {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  border-width: 1px;
+  font-size: 9px;
+  padding: 0 3px;
+}
+
+@media (max-width: 860px) {
+  .sidebar--mobile-open .sidebar__notification {
+    min-width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
 }
 
 .sidebar--collapsed .sidebar__label {
@@ -512,13 +555,13 @@ a {
 }
 
 .sidebar__item:hover {
-  background: var(--sidebar-accent);
-  color: var(--foreground);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .sidebar__item--active {
-  background: var(--sidebar-accent);
-  color: var(--foreground);
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-weight: 800;
 }
 
@@ -1675,6 +1718,24 @@ footer a {
 }
 
 /* Mode selector pills */
+.auth-switch-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  margin: 0 auto 16px;
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .auth-role-switch {
   position: relative;
   display: flex;
@@ -1709,6 +1770,10 @@ footer a {
   position: relative;
   z-index: 1;
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 8px 12px;
   border: 0;
   border-radius: 9999px;
@@ -1785,6 +1850,73 @@ footer a {
 .auth-forgot:hover {
   color: var(--foreground);
   text-decoration: underline;
+}
+
+.auth-forgot:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-forgot-link {
+  align-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.auth-forgot-link:hover {
+  opacity: 0.8;
+}
+
+/* OTP slots */
+[data-slot="input-otp"] {
+  justify-content: center;
+}
+
+.auth-otp-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.auth-otp-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.auth-otp-hint strong {
+  color: var(--foreground);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+[data-slot="input-otp-slot"] {
+  animation: otp-slot-in 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-slot="input-otp-slot"]:nth-child(2) { animation-delay: 40ms; }
+[data-slot="input-otp-slot"]:nth-child(3) { animation-delay: 80ms; }
+[data-slot="input-otp-slot"]:nth-child(4) { animation-delay: 120ms; }
+[data-slot="input-otp-slot"]:nth-child(5) { animation-delay: 160ms; }
+[data-slot="input-otp-slot"]:nth-child(6) { animation-delay: 200ms; }
+
+@keyframes otp-slot-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .auth-input-wrap {

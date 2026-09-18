@@ -16,9 +16,11 @@ RUN apk add --no-cache \
     zip \
     libzip-dev \
     libpq-dev \
+    linux-headers \
     && docker-php-ext-configure zip \
     && docker-php-ext-install pdo_mysql bcmath zip exif intl pcntl \
-    && pecl install redis && docker-php-ext-enable redis \
+    && pecl install --nobuild redis-6.0.2 && cd "$(pecl config-get temp_dir)/redis" && phpize && ./configure && make && make install \
+    && docker-php-ext-enable redis \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
 WORKDIR /var/www/html

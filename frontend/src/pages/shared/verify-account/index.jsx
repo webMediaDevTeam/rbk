@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertCircle, CheckCircle, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/context/theme-provider";
-import faviconLight from "@/assets/brand-icons/rbq_favicon_inverted_white_bg.svg";
-import faviconDark from "@/assets/brand-icons/rbq_favicon_black_white.svg";
+import faviconLight from "@/assets/icons/light_logo.svg";
+import faviconDark from "@/assets/icons/dark_logo.svg";
 import { resendVerificationApi, verifyAccountApi } from "@/api/auth.api";
 import { getApiErrorMessage, getApiFieldErrors } from "@/lib/api-errors";
 

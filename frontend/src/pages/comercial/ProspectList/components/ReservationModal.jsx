@@ -1,47 +1,82 @@
-import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, CheckCircle2, Loader2, RotateCcw, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { reserveCommercialClientsApi } from '@/api/commercial.api.js'
+import {
+  reserveCommercialProspectsApi,
+  getPendingReservationsCountApi,
+  releasePendingReservationsApi,
+} from '@/api/commercial.api.js'
+import { useAuth } from '@/context/AuthContext.jsx'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
-import Select from '@/components/ui/select.jsx'
 import Badge from '@/components/ui/badge.jsx'
 import { cn } from '@/lib/utils.js'
 
-const QUICK_OPTIONS = [
-  { label: '1 jour', value: '1j' },
-  { label: '2 jours', value: '2j' },
-  { label: '1 semaine', value: '1w' },
-  { label: '1 mois', value: '1m' },
-]
+const COUNT_OPTIONS = [10, 20, 50, 80, 100]
+
+function generateGroupName(userName) {
+  const now = new Date()
+  const day = now.getDate()
+  const months = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc']
+  const month = months[now.getMonth()]
+  const year = now.getFullYear()
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${userName} - ${day} ${month} ${year} ${hours}:${minutes}`
+}
 
 export default function ReservationModal({ open, onClose }) {
   const qc = useQueryClient()
+  const { user } = useAuth()
   const [count, setCount] = useState(10)
-  const [quick, setQuick] = useState('')
-  const [amount, setAmount] = useState(1)
-  const [unit, setUnit] = useState('JOUR')
+  const [groupName, setGroupName] = useState('')
   const [result, setResult] = useState(null)
+
+  const defaultName = useMemo(() => {
+    if (!open) return ''
+    const displayName = user?.first_name || user?.email?.split('@')[0] || 'Commercial'
+    return generateGroupName(displayName)
+  }, [open, user])
 
   useEffect(() => {
     if (open) {
       setCount(10)
-      setQuick('')
-      setAmount(1)
-      setUnit('JOUR')
+      setGroupName(defaultName)
       setResult(null)
     }
-  }, [open])
+  }, [open, defaultName])
+
+  const { data: pendingData } = useQuery({
+    queryKey: ['reservations-pending'],
+    queryFn: getPendingReservationsCountApi,
+    enabled: open,
+  })
+  const pendingCount = pendingData?.data?.count ?? 0
+
+  const releaseMutation = useMutation({
+    mutationFn: releasePendingReservationsApi,
+    onSuccess: (res) => {
+      const released = res?.data?.released ?? 0
+      qc.invalidateQueries({ queryKey: ['reservations-pending'] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
+      qc.invalidateQueries({ queryKey: ['reservation-groups'] })
+      toast.success(`${released} prospect(s) retourné(s) à disponible.`)
+    },
+    onError: (err) => {
+      const msg = err?.response?.data?.message || 'Une erreur est survenue.'
+      toast.error(msg)
+    },
+  })
 
   const mutation = useMutation({
-    mutationFn: (payload) => reserveCommercialClientsApi(payload),
+    mutationFn: (payload) => reserveCommercialProspectsApi(payload),
     onSuccess: (res) => {
       const data = res.data
       setResult(data)
-      qc.invalidateQueries({ queryKey: ['commercial-clients'] })
-      qc.invalidateQueries({ queryKey: ['mes-clients'] })
-      toast.success(`${data.reserved} client(s) réservé(s) avec succès.`)
+      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
+      qc.invalidateQueries({ queryKey: ['reservation-groups'] })
+      toast.success(`${data.reserved} prospect(s) réservé(s) avec succès.`)
     },
     onError: (err) => {
       const msg = err?.response?.data?.message || 'Une erreur est survenue.'
@@ -55,13 +90,7 @@ export default function ReservationModal({ open, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     setResult(null)
-    const payload = { count }
-    if (quick) {
-      payload.quick = quick
-    } else {
-      payload.amount = amount
-      payload.unit = unit
-    }
+    const payload = { group_name: groupName, count, amount: 1, unit: 'JOUR' }
     mutation.mutate(payload)
   }
 
@@ -69,7 +98,7 @@ export default function ReservationModal({ open, onClose }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-foreground">Réserver des clients</h2>
+          <h2 className="text-lg font-semibold text-foreground">Réserver des prospects</h2>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
             <X className="h-4 w-4" />
           </button>
@@ -77,7 +106,35 @@ export default function ReservationModal({ open, onClose }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-bold mb-1">Nombre de clients *</label>
+            <label className="block text-sm font-bold mb-1">Nom de la liste</label>
+            <Input
+              type="text"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Nombre de prospects *</label>
+            <div className="flex flex-wrap gap-2">
+              {COUNT_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setCount(opt)}
+                  className={cn(
+                    'px-3 py-1.5 text-sm rounded-lg border transition-colors',
+                    count === opt
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border bg-background hover:bg-muted text-foreground'
+                  )}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            <label className="block text-sm font-bold mb-1 mt-3">Ou saisir un nombre</label>
             <Input
               type="number"
               min={1}
@@ -89,45 +146,32 @@ export default function ReservationModal({ open, onClose }) {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-bold mb-2">Durée de réservation</label>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setQuick(quick === opt.value ? '' : opt.value)}
-                  className={cn(
-                    'px-3 py-1.5 text-sm rounded-lg border transition-colors',
-                    quick === opt.value
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background hover:bg-muted text-foreground'
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
+          {pendingCount > 0 && (
+            <div className="flex flex-col gap-2 rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  Vous avez <strong>{pendingCount}</strong> prospect(s) en attente (boîte vocale / injoignable) dans vos listes.
+                  Retournez-les à disponible avant de réserver.
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-end"
+                disabled={releaseMutation.isPending}
+                onClick={releaseMutation.mutate}
+              >
+                {releaseMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : (
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Retourner à disponible
+              </Button>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold mb-1">Ou durée personnalisée</label>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={1}
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
-                className="w-24"
-              />
-              <Select value={unit} onChange={(e) => { setUnit(e.target.value); setQuick('') }}>
-                <option value="HEURE">Heure(s)</option>
-                <option value="JOUR">Jour(s)</option>
-                <option value="SEMAINE">Semaine(s)</option>
-                <option value="MOIS">Mois</option>
-              </Select>
-            </div>
-          </div>
+          )}
 
           {mutation.isError && (
             <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
@@ -140,7 +184,7 @@ export default function ReservationModal({ open, onClose }) {
             <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>
               Annuler
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending || pendingCount > 0}>
               {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Réserver
             </Button>

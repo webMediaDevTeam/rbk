@@ -46,7 +46,7 @@ function TableRow({ className, ...props }) {
   return (
     <tr
       data-slot="table-row"
-      className={cn("border-b border-border transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)}
+      className={cn("border-b border-border transition-colors hover:bg-primary/10 data-[state=selected]:bg-primary/10 data-[state=selected]:text-primary", className)}
       {...props}
     />
   );

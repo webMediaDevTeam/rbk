@@ -6,9 +6,10 @@ import ComercialListPage from '@/pages/shared/comercialList/index.jsx'
 import AdminListPage from '@/pages/superAdmin/adminList/index.jsx'
 import VerifyAccountPage from '@/pages/shared/verify-account/index.jsx'
 import ConnexionPage from '@/pages/shared/connexion/index.jsx'
-import ClientListPage from '@/pages/comercial/ClientList/index.jsx'
+import ProspectListPage from '@/pages/comercial/ProspectList/index.jsx'
 import ClientDetailPage from '@/pages/comercial/ClientDetail/index.jsx'
-import MesClientsPage from '@/pages/comercial/MesClients/index.jsx'
+import MesListesPage from '@/pages/comercial/MesListes/index.jsx'
+import GroupDetailPage from '@/pages/comercial/MesListes/GroupDetail.jsx'
 import RemindersPage from '@/pages/comercial/Reminders/index.jsx'
 export default function AppRoutes() {
   return (
@@ -18,10 +19,10 @@ export default function AppRoutes() {
       <Route path="/profil" element={<ProfilPage />} />
       <Route path="/entreprises" element={<EntrepriseListPage />} />
       <Route path="/commerciaux" element={<ComercialListPage />} />
-      <Route path="/clients" element={<ClientListPage />} />
-      <Route path="/clients/:id" element={<ClientDetailPage />} />
-      <Route path="/mes-clients" element={<MesClientsPage />} />
-      <Route path="/mes-clients/:id" element={<ClientDetailPage />} />
+      <Route path="/prospects" element={<ProspectListPage />} />
+      <Route path="/prospects/:id" element={<ClientDetailPage />} />
+      <Route path="/mes-listes" element={<MesListesPage />} />
+      <Route path="/mes-listes/:id" element={<GroupDetailPage />} />
       <Route path="/reminders" element={<RemindersPage />} />
       <Route path="/admins" element={<AdminListPage />} />
       <Route path="/connexion" element={<ConnexionPage />} />
