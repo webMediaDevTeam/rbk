@@ -21,11 +21,10 @@ jobs:
           echo "=== SSH TEST ==="
 
           sshpass -p "$SSH_PASSWORD" ssh \
+            -tt \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=30 \
             -p 22 \
             "$SSH_USER@$SSH_HOST" \
-            'echo SSH_OK'
-
-          echo "=== SSH COMMAND FINISHED ==="
+            'echo SSH_OK; exit 0'
