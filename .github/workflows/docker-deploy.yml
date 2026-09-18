@@ -1,19 +1,16 @@
 
-name: Deploy to Production
+name: Test SSH Connection
 
 on:
   push:
     branches: [master]
 
-env:
-  DEPLOY_PATH: /var/www/vhosts/crmzdig.test-webmedia.site/httpdocs
-
 jobs:
-  deploy:
+  test-ssh:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test SSH connection
+      - name: Test SSH and OS
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -22,54 +19,9 @@ jobs:
           port: 22
           timeout: 30s
           command_timeout: 1m
-          debug: true
           script: |
-            set -x
-
             echo "SSH connection OK"
-            echo "=== User ==="
-            whoami
-
-            echo "=== Directory ==="
-            pwd
-
-            echo "=== Host ==="
-            hostname
-
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: 22
-          timeout: 60s
-          command_timeout: 10m
-          debug: true
-          script: |
-            set -e
-
-            echo "=== Entering deployment directory ==="
-            cd "${{ env.DEPLOY_PATH }}"
-
-            echo "=== 1. Git ==="
-            git status
-            git pull origin master
-
-            echo "=== 2. Deploy script ==="
-            bash -x deploy.sh
-
-            echo "=== 3. Docker versions ==="
-            docker --version
-            docker compose version
-
-            echo "=== 4. Docker down ==="
-            docker compose down
-
-            echo "=== 5. Docker build/up ==="
-            docker compose up -d --build
-
-            echo "=== 6. Docker status ==="
-            docker compose ps
-
-            echo "=== Deployment complete ==="
+            echo "=== Remote OS ==="
+            uname -a
+            echo "=== OS Information ==="
+            cat /etc/os-release
