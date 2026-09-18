@@ -6,16 +6,19 @@ echo "🚀 Starting deployment build..."
 # ---- 1. Build frontend inside Docker ----
 echo "📦 Building frontend with Docker..."
 docker run --rm \
+  --user "$(id -u):$(id -g)" \
   -v "$(pwd)/frontend:/app" \
   -w /app \
   node:22-alpine \
-  sh -c "npm install && npm run build"
+  sh -c "npm install && npm run build -- --outDir /app/dist-deploy --emptyOutDir"
 
 # ---- 2. Copy frontend build into Laravel public ----
 echo "📋 Copying frontend assets into backend/public..."
 rm -rf backend/public/build
-cp -r frontend/dist/build backend/public/build
-cp frontend/dist/index.html backend/public/index.html
+cp -r frontend/dist-deploy/build backend/public/build
+cp frontend/dist-deploy/index.html backend/public/index.html
+cp frontend/dist-deploy/favicon.svg backend/public/favicon.svg 2>/dev/null || true
+rm -rf frontend/dist-deploy
 
 # ---- 3. Install Laravel dependencies ----
 echo "📦 Installing backend dependencies with Docker..."
@@ -39,5 +42,5 @@ docker run --rm \
 
 echo ""
 echo "✅ Deployment build complete!"
-echo "   → frontend/assets → backend/public/build/"
+echo "   → frontend/dist-deploy/build → backend/public/build/"
 echo "   → backend/ is ready to deploy"
