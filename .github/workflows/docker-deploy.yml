@@ -10,24 +10,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Test SSH connection
+      - name: Test SSH
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
         run: |
-          sudo apt-get update -qq
           sudo apt-get install -y sshpass
 
-          echo "=== Testing SSH connection ==="
+          echo "=== SSH TEST ==="
 
           sshpass -p "$SSH_PASSWORD" ssh \
-            -vvv \
-            -o PreferredAuthentications=password \
-            -o PubkeyAuthentication=no \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -o ConnectTimeout=30 \
             -p 22 \
             "$SSH_USER@$SSH_HOST" \
-            'echo "SSH connection OK"; echo "=== OS ==="; uname -a; cat /etc/os-release'
+            'echo SSH_OK'
+
+          echo "=== SSH COMMAND FINISHED ==="
