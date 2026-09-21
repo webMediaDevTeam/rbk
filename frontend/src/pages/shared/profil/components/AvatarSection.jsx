@@ -1,6 +1,6 @@
 import Button from '@/components/ui/button.jsx'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
-import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal/index.jsx'
 import { useAvatarSection } from './useAvatarSection.js'
 
 export default function AvatarSection({ user, queryKey }) {

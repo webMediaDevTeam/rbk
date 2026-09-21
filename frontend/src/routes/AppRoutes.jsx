@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import DashboardPage from '@/pages/dashboard/index.jsx'
+import DashboardPage from '@/pages/shared/dashboard/index.jsx'
 import ProfilPage from '@/pages/shared/profil/index.jsx'
 import EntrepriseListPage from '@/pages/shared/entrepriseList/index.jsx'
 import ComercialListPage from '@/pages/shared/comercialList/index.jsx'

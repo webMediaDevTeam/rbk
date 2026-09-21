@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom'
 import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import StatusBadge from './StatusBadge'
-import RowMenu from '@/pages/shared/components/RowMenu.jsx'
-import SortHeader from '@/pages/shared/components/SortHeader.jsx'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
+import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { useComercialTable } from './useComercialTable.js'
 
 export default function ComercialTable(props) {

@@ -1,7 +1,7 @@
 import { Pencil, Power, Trash2 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
-import RowMenu from '@/pages/shared/components/RowMenu.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
 import { useComercialCard } from './useComercialCard.js'
 
 export default function ComercialCard(props) {

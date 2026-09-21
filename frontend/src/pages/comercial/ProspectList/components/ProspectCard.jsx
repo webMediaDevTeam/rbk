@@ -1,6 +1,6 @@
 import { Eye } from 'lucide-react'
 import ProspectStatusBadge from './ProspectStatusBadge'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 
 export default function ProspectCard({ client, onViewDetail, showViewButton = true }) {
   return (

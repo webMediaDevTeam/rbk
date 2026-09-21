@@ -4,10 +4,10 @@ import { useAdminListPage } from './useAdminList.js'
 import AdminTable from './components/AdminTable.jsx'
 import AdminCard from './components/AdminCard.jsx'
 import AdminToolbar from './components/AdminToolbar.jsx'
-import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal.jsx'
-import AdminCreateModal from '@/pages/shared/components/AdminCreateModal.jsx'
-import AdminUpdateModal from '@/pages/shared/components/AdminUpdateModal.jsx'
-import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal/index.jsx'
+import AdminCreateModal from '@/pages/shared/components/AdminCreateModal/index.jsx'
+import AdminUpdateModal from '@/pages/shared/components/AdminUpdateModal/index.jsx'
+import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 
 export default function AdminListPage() {
   const {

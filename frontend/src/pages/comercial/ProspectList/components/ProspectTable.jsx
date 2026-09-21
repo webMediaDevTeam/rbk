@@ -1,8 +1,8 @@
 import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import ProspectStatusBadge from './ProspectStatusBadge'
-import SortHeader from '@/pages/shared/components/SortHeader.jsx'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 
 export default function ProspectTable({ clients, sortBy, sortOrder, onSort, onViewDetail, showViewButton = true }) {
   return (

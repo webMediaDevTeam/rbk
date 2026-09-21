@@ -2,7 +2,7 @@ import { ChevronRight, Home, ArrowLeft, Eye } from 'lucide-react'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
 import ClientStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 
 export default function GroupDetailPage() {
   const {

@@ -1,6 +1,6 @@
 import { Eye } from 'lucide-react'
 import ProspectStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { useHistoryCard } from './useHistoryCard.js'
 
 export default function HistoryCard(props) {

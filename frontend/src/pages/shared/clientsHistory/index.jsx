@@ -3,7 +3,7 @@ import { useClientsHistoryPage } from './useClientsHistory.js'
 import ProspectTable from '@/pages/comercial/ProspectList/components/ProspectTable.jsx'
 import ProspectCard from '@/pages/comercial/ProspectList/components/ProspectCard.jsx'
 import ClientsHistoryToolbar from './components/ClientsHistoryToolbar.jsx'
-import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 
 export default function ClientsHistoryPage() {
   const {

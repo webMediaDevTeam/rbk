@@ -4,10 +4,10 @@ import { useComercialListPage } from './useComercialList.js'
 import ComercialTable from './components/ComercialTable.jsx'
 import ComercialCard from './components/ComercialCard.jsx'
 import ComercialToolbar from './components/ComercialToolbar.jsx'
-import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal.jsx'
-import CommercialCreateModal from '@/pages/shared/components/CommercialCreateModal.jsx'
-import CommercialUpdateModal from '@/pages/shared/components/CommercialUpdateModal.jsx'
-import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal/index.jsx'
+import CommercialCreateModal from '@/pages/shared/components/CommercialCreateModal/index.jsx'
+import CommercialUpdateModal from '@/pages/shared/components/CommercialUpdateModal/index.jsx'
+import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 
 export default function ComercialListPage() {
   const {

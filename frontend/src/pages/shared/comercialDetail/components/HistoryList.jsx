@@ -1,4 +1,4 @@
-import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import HistoryTable from './HistoryTable.jsx'
 import HistoryCard from './HistoryCard.jsx'
 import { useHistoryList } from './useHistoryList.js'

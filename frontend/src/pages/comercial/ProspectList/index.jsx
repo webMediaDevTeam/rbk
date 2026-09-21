@@ -3,7 +3,7 @@ import { useCommercialProspectList } from './useCommercialProspectList.js'
 import ProspectTable from './components/ProspectTable.jsx'
 import ProspectCard from './components/ProspectCard.jsx'
 import ProspectToolbar from './components/ProspectToolbar.jsx'
-import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ReservationModal from './components/ReservationModal.jsx'
 import Button from '@/components/ui/button.jsx'
 

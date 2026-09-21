@@ -4,10 +4,10 @@ import { useEntrepriseListPage } from './useEntrepriseList.js'
 import EntrepriseTable from './components/EntrepriseTable.jsx'
 import EntrepriseCard from './components/EntrepriseCard.jsx'
 import EntrepriseToolbar from './components/EntrepriseToolbar.jsx'
-import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal.jsx'
-import EnterpriseCreateModal from '@/pages/shared/components/EnterpriseCreateModal.jsx'
-import EnterpriseUpdateModal from '@/pages/shared/components/EnterpriseUpdateModal.jsx'
-import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import AvatarUpdateModal from '@/pages/shared/components/AvatarUpdateModal/index.jsx'
+import EnterpriseCreateModal from '@/pages/shared/components/EnterpriseCreateModal/index.jsx'
+import EnterpriseUpdateModal from '@/pages/shared/components/EnterpriseUpdateModal/index.jsx'
+import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 
 export default function EntrepriseListPage() {
   const {

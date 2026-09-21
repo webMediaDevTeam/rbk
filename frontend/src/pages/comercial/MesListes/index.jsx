@@ -1,7 +1,7 @@
 import { ChevronRight, Home, Eye, RotateCcw } from 'lucide-react'
 import { useMesListes } from './useMesListes.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
-import Pagination from '@/pages/shared/users/components/Pagination.jsx'
+import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 
 export default function MesListesPage() {
   const {

@@ -1,7 +1,7 @@
 import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import ProspectStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { useHistoryTable } from './useHistoryTable.js'
 
 export default function HistoryTable(props) {

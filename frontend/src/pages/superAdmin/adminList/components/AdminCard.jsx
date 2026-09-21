@@ -1,7 +1,7 @@
 import { Pencil, Power, ShieldCheck, Trash2 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
-import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
-import RowMenu from '@/pages/shared/components/RowMenu.jsx'
+import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
 
 export default function AdminCard({ admin, onAvatarClick, onToggleStatus, onDelete, onEdit }) {
   return (
