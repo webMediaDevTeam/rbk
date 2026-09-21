@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\V1\Shared;
 use App\Http\Controllers\Controller;
 use App\Mail\OtpVerificationMail;
 use App\Models\Employee;
-use App\Models\Enterprise;
 use App\Models\User;
 use App\Support\AccountVerificationLinks;
 use Illuminate\Database\Query\Builder;
@@ -197,7 +196,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->load(['enterprise', 'employee']);
+        $user = $request->user()->load(['employee.enterprise']);
 
         return response()->json([
             'utilisateur' => $this->formatUser($user),
@@ -371,7 +370,6 @@ class AuthController extends Controller
     private function verificationDisplayName(User $user): string
     {
         return match ($user->role) {
-            'ENTREPRISE' => $user->enterprise?->name ?? $user->email,
             'COMERCIAL' => trim(implode(' ', array_filter([
                 $user->employee?->first_name ?? $user->first_name,
                 $user->employee?->last_name ?? $user->last_name,
@@ -423,20 +421,13 @@ class AuthController extends Controller
     private function getProfile(User $user): ?array
     {
         return match ($user->role) {
-            'ENTREPRISE' => $user->enterprise ? [
-                'id' => $user->enterprise->id,
-                'nom' => $user->enterprise->name,
-                'telephone' => $user->enterprise->phone,
-                'adresse' => $user->enterprise->address,
-                'numero_fiscal' => $user->enterprise->tax_number,
-                'logo' => $user->enterprise->logo,
-            ] : null,
             'COMERCIAL' => $user->employee ? [
                 'id' => $user->employee->id,
                 'prenom' => $user->employee->first_name,
                 'nom' => $user->employee->last_name,
                 'telephone' => $user->employee->phone,
                 'entreprise_id' => $user->employee->enterprise_id,
+                'entreprise_name' => $user->employee->enterprise?->name,
                 'image_dp' => $user->employee->image_dp,
             ] : null,
             default => null,

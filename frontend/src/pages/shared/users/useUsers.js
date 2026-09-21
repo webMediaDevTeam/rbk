@@ -46,6 +46,11 @@ export function useUsers() {
     )
   }
 
+  const handleInvite = () => console.log('Invite User Clicked')
+  const handleAddUser = () => console.log('Add User Clicked')
+  const handleSort = (column) => console.log(`Sorting by ${column}`)
+  const handleHomeClick = (e) => e.preventDefault()
+
   return {
     users: filteredUsers,
     selectedUsers,
@@ -63,5 +68,9 @@ export function useUsers() {
     viewMode,
     setViewMode,
     toggleSelect,
+    handleInvite,
+    handleAddUser,
+    handleSort,
+    handleHomeClick,
   }
 }

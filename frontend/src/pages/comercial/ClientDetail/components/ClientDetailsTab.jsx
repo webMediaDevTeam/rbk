@@ -1,4 +1,5 @@
 import Badge from '@/components/ui/badge.jsx'
+import { useClientDetailsTab } from './useClientDetailsTab.js'
 
 function DetailRow({ label, value }) {
   return (
@@ -21,6 +22,16 @@ function DetailSection({ title, children }) {
 }
 
 export default function ClientDetailsTab({ client }) {
+  const {
+    licenceStartDate,
+    licenceEndDate,
+    suretyAmount,
+    licencePropre,
+    hasCategories,
+    hasRespondents,
+    hasActivity,
+  } = useClientDetailsTab({ client })
+
   return (
     <div className="space-y-6">
       <DetailSection title="Identification">
@@ -36,18 +47,12 @@ export default function ClientDetailsTab({ client }) {
         <DetailRow label="Numéro de licence" value={client.licence_number} />
         <DetailRow label="Statut" value={client.licence_status} />
         <DetailRow label="Intervenant" value={client.intervenant_name} />
-        <DetailRow label="Licence propre" value={client.licence_propre ? 'Oui' : 'Non'} />
-        <DetailRow
-          label="Date de début"
-          value={client.licence_start_date ? new Date(client.licence_start_date).toLocaleDateString('fr-FR') : null}
-        />
-        <DetailRow
-          label="Date de fin"
-          value={client.licence_end_date ? new Date(client.licence_end_date).toLocaleDateString('fr-FR') : null}
-        />
+        <DetailRow label="Licence propre" value={licencePropre} />
+        <DetailRow label="Date de début" value={licenceStartDate} />
+        <DetailRow label="Date de fin" value={licenceEndDate} />
       </DetailSection>
 
-      {client.authorized_categories && client.authorized_categories.length > 0 && (
+      {hasCategories && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Catégories</h3>
           <div className="flex flex-wrap gap-1.5">
@@ -60,15 +65,10 @@ export default function ClientDetailsTab({ client }) {
 
       <DetailSection title="Cautionnement">
         <DetailRow label="Compagnie" value={client.surety_company} />
-        <DetailRow
-          label="Montant"
-          value={client.surety_amount != null
-            ? new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' }).format(client.surety_amount)
-            : null}
-        />
+        <DetailRow label="Montant" value={suretyAmount} />
       </DetailSection>
 
-      {client.respondents && client.respondents.length > 0 && (
+      {hasRespondents && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">
             Répondants ({client.respondent_count})
@@ -88,7 +88,7 @@ export default function ClientDetailsTab({ client }) {
         <DetailRow label="Représentant" value={client.representative_name} />
       </DetailSection>
 
-      {(client.reservations_count != null || client.notes_count != null) && (
+      {hasActivity && (
         <DetailSection title="Activité">
           <DetailRow label="Réservations" value={client.reservations_count} />
           <DetailRow label="Notes" value={client.notes_count} />

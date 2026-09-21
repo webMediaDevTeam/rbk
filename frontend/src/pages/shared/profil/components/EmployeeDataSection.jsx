@@ -1,53 +1,20 @@
-import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
-import Button from '@/components/ui/button.jsx'
+import { Building2, Info } from 'lucide-react'
 import Input from '@/components/ui/input.jsx'
 import { Textarea } from '@/components/ui/textarea.jsx'
-import { useUpdateProfile } from '@/pages/shared/profil/useProfil.js'
-import { getApiErrorMessage } from '@/lib/api-errors.js'
+import { Alert, AlertDescription } from '@/components/ui/alert.jsx'
+import { useEmployeeDataSection } from './useEmployeeDataSection.js'
+
+function DetailRow({ label, value }) {
+  return (
+    <div className="space-y-1">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="font-medium text-foreground break-words">{value || '—'}</dd>
+    </div>
+  )
+}
 
 export default function EmployeeDataSection({ user }) {
-  const profil = user?.profil ?? {}
-
-  const [values, setValues] = useState({
-    first_name: '',
-    last_name: '',
-    phone: '',
-    additional_info: '',
-  })
-
-  useEffect(() => {
-    setValues({
-      first_name: profil.prenom ?? '',
-      last_name: profil.nom ?? '',
-      phone: profil.telephone ?? '',
-      additional_info: profil.info_supp ?? '',
-    })
-  }, [user?.id])
-
-  const updateMut = useUpdateProfile()
-
-  const handleChange = (key) => (e) => {
-    setValues((prev) => ({ ...prev, [key]: e.target.value }))
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    updateMut.mutate(
-      {
-        id: user.id,
-        first_name: values.first_name || null,
-        last_name: values.last_name || null,
-        phone: values.phone || null,
-        additional_info: values.additional_info || null,
-      },
-      {
-        onSuccess: () => toast.success('Données employé mises à jour.'),
-        onError: (err) => toast.error(getApiErrorMessage(err)),
-      }
-    )
-  }
+  const { entreprise, prenom, nom, telephone, infoSupp, entrepriseName, entrepriseLogoAlt } = useEmployeeDataSection({ user })
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -60,52 +27,69 @@ export default function EmployeeDataSection({ user }) {
 
       <div className="border-b border-border" />
 
-      <div className="rounded-xl border border-border px-4 py-3 space-y-3 text-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 py-1">
-          <span className="text-muted-foreground">Identifiant agent</span>
-          <span className="font-semibold text-foreground sm:col-span-2 break-words">{profil.id || '—'}</span>
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          Ces informations sont en lecture seule. Pour toute modification, veuillez contacter votre administrateur.
+        </AlertDescription>
+      </Alert>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-foreground">Prénom</label>
+          <Input type="text" value={prenom} disabled readOnly />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-4 py-1">
-          <span className="text-muted-foreground">Entreprise (ID)</span>
-          <span className="font-semibold text-foreground sm:col-span-2 break-words">{profil.entreprise_id || '—'}</span>
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-foreground">Nom</label>
+          <Input type="text" value={nom} disabled readOnly />
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-foreground">Prénom</label>
-            <Input type="text" value={values.first_name} onChange={handleChange('first_name')} />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-foreground">Téléphone</label>
+        <Input type="tel" value={telephone} disabled readOnly />
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-foreground">Zone de vente & détails du contrat</label>
+        <Textarea
+          rows={3}
+          value={infoSupp}
+          disabled
+          readOnly
+        />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold text-foreground">Entreprise</h3>
+        </div>
+
+        <div className="rounded-xl border border-border p-4 space-y-4">
+          <div className="flex items-center gap-3">
+            {entreprise.logo_url ? (
+              <img
+                src={entreprise.logo_url}
+                alt={entrepriseLogoAlt}
+                className="h-12 w-12 rounded-lg object-cover border border-border bg-background"
+              />
+            ) : (
+              <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center">
+                <Building2 className="h-5 w-5 text-muted-foreground" />
+              </div>
+            )}
+            <p className="font-semibold text-foreground break-words">{entrepriseName}</p>
           </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-foreground">Nom</label>
-            <Input type="text" value={values.last_name} onChange={handleChange('last_name')} />
-          </div>
-        </div>
 
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-foreground">Téléphone</label>
-          <Input type="tel" value={values.phone} onChange={handleChange('phone')} />
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <DetailRow label="NEQ / N° taxe" value={entreprise.tax_number} />
+            <DetailRow label="E-mail" value={entreprise.email} />
+            <DetailRow label="Téléphone" value={entreprise.phone} />
+            <DetailRow label="Adresse" value={entreprise.address} />
+          </dl>
         </div>
-
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-foreground">Zone de vente & détails du contrat</label>
-          <Textarea
-            rows={3}
-            value={values.additional_info}
-            onChange={handleChange('additional_info')}
-            placeholder="Décrivez votre zone de vente et les détails de votre contrat…"
-          />
-        </div>
-
-        <div>
-          <Button type="submit" disabled={updateMut.isPending}>
-            {updateMut.isPending ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Enregistrement…</>
-            ) : 'Enregistrer'}
-          </Button>
-        </div>
-      </form>
+      </div>
     </div>
   )
 }

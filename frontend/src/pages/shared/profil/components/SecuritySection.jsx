@@ -1,5 +1,3 @@
-import { useState } from 'react'
-import { toast } from 'sonner'
 import { AlertCircle, CheckCircle2, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
@@ -8,106 +6,29 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp.jsx'
-import {
-  useSendProfilePasswordOtp,
-  useUpdateProfilePassword,
-  useVerifyProfilePasswordOtp,
-} from '@/pages/shared/profil/useProfil.js'
-import { getApiErrorMessage } from '@/lib/api-errors.js'
-
-const MIN_PASSWORD_LENGTH = 8
+import { useSecuritySection } from './useSecuritySection.js'
 
 export default function SecuritySection({ user }) {
-  const [step, setStep] = useState('idle')
-  const [otp, setOtp] = useState('')
-  const [passwordUpdateToken, setPasswordUpdateToken] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmation, setConfirmation] = useState('')
-  const [error, setError] = useState(null)
-  const [canResendOtp, setCanResendOtp] = useState(false)
-
-  const sendOtpMut = useSendProfilePasswordOtp()
-  const verifyOtpMut = useVerifyProfilePasswordOtp()
-  const updatePasswordMut = useUpdateProfilePassword()
-
-  const email = user?.email ?? 'votre adresse email'
-  const isBusy = sendOtpMut.isPending || verifyOtpMut.isPending || updatePasswordMut.isPending
-
-  const requestOtp = () => {
-    setError(null)
-    setCanResendOtp(false)
-    setOtp('')
-
-    sendOtpMut.mutate(undefined, {
-      onSuccess: (response) => {
-        toast.success(response?.message ?? response?.data?.message ?? 'Code envoyé.')
-        setStep('otp')
-      },
-      onError: (err) => setError(getApiErrorMessage(err)),
-    })
-  }
-
-  const verifyOtp = (e) => {
-    e.preventDefault()
-    setError(null)
-    setCanResendOtp(false)
-
-    verifyOtpMut.mutate(
-      { code: otp },
-      {
-        onSuccess: (response) => {
-          setPasswordUpdateToken(response?.password_update_token ?? response?.data?.password_update_token ?? '')
-          setStep('password')
-          toast.success(response?.message ?? response?.data?.message ?? 'Code vérifié.')
-        },
-        onError: (err) => {
-          setError(getApiErrorMessage(err))
-          setCanResendOtp(err.response?.data?.code === 'PASSWORD_OTP_EXPIRED')
-        },
-      }
-    )
-  }
-
-  const updatePassword = (e) => {
-    e.preventDefault()
-    setError(null)
-
-    if (password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`)
-      return
-    }
-    if (password !== confirmation) {
-      setError('La confirmation ne correspond pas au mot de passe.')
-      return
-    }
-
-    updatePasswordMut.mutate(
-      {
-        password_update_token: passwordUpdateToken,
-        password,
-        password_confirmation: confirmation,
-      },
-      {
-        onSuccess: (response) => {
-          toast.success(response?.message ?? response?.data?.message ?? 'Mot de passe mis à jour.')
-          setStep('idle')
-          setOtp('')
-          setPassword('')
-          setConfirmation('')
-          setPasswordUpdateToken('')
-          setCanResendOtp(false)
-        },
-        onError: (err) => {
-          setError(getApiErrorMessage(err))
-          if (err.response?.data?.code === 'PASSWORD_UPDATE_TOKEN_EXPIRED') {
-            setStep('otp')
-            setPasswordUpdateToken('')
-            setCanResendOtp(true)
-          }
-        },
-      }
-    )
-  }
+  const {
+    step,
+    otp,
+    onOtpChange,
+    password,
+    onPasswordChange,
+    confirmation,
+    onConfirmationChange,
+    error,
+    canResendOtp,
+    email,
+    isBusy,
+    sendOtpPending,
+    verifyOtpPending,
+    updatePasswordPending,
+    otpSubmitDisabled,
+    requestOtp,
+    verifyOtp,
+    updatePassword,
+  } = useSecuritySection({ user })
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -146,7 +67,7 @@ export default function SecuritySection({ user }) {
 
         {step === 'idle' && (
           <Button type="button" onClick={requestOtp} disabled={isBusy}>
-            {sendOtpMut.isPending ? (
+            {sendOtpPending ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Envoi…
@@ -164,7 +85,7 @@ export default function SecuritySection({ user }) {
           <form onSubmit={verifyOtp} className="space-y-4">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-foreground">Code OTP</label>
-              <InputOTP maxLength={6} value={otp} onChange={setOtp} disabled={isBusy}>
+              <InputOTP maxLength={6} value={otp} onChange={onOtpChange} disabled={isBusy}>
                 <InputOTPGroup>
                   {[0, 1, 2, 3, 4, 5].map((index) => (
                     <InputOTPSlot key={index} index={index} />
@@ -174,8 +95,8 @@ export default function SecuritySection({ user }) {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={isBusy || otp.length !== 6}>
-                {verifyOtpMut.isPending ? (
+              <Button type="submit" disabled={otpSubmitDisabled}>
+                {verifyOtpPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Vérification…
@@ -187,7 +108,7 @@ export default function SecuritySection({ user }) {
 
               {canResendOtp && (
                 <Button type="button" variant="outline" onClick={requestOtp} disabled={isBusy}>
-                  {sendOtpMut.isPending ? (
+                  {sendOtpPending ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Renvoi…
@@ -210,7 +131,7 @@ export default function SecuritySection({ user }) {
                 <Input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={onPasswordChange}
                   placeholder="••••••••"
                   className="pl-9"
                   disabled={isBusy}
@@ -223,14 +144,14 @@ export default function SecuritySection({ user }) {
               <Input
                 type="password"
                 value={confirmation}
-                onChange={(e) => setConfirmation(e.target.value)}
+                onChange={onConfirmationChange}
                 placeholder="••••••••"
                 disabled={isBusy}
               />
             </div>
 
             <Button type="submit" disabled={isBusy}>
-              {updatePasswordMut.isPending ? (
+              {updatePasswordPending ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Mise à jour…

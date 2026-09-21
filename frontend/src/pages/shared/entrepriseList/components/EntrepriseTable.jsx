@@ -4,8 +4,11 @@ import StatusBadge from './StatusBadge'
 import RowMenu from '@/pages/shared/components/RowMenu.jsx'
 import SortHeader from '@/pages/shared/components/SortHeader.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
+import { useEntrepriseTable } from './useEntrepriseTable.js'
 
-export default function EntrepriseTable({ entreprises, sortBy, sortOrder, onSort, onToggleStatus, onDelete, canDelete, onAvatarClick, onEdit }) {
+export default function EntrepriseTable(props) {
+  const { rows, sortBy, sortOrder, onSort, canDelete } = useEntrepriseTable(props)
+
   return (
     <div className="rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
       <Table>
@@ -18,7 +21,7 @@ export default function EntrepriseTable({ entreprises, sortBy, sortOrder, onSort
               <SortHeader column="email" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Adresse e-mail</SortHeader>
             </TableHead>
             <TableHead>Téléphone</TableHead>
-            <TableHead>NIF</TableHead>
+            <TableHead>NIF / NEQ</TableHead>
             <TableHead>
               <SortHeader column="status" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Statut</SortHeader>
             </TableHead>
@@ -26,55 +29,51 @@ export default function EntrepriseTable({ entreprises, sortBy, sortOrder, onSort
           </TableRow>
         </TableHeader>
         <TableBody>
-          {entreprises.map((ent) => {
-            const profil = ent.profil
-            const name = profil?.nom ?? ent.email
-            return (
-              <TableRow key={ent.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2.5">
-                    <UserAvatar user={ent} size="sm" onEdit={() => onAvatarClick?.(ent)} />
-                    <span className="font-medium">{name}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">{ent.email}</TableCell>
-                <TableCell className="text-muted-foreground">{profil?.telephone ?? '—'}</TableCell>
-                <TableCell className="text-muted-foreground">{profil?.numero_fiscal ?? '—'}</TableCell>
-                <TableCell><StatusBadge status={ent.status} /></TableCell>
-                <TableCell className="text-right">
-                  <RowMenu>
-                    {(closeMenu) => (
-                      <>
+          {rows.map((row) => (
+            <TableRow key={row.key}>
+              <TableCell>
+                <div className="flex items-center gap-2.5">
+                  <UserAvatar user={row.ent} size="sm" onEdit={row.handleAvatarClick} />
+                  <span className="font-medium">{row.name}</span>
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">{row.email}</TableCell>
+              <TableCell className="text-muted-foreground">{row.phone}</TableCell>
+              <TableCell className="text-muted-foreground">{row.taxNumber}</TableCell>
+              <TableCell><StatusBadge status={row.ent.status} /></TableCell>
+              <TableCell className="text-right">
+                <RowMenu>
+                  {(closeMenu) => (
+                    <>
+                      <button
+                        onClick={() => row.handleEdit(closeMenu)}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Modifier
+                      </button>
+                      <button
+                        onClick={() => row.handleToggleStatus(closeMenu)}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <Power className="h-3.5 w-3.5" /> {row.toggleLabel}
+                      </button>
+                      {canDelete && (
                         <button
-                          onClick={() => { onEdit?.(ent); closeMenu() }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                          onClick={() => row.handleDelete(closeMenu)}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
                         >
-                          <Pencil className="h-3.5 w-3.5" /> Modifier
+                          <Trash2 className="h-3.5 w-3.5" /> Supprimer
                         </button>
-                        <button
-                          onClick={() => { onToggleStatus(ent.id, ent.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'); closeMenu() }}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-                        >
-                          <Power className="h-3.5 w-3.5" /> {ent.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
-                        </button>
-                        {canDelete && (
-                          <button
-                            onClick={() => { onDelete(ent.id); closeMenu() }}
-                            className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Supprimer
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </RowMenu>
-                </TableCell>
-              </TableRow>
-            )
-          })}
+                      )}
+                    </>
+                  )}
+                </RowMenu>
+              </TableCell>
+            </TableRow>
+          ))}
         </TableBody>
       </Table>
-      {entreprises.length === 0 && (
+      {rows.length === 0 && (
         <div className="h-24 flex items-center justify-center text-muted-foreground">Aucun résultat.</div>
       )}
     </div>

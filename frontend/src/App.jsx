@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   List,
   Bell,
+  History,
 } from 'lucide-react'
 
 const ROLE_NAV = {
@@ -28,6 +29,7 @@ const ROLE_NAV = {
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
         { title: 'Commerciaux', path: '/commerciaux', icon: List },
+        { title: 'Prospect list', path: '/clients-historique', icon: History },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
       ],
     },
@@ -50,26 +52,7 @@ const ROLE_NAV = {
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
         { title: 'Commerciaux', path: '/commerciaux', icon: List },
-      ],
-    },
-    {
-      title: 'Mon compte',
-      items: [
-        { title: 'Profil', path: '/profil', icon: UserRound },
-      ],
-    },
-  ],
-  ENTREPRISE: [
-    {
-      title: 'Principal',
-      items: [
-        { title: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-      ],
-    },
-    {
-      title: 'Gestion',
-      items: [
-        { title: 'Commerciaux', path: '/commerciaux', icon: List },
+        { title: 'Prospect list', path: '/clients-historique', icon: History },
       ],
     },
     {

@@ -1,46 +1,29 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Home, Eye, RotateCcw } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listReservationGroupsApi, releaseGroupPendingApi } from '@/api/commercial.api.js'
-import { useIsDesktop } from '@/hooks/use-mobile.js'
+import { useMesListes } from './useMesListes.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
 import Pagination from '@/pages/shared/users/components/Pagination.jsx'
-import Button from '@/components/ui/button.jsx'
-import { toast } from 'sonner'
 
 export default function MesListesPage() {
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const isDesktop = useIsDesktop()
-  const [currentPage, setCurrentPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(20)
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['reservation-groups', currentPage, rowsPerPage],
-    queryFn: () => listReservationGroupsApi({ page: currentPage, per_page: rowsPerPage }),
-  })
-
-  const groups = data?.data?.groups ?? []
-  const total = data?.data?.pagination?.total ?? 0
-
-  const releaseMutation = useMutation({
-    mutationFn: (groupId) => releaseGroupPendingApi(groupId),
-    onSuccess: (res, groupId) => {
-      const released = res?.data?.released ?? 0
-      qc.invalidateQueries({ queryKey: ['reservation-groups'] })
-      qc.invalidateQueries({ queryKey: ['reservations-pending'] })
-      toast.success(`${released} prospect(s) retourné(s) à disponible.`)
-    },
-    onError: (err) => {
-      toast.error(err?.response?.data?.message || 'Une erreur est survenue.')
-    },
-  })
+  const {
+    isLoading,
+    groups,
+    isDesktop,
+    currentPage,
+    totalPages,
+    rowsPerPage,
+    handleAccueilClick,
+    openGroupClick,
+    openGroupStopClick,
+    releaseGroupClick,
+    handlePageChange,
+    handleRowsPerPageChange,
+    formatDate,
+  } = useMesListes()
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={(e) => e.preventDefault()} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        <a href="#" onClick={handleAccueilClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />
@@ -76,7 +59,7 @@ export default function MesListesPage() {
                 <TableRow
                   key={g.id}
                   className="cursor-pointer hover:bg-primary/10 transition-colors"
-                  onClick={() => navigate(`/mes-listes/${g.id}`)}
+                  onClick={openGroupClick(g.id)}
                 >
                   <TableCell className="font-medium">{g.name}</TableCell>
                   <TableCell className="text-muted-foreground">{g.reserved_count}</TableCell>
@@ -91,12 +74,12 @@ export default function MesListesPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {g.created_at ? new Date(g.created_at).toLocaleDateString('fr-FR') : '—'}
+                    {formatDate(g.created_at)}
                   </TableCell>
                   <TableCell className="text-right">
                     {g.pending_count > 0 && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); releaseMutation.mutate(g.id) }}
+                        onClick={releaseGroupClick(g.id)}
                         className="p-1.5 rounded-lg hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
                         title="Retourner à disponible"
                         aria-label="Retourner à disponible"
@@ -105,7 +88,7 @@ export default function MesListesPage() {
                       </button>
                     )}
                     <button
-                      onClick={(e) => { e.stopPropagation(); navigate(`/mes-listes/${g.id}`) }}
+                      onClick={openGroupStopClick(g.id)}
                       className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                       aria-label="Voir"
                     >
@@ -123,11 +106,11 @@ export default function MesListesPage() {
             <div
               key={g.id}
               className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
-              onClick={() => navigate(`/mes-listes/${g.id}`)}
+              onClick={openGroupClick(g.id)}
             >
               {g.pending_count > 0 && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); releaseMutation.mutate(g.id) }}
+                  onClick={releaseGroupClick(g.id)}
                   className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
                   title="Retourner à disponible"
                   aria-label="Retourner à disponible"
@@ -146,7 +129,7 @@ export default function MesListesPage() {
                 </span>
               )}
               <span className="text-xs text-muted-foreground mt-3">
-                {g.created_at ? new Date(g.created_at).toLocaleDateString('fr-FR') : '—'}
+                {formatDate(g.created_at)}
               </span>
             </div>
           ))}
@@ -155,10 +138,10 @@ export default function MesListesPage() {
 
       <Pagination
         currentPage={currentPage}
-        totalPages={Math.max(1, Math.ceil(total / rowsPerPage))}
+        totalPages={totalPages}
         rowsPerPage={rowsPerPage}
-        onPageChange={setCurrentPage}
-        onRowsPerPageChange={(n) => { setRowsPerPage(n); setCurrentPage(1) }}
+        onPageChange={handlePageChange}
+        onRowsPerPageChange={handleRowsPerPageChange}
       />
     </div>
   )

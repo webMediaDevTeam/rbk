@@ -1,11 +1,4 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronRight, Copy, Home, ArrowLeft, Phone, Ban, Loader2, AlertCircle, X } from 'lucide-react'
-import { toast } from 'sonner'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCommercialProspect } from '@/pages/comercial/ProspectList/useCommercialProspectList.js'
-import { blacklistClientApi } from '@/api/commercial.api.js'
-import { useClientNotes } from './useNotes.js'
+import { ChevronRight, Copy, Home, ArrowLeft, Phone, Ban, Loader2, AlertCircle, X, Unlock } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs.jsx'
 import ProspectStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
@@ -13,51 +6,48 @@ import ClientDetailsTab from './components/ClientDetailsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
 import { cn } from '@/lib/utils.js'
+import { useClientDetail } from './useClientDetail.js'
 
 export default function ClientDetailPage() {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const { data, isLoading } = useCommercialProspect(id)
-  const { data: notesData } = useClientNotes(id)
-  const qc = useQueryClient()
-  const [actionOpen, setActionOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('details')
-  const [blacklistOpen, setBlacklistOpen] = useState(false)
-  const [blacklistNote, setBlacklistNote] = useState('')
-  const [blacklistError, setBlacklistError] = useState(null)
-
-  const client = data?.data?.client
-  const notes = notesData?.data ?? []
-
-  const hasReservation = !!client?.my_reservation
-  const reservedByName = client?.assigned_commercial
-    ? `${client.assigned_commercial.first_name ?? ''} ${client.assigned_commercial.last_name ?? ''}`.trim() || client.assigned_commercial.email
-    : null
-
-  const blacklistMutation = useMutation({
-    mutationFn: () => blacklistClientApi(id, blacklistNote),
-    onSuccess: () => {
-      toast.success('Client mis en liste noire.')
-      setBlacklistOpen(false)
-      setBlacklistNote('')
-      qc.invalidateQueries({ queryKey: ['commercial-prospect', id] })
-      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
-    },
-    onError: (err) => {
-      const msg = err?.response?.data?.message || 'Une erreur est survenue.'
-      setBlacklistError(msg)
-      toast.error(msg)
-    },
-  })
+  const {
+    id,
+    isAdmin,
+    isLoading,
+    client,
+    notes,
+    outcomes,
+    historyCount,
+    hasReservation,
+    reservedByName,
+    actionOpen,
+    openAction,
+    closeAction,
+    handleActionSuccess,
+    activeTab,
+    setActiveTab,
+    blacklistOpen,
+    blacklistNote,
+    blacklistError,
+    handleBlacklistNoteChange,
+    openBlacklist,
+    closeBlacklist,
+    blacklistMutation,
+    blacklistConfirmDisabled,
+    unblockMutation,
+    handleHomeClick,
+    handleProspectsClick,
+    handleBack,
+    handleCopyPhone,
+  } = useClientDetail()
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={(e) => { e.preventDefault(); navigate('/prospects') }} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        <a href="#" onClick={handleHomeClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />
-        <a href="#" onClick={(e) => { e.preventDefault(); navigate('/prospects') }} className="hover:text-foreground transition-colors">
+        <a href="#" onClick={handleProspectsClick} className="hover:text-foreground transition-colors">
           Prospects
         </a>
         <ChevronRight className="h-3.5 w-3.5" />
@@ -72,7 +62,7 @@ export default function ClientDetailPage() {
         <>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
-              <Button variant="ghost" size="icon-sm" onClick={() => navigate(-1)}>
+              <Button variant="ghost" size="icon-sm" onClick={handleBack}>
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div className="min-w-0">
@@ -91,11 +81,7 @@ export default function ClientDetailPage() {
                       {client.phone}
                       <button
                         type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(client.phone)
-                            .then(() => toast.success('Numéro copié.'))
-                            .catch(() => toast.error('Impossible de copier le numéro.'))
-                        }}
+                        onClick={handleCopyPhone}
                         className="p-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
                         aria-label="Copier le numéro"
                       >
@@ -107,17 +93,19 @@ export default function ClientDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <Button onClick={() => setActionOpen(true)}>
-                <Phone className="h-4 w-4 mr-1" />
-                Suite appel
-              </Button>
+              {!isAdmin && (
+                <Button onClick={openAction}>
+                  <Phone className="h-4 w-4 mr-1" />
+                  Suite appel
+                </Button>
+              )}
             </div>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="details">Détails</TabsTrigger>
-              <TabsTrigger value="history">Historique ({notes.length + (client.call_outcomes?.length ?? 0)})</TabsTrigger>
+              <TabsTrigger value="history">Historique ({historyCount})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details">
@@ -131,41 +119,63 @@ export default function ClientDetailPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-foreground">Historique des interactions</h3>
                 </div>
-                <NoteTimeline notes={notes} outcomes={client.call_outcomes ?? []} clientId={id} />
+                <NoteTimeline notes={notes} outcomes={outcomes} clientId={id} readOnly={isAdmin} />
               </div>
             </TabsContent>
           </Tabs>
 
-          {!client.is_blacklisted && (
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                onClick={() => setBlacklistOpen(true)}
-              >
-                <Ban className="h-4 w-4 mr-1.5" />
-                Mettre en liste noire
-              </Button>
-            </div>
-          )}
+          <div className="flex justify-end">
+            {isAdmin ? (
+              client.is_blacklisted ? (
+                <Button
+                  variant="outline"
+                  onClick={unblockMutation.mutate}
+                  disabled={unblockMutation.isPending}
+                >
+                  {unblockMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Unlock className="h-4 w-4 mr-1.5" />}
+                  Débloquer
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                  onClick={openBlacklist}
+                >
+                  <Ban className="h-4 w-4 mr-1.5" />
+                  Mettre en liste noire
+                </Button>
+              )
+            ) : (
+              !client.is_blacklisted && (
+                <Button
+                  variant="outline"
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10"
+                  onClick={openBlacklist}
+                >
+                  <Ban className="h-4 w-4 mr-1.5" />
+                  Mettre en liste noire
+                </Button>
+              )
+            )}
+          </div>
         </>
       )}
 
       <ActionModal
         open={actionOpen}
-        onClose={() => setActionOpen(false)}
-        onActionSuccess={() => setActiveTab('history')}
+        onClose={closeAction}
+        onActionSuccess={handleActionSuccess}
         clientId={id}
         hasReservation={hasReservation}
         reservedByName={reservedByName}
-            />
+      />
 
       {blacklistOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => setBlacklistOpen(false)}>
-          <div className="relative w-full max-w-md rounded-2xl border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={closeBlacklist}>
+          <div className="relative w-full max-w-md rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold text-foreground">Mettre en liste noire</h2>
-              <button onClick={() => setBlacklistOpen(false)} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
+              <button onClick={closeBlacklist} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -179,7 +189,7 @@ export default function ClientDetailPage() {
                 <label className="block text-sm font-bold mb-1">Note *</label>
                 <textarea
                   value={blacklistNote}
-                  onChange={(e) => { setBlacklistNote(e.target.value); setBlacklistError(null) }}
+                  onChange={handleBlacklistNoteChange}
                   rows={3}
                   placeholder="Décrivez la raison de la mise en liste noire..."
                   className={cn(
@@ -198,12 +208,12 @@ export default function ClientDetailPage() {
               )}
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="secondary" onClick={() => setBlacklistOpen(false)} disabled={blacklistMutation.isPending}>
+                <Button type="button" variant="secondary" onClick={closeBlacklist} disabled={blacklistMutation.isPending}>
                   Annuler
                 </Button>
                 <Button
                   variant="destructive"
-                  disabled={blacklistMutation.isPending || !blacklistNote.trim()}
+                  disabled={blacklistConfirmDisabled}
                   onClick={blacklistMutation.mutate}
                 >
                   {blacklistMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}

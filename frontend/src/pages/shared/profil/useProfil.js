@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/context/AuthContext.jsx'
 import {
   sendProfilePasswordOtpApi,
   showUserApi,
@@ -17,6 +19,26 @@ export function useProfil(userId) {
     queryFn: () => showUserApi(userId),
     enabled: Boolean(userId),
   })
+}
+
+export function useProfilPage() {
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState('avatar')
+
+  const { data, isLoading, isError } = useProfil(user?.id)
+  const profile = data?.data?.utilisateur ?? (isError ? user : null)
+  const role = user?.role ?? 'COMERCIAL'
+  const queryKey = profilQueryKey(user?.id)
+  const showLoading = isLoading && !profile
+
+  return {
+    activeTab,
+    setActiveTab,
+    profile,
+    role,
+    queryKey,
+    showLoading,
+  }
 }
 
 export function useUpdateProfile() {

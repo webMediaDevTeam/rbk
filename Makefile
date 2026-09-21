@@ -22,6 +22,14 @@ dev: install
 	@$(MAKE) links
 	@echo "Bringing up frontend (Vite) and backend-dev (artisan serve) with hot reload"
 	docker compose up --build frontend backend-dev
+	@echo ""
+	@echo "✅ Dev stack is running! Useful links:"
+	@echo "  Frontend (Vite):      http://localhost:5173"
+	@echo "  Backend (HTTP):       http://localhost:8000"
+	@echo "  Reverb (WebSocket):   http://localhost:8080"
+	@echo "  MySQL:                127.0.0.1:3306 (rbqbot / rbqbot / rbqbot)"
+	@echo "  phpMyAdmin:           http://localhost:8081 (root / root)"
+	@echo "  Redis:                127.0.0.1:6379"
 
 up: install
 	@echo "Starting stack in background..."
@@ -80,9 +88,10 @@ artisan: install
 
 links:
 	@echo "Service URLs & connection info:"
-	@echo "  Frontend (Vite dev): http://localhost:5173"
-	@echo "  Reverb (WebSocket): http://localhost:8080"
-	@echo "  Backend (PHP-FPM): 127.0.0.1:9000 (use nginx or 'make artisan cmd=\"serve --host=0.0.0.0 --port=8000\"' for HTTP)"
+	@echo "  Frontend (Vite dev):     http://localhost:5173"
+	@echo "  Backend (HTTP serve):    http://localhost:8000"
+	@echo "  Reverb (WebSocket):      http://localhost:8080"
+	@echo "  phpMyAdmin:              http://localhost:8081 (root / root)"
 	@echo "  MySQL: 127.0.0.1:3306  (DB: rbqbot / user: rbqbot / pass: rbqbot)"
 	@echo "  Redis: 127.0.0.1:6379"
 	@echo "  To run artisan HTTP server: make artisan cmd=\"serve --host=0.0.0.0 --port=8000\""

@@ -1,9 +1,4 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Home } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext.jsx'
-import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
-import { useIsDesktop } from '@/hooks/use-mobile.js'
 import { useCommercialProspectList } from './useCommercialProspectList.js'
 import ProspectTable from './components/ProspectTable.jsx'
 import ProspectCard from './components/ProspectCard.jsx'
@@ -13,41 +8,19 @@ import ReservationModal from './components/ReservationModal.jsx'
 import Button from '@/components/ui/button.jsx'
 
 export default function ProspectListPage() {
-  const navigate = useNavigate()
-  const { canAccess } = useAuth()
-  const isDesktop = useIsDesktop()
-  const [search, setSearch] = useState('')
-  const [categories, setCategories] = useState('')
-  const [currentPage, setCurrentPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(10)
-  const [sortBy, setSortBy] = useState('created_at')
-  const [sortOrder, setSortOrder] = useState('desc')
-
-  const debouncedSearch = useDebouncedValue(search, 400)
-  const searchParam = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined
-
-  const { data, isLoading } = useCommercialProspectList({
-    search: searchParam,
-    category_id: categories || undefined,
-    page: currentPage,
-    per_page: rowsPerPage,
-    sort_by: sortBy,
-    sort_order: sortOrder,
-  })
-
-  const clients = data?.data?.clients ?? []
-  const total = data?.data?.pagination?.total ?? 0
-
-  const handleSort = (column) => {
-    if (sortBy === column) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortBy(column)
-      setSortOrder('asc')
-    }
-  }
-
-  const [showReserve, setShowReserve] = useState(false)
+  const {
+    isDesktop,
+    search, setSearch,
+    categories,
+    handleCategoriesChange,
+    currentPage, setCurrentPage,
+    rowsPerPage, handleRowsPerPageChange,
+    sortBy, sortOrder, handleSort,
+    clients, isLoading,
+    total, totalPages,
+    showReserve, openReserve, closeReserve,
+    handleViewDetail,
+  } = useCommercialProspectList()
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -65,13 +38,13 @@ export default function ProspectListPage() {
           <p className="text-sm text-muted-foreground mt-1">Visualisez et gérez tous les prospects disponibles.</p>
         </div>
         <div>
-          <Button variant="default" onClick={() => setShowReserve(true)}>Réserver</Button>
+          <Button variant="default" onClick={openReserve}>Réserver</Button>
         </div>
       </div>
 
       <ProspectToolbar
         search={search} setSearch={setSearch}
-        categories={categories} setCategories={(c) => { setCategories(c); setCurrentPage(1) }}
+        categories={categories} setCategories={handleCategoriesChange}
       />
 
       {isLoading ? (
@@ -80,24 +53,25 @@ export default function ProspectListPage() {
         <ProspectTable
           clients={clients}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
-          onViewDetail={(c) => navigate(`/prospects/${c.id}`)}
+          onViewDetail={handleViewDetail}
+          showViewButton={false}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {clients.map((c) => (
-            <ProspectCard key={c.id} client={c} onViewDetail={(cl) => navigate(`/prospects/${cl.id}`)} />
+            <ProspectCard key={c.id} client={c} onViewDetail={handleViewDetail} showViewButton={false} />
           ))}
         </div>
       )}
 
       <Pagination
         currentPage={currentPage}
-        totalPages={Math.max(1, Math.ceil(total / rowsPerPage))}
+        totalPages={totalPages}
         rowsPerPage={rowsPerPage}
         onPageChange={setCurrentPage}
-        onRowsPerPageChange={(n) => { setRowsPerPage(n); setCurrentPage(1) }}
+        onRowsPerPageChange={handleRowsPerPageChange}
       />
-      <ReservationModal open={showReserve} onClose={() => setShowReserve(false)} />
+      <ReservationModal open={showReserve} onClose={closeReserve} />
     </div>
   )
 }

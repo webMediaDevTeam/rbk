@@ -1,5 +1,5 @@
 import { Check, Moon, Monitor, Sun } from 'lucide-react'
-import { useTheme } from '@/context/theme-provider.jsx'
+import { useThemeSection } from './useThemeSection.js'
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Clair', description: 'Utiliser un thème clair.', icon: Sun },
@@ -8,7 +8,7 @@ const THEME_OPTIONS = [
 ]
 
 export default function ThemeSection() {
-  const { theme, setTheme } = useTheme()
+  const { themes } = useThemeSection(THEME_OPTIONS)
 
   return (
     <div className="space-y-6">
@@ -22,21 +22,16 @@ export default function ThemeSection() {
       <div className="border-b border-border" />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {THEME_OPTIONS.map((option) => {
+        {themes.map((option) => {
           const Icon = option.icon
-          const isActive = theme === option.value
           return (
             <button
               key={option.value}
               type="button"
-              onClick={() => setTheme(option.value)}
-              className={`relative flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition-colors ${
-                isActive
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border hover:border-ring hover:bg-muted/50'
-              }`}
+              onClick={option.onClick}
+              className={option.className}
             >
-              {isActive && (
+              {option.isActive && (
                 <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Check className="h-3 w-3" />
                 </span>

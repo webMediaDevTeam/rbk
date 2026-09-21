@@ -1,4 +1,9 @@
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { useAuth } from '@/context/AuthContext.jsx'
+import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
+import { useIsDesktop } from '@/hooks/use-mobile.js'
 import {
   listCommerciauxApi,
   createCommercialApi,
@@ -58,4 +63,100 @@ export function useToggleCommercialStatus() {
     mutationFn: ({ id, status }) => toggleCommercialStatusApi(id, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commerciaux'] }),
   })
+}
+
+export function useComercialListPage() {
+  const { canAccess } = useAuth()
+  const isDesktop = useIsDesktop()
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [sortBy, setSortBy] = useState('created_at')
+  const [sortOrder, setSortOrder] = useState('desc')
+  const [avatarTarget, setAvatarTarget] = useState(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+
+  const debouncedSearch = useDebouncedValue(search, 400)
+  const searchParam = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined
+
+  const { data } = useComercialList({
+    search: searchParam,
+    status: statusFilter || undefined,
+    page: currentPage,
+    per_page: rowsPerPage,
+    sort_by: sortBy,
+    sort_order: sortOrder,
+  })
+
+  const deleteMut = useDeleteCommercial()
+  const toggleMut = useToggleCommercialStatus()
+
+  const commerciaux = data?.data?.utilisateurs ?? []
+  const total = data?.data?.pagination?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / rowsPerPage))
+  const canCreate = canAccess('commercials:create')
+  const canUpdate = canAccess('commercials:update')
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(column)
+      setSortOrder('asc')
+    }
+  }
+
+  const handleToggleStatus = (id, status) =>
+    toggleMut.mutate({ id, status }, { onSuccess: () => toast.success('Statut mis à jour.') })
+
+  const handleDelete = (id) => deleteMut.mutate(id, { onSuccess: () => toast.success('Supprimé.') })
+
+  const handleStatusFilterChange = (s) => {
+    setStatusFilter(s)
+    setCurrentPage(1)
+  }
+
+  const handleRowsPerPageChange = (n) => {
+    setRowsPerPage(n)
+    setCurrentPage(1)
+  }
+
+  const handleOpenCreate = () => setShowCreate(true)
+  const handleCloseCreate = () => setShowCreate(false)
+  const handleCloseAvatar = () => setAvatarTarget(null)
+  const handleCloseEdit = () => setEditTarget(null)
+  const handleHomeClick = (e) => e.preventDefault()
+
+  return {
+    isDesktop,
+    search,
+    setSearch,
+    statusFilter,
+    handleStatusFilterChange,
+    currentPage,
+    setCurrentPage,
+    rowsPerPage,
+    handleRowsPerPageChange,
+    totalPages,
+    canCreate,
+    canUpdate,
+    commerciaux,
+    sortBy,
+    sortOrder,
+    handleSort,
+    handleToggleStatus,
+    handleDelete,
+    avatarTarget,
+    setAvatarTarget,
+    handleCloseAvatar,
+    showCreate,
+    handleOpenCreate,
+    handleCloseCreate,
+    editTarget,
+    setEditTarget,
+    handleCloseEdit,
+    handleHomeClick,
+  }
 }

@@ -1,11 +1,8 @@
-import { useState } from 'react'
 import { Filter, LayoutGrid, List, X } from 'lucide-react'
 import Button from '@/components/ui/button'
 import Input from '@/components/ui/input'
 import Select from '@/components/ui/select'
-
-const STATUS_OPTIONS = ['Active', 'Suspended', 'Invited']
-const ROLE_OPTIONS = ['Admin', 'Manager', 'Cashier']
+import { useToolbar } from './useToolbar.js'
 
 export default function Toolbar({
   search,
@@ -17,14 +14,22 @@ export default function Toolbar({
   viewMode,
   setViewMode,
 }) {
-  const [drawerOpen, setDrawerOpen] = useState(false)
-
-  const clearFilters = () => {
-    setStatusFilter('')
-    setRoleFilter('')
-  }
-
-  const activeFilterCount = [statusFilter, roleFilter].filter(Boolean).length
+  const {
+    drawerOpen,
+    openDrawer,
+    closeDrawer,
+    clearFilters,
+    handleSearchChange,
+    handleStatusFilterChange,
+    handleRoleFilterChange,
+    toggleStatusFilter,
+    toggleRoleFilter,
+    setTableMode,
+    setCardMode,
+    activeFilterCount,
+    STATUS_OPTIONS,
+    ROLE_OPTIONS,
+  } = useToolbar({ search, setSearch, statusFilter, setStatusFilter, roleFilter, setRoleFilter, viewMode, setViewMode })
 
   return (
     <>
@@ -32,7 +37,7 @@ export default function Toolbar({
         <div className="flex w-full md:w-auto flex-wrap items-center gap-3">
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             placeholder="Filter users..."
             className="md:w-64 w-full min-w-0 flex-1 md:flex-none md:min-w-64"
           />
@@ -40,7 +45,7 @@ export default function Toolbar({
             variant="secondary"
             size="md"
             className="md:hidden"
-            onClick={() => setDrawerOpen(true)}
+            onClick={openDrawer}
           >
             <Filter className="h-4 w-4" />
             Filter
@@ -57,7 +62,7 @@ export default function Toolbar({
           <Button
             variant="secondary"
             size="md"
-            onClick={() => setStatusFilter(statusFilter === 'Active' ? '' : 'Active')}
+            onClick={toggleStatusFilter}
           >
             Status
             {statusFilter && (
@@ -69,7 +74,7 @@ export default function Toolbar({
           <Button
             variant="secondary"
             size="md"
-            onClick={() => setRoleFilter(roleFilter === 'Admin' ? '' : 'Admin')}
+            onClick={toggleRoleFilter}
           >
             Role
             {roleFilter && (
@@ -80,7 +85,7 @@ export default function Toolbar({
           </Button>
           <div className="flex items-center border border-border rounded-lg overflow-hidden shadow-sm">
             <button
-              onClick={() => setViewMode('table')}
+              onClick={setTableMode}
               className={`inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === 'table'
                   ? 'bg-primary text-primary-foreground'
@@ -90,7 +95,7 @@ export default function Toolbar({
               <List className="h-4 w-4" />
             </button>
             <button
-              onClick={() => setViewMode('card')}
+              onClick={setCardMode}
               className={`inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium transition-colors ${
                 viewMode === 'card'
                   ? 'bg-primary text-primary-foreground'
@@ -106,14 +111,14 @@ export default function Toolbar({
       {/* Mobile filter drawer */}
       {drawerOpen && (
         <>
-          <button className="fixed inset-0 h-[100dvh] z-[80] bg-black/40 md:hidden" aria-hidden="true" tabIndex={-1} onClick={() => setDrawerOpen(false)} />
+          <button className="fixed inset-0 h-[100dvh] z-[80] bg-black/40 md:hidden" aria-hidden="true" tabIndex={-1} onClick={closeDrawer} />
           <div className="fixed inset-y-0 right-0 h-[100dvh] z-[90] w-80 max-w-[85vw] bg-card border-l border-border p-4 shadow-xl md:hidden flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 Filters
               </h3>
-              <Button variant="ghost" size="icon-sm" onClick={() => setDrawerOpen(false)} aria-label="Close filters">
+              <Button variant="ghost" size="icon-sm" onClick={closeDrawer} aria-label="Close filters">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -121,14 +126,14 @@ export default function Toolbar({
             <div className="space-y-4 flex-1">
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Status</label>
-                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <Select value={statusFilter} onChange={handleStatusFilterChange}>
                   <option value="">All statuses</option>
                   {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </Select>
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1.5 block">Role</label>
-                <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                <Select value={roleFilter} onChange={handleRoleFilterChange}>
                   <option value="">All roles</option>
                   {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </Select>
@@ -139,7 +144,7 @@ export default function Toolbar({
               <Button variant="secondary" className="flex-1" onClick={clearFilters}>
                 Clear filters
               </Button>
-              <Button variant="default" className="flex-1" onClick={() => setDrawerOpen(false)}>
+              <Button variant="default" className="flex-1" onClick={closeDrawer}>
                 Apply
               </Button>
             </div>

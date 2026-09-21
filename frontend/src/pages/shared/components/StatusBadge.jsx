@@ -1,14 +1,11 @@
 import Badge from '@/components/ui/badge'
-
-const statusVariants = {
-  ACTIVE: 'success',
-  INACTIVE: 'destructive',
-  ARCHIVED: 'secondary',
-}
+import { useStatusBadge } from './useStatusBadge.js'
 
 export default function StatusBadge({ status, className }) {
+  const { variant } = useStatusBadge({ status })
+
   return (
-    <Badge variant={statusVariants[status] || 'secondary'} className={className}>
+    <Badge variant={variant} className={className}>
       <span className="font-bold uppercase text-[11px]">{status}</span>
     </Badge>
   )

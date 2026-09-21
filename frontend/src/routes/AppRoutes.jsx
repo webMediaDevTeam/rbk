@@ -11,6 +11,8 @@ import ClientDetailPage from '@/pages/comercial/ClientDetail/index.jsx'
 import MesListesPage from '@/pages/comercial/MesListes/index.jsx'
 import GroupDetailPage from '@/pages/comercial/MesListes/GroupDetail.jsx'
 import RemindersPage from '@/pages/comercial/Reminders/index.jsx'
+import ComercialDetailPage from '@/pages/shared/comercialDetail/index.jsx'
+import ClientsHistoryPage from '@/pages/shared/clientsHistory/index.jsx'
 export default function AppRoutes() {
   return (
     <Routes>
@@ -19,6 +21,8 @@ export default function AppRoutes() {
       <Route path="/profil" element={<ProfilPage />} />
       <Route path="/entreprises" element={<EntrepriseListPage />} />
       <Route path="/commerciaux" element={<ComercialListPage />} />
+      <Route path="/comercialDetail/:id" element={<ComercialDetailPage />} />
+      <Route path="/clients-historique" element={<ClientsHistoryPage />} />
       <Route path="/prospects" element={<ProspectListPage />} />
       <Route path="/prospects/:id" element={<ClientDetailPage />} />
       <Route path="/mes-listes" element={<MesListesPage />} />

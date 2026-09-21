@@ -32,27 +32,14 @@ class DemoBusinessDataSeeder extends Seeder
         ))->values();
 
         for ($enterpriseIndex = 1; $enterpriseIndex <= 32; $enterpriseIndex++) {
-            $enterpriseUser = User::updateOrCreate(
-                ['email' => sprintf('entreprise%02d@demo.rbk.local', $enterpriseIndex)],
-                [
-                    'password_hash' => Hash::make('password'),
-                    'role' => 'ENTREPRISE',
-                    'status' => 'ACTIVE',
-                    'first_name' => 'Entreprise',
-                    'last_name' => sprintf('Démo %02d', $enterpriseIndex),
-                    'email_verified_at' => now(),
-                    'verification_token' => null,
-                    'verification_sent_at' => null,
-                ],
-            );
-
             $enterprise = Enterprise::updateOrCreate(
-                ['user_id' => $enterpriseUser->id],
+                ['name' => sprintf('Entreprise Démo %02d', $enterpriseIndex)],
                 [
-                    'name' => sprintf('Entreprise Démo %02d', $enterpriseIndex),
+                    'email' => sprintf('entreprise%02d@demo.rbk.local', $enterpriseIndex),
                     'tax_number' => sprintf('TAX-DEMO-%04d', $enterpriseIndex),
                     'phone' => sprintf('418-555-%04d', 1000 + $enterpriseIndex),
                     'address' => sprintf('%d rue Démo, Québec, QC', 100 + $enterpriseIndex),
+                    'status' => 'ACTIVE',
                 ],
             );
 

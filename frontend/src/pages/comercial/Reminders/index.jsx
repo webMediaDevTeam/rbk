@@ -1,46 +1,14 @@
 import { ChevronRight, Home, Phone, Clock } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { useReminders } from '@/pages/comercial/ClientDetail/useOutcomes.js'
+import { useRemindersPage } from './useRemindersPage.js'
 import Button from '@/components/ui/button.jsx'
-import Badge from '@/components/ui/badge.jsx'
-
-const UNIT_LABELS = {
-  MINUTE: 'min',
-  HEURE: 'h',
-  JOUR: 'j',
-  SEMAINE: 'sem',
-  MOIS: 'mois',
-}
-
-function formatRecallAt(dateStr) {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const diffMs = date - now
-  const absDiffMs = Math.abs(diffMs)
-  const diffMin = Math.floor(absDiffMs / 60000)
-  const diffH = Math.floor(absDiffMs / 3600000)
-  const diffD = Math.floor(absDiffMs / 86400000)
-
-  if (diffMs < 0) {
-    if (diffMin < 60) return `En retard de ${diffMin} min`
-    if (diffH < 24) return `En retard de ${diffH}h`
-    return `En retard de ${diffD}j`
-  }
-  if (diffMin < 60) return `dans ${diffMin} min`
-  if (diffH < 24) return `dans ${diffH}h`
-  return `dans ${diffD}j`
-}
 
 export default function RemindersPage() {
-  const navigate = useNavigate()
-  const { data, isLoading } = useReminders()
-
-  const reminders = data?.data ?? []
+  const { isLoading, reminders, handleAccueilClick, formatRecallAt, UNIT_LABELS } = useRemindersPage()
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={(e) => { e.preventDefault(); navigate('/prospects') }} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        <a href="#" onClick={handleAccueilClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />

@@ -1,79 +1,17 @@
-import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Loader2, X } from 'lucide-react'
-import { toast } from 'sonner'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
-import { updateUserApi } from '@/api/shared.api.js'
-import { getApiErrorMessage } from '@/lib/api-errors.js'
+import Select from '@/components/ui/select.jsx'
+import { useCommercialUpdateModal } from './useCommercialUpdateModal.js'
 
 export default function CommercialUpdateModal({ open, onClose, user, queryKey }) {
-  const qc = useQueryClient()
-  const [error, setError] = useState(null)
-
-  const profil = user?.profil
-  const [form, setForm] = useState({
-    email: '', first_name: '', last_name: '', phone: '',
-    enterprise_id: '', additional_info: '',
-  })
-
-  useEffect(() => {
-    if (open && user) {
-      setForm({
-        email: user.email ?? '',
-        first_name: profil?.prenom ?? '',
-        last_name: profil?.nom ?? '',
-        phone: profil?.telephone ?? '',
-        enterprise_id: profil?.entreprise_id ?? '',
-        additional_info: profil?.info_supp ?? '',
-      })
-      setError(null)
-    }
-  }, [open, user?.id])
-
-  const mutation = useMutation({
-    mutationFn: (payload) => updateUserApi(user.id, payload),
-    onSuccess: () => {
-      toast.success('Commercial mis à jour.')
-      qc.invalidateQueries({ queryKey })
-      onClose()
-    },
-    onError: (err) => {
-      const msg = getApiErrorMessage(err)
-      setError(msg)
-      toast.error(msg)
-    },
-  })
+  const { form, error, isPending, enterprises, set, handleSubmit } = useCommercialUpdateModal({ open, onClose, user, queryKey })
 
   if (!open || !user) return null
 
-  const set = (key, val) => setForm((p) => ({ ...p, [key]: val }))
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setError(null)
-    if (!form.email) {
-      setError('L\'adresse e-mail est requise.')
-      return
-    }
-    if (!form.first_name || !form.last_name) {
-      setError('Le prénom et le nom sont requis.')
-      return
-    }
-    const payload = {
-      email: form.email,
-      first_name: form.first_name,
-      last_name: form.last_name,
-      phone: form.phone || null,
-      enterprise_id: form.enterprise_id || null,
-      additional_info: form.additional_info || null,
-    }
-    mutation.mutate(payload)
-  }
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-foreground">Modifier le commercial</h2>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
@@ -104,8 +42,13 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
               <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-bold mb-1">ID entreprise</label>
-              <Input type="text" value={form.enterprise_id} onChange={(e) => set('enterprise_id', e.target.value)} />
+              <label className="block text-sm font-bold mb-1">Entreprise</label>
+              <Select value={form.enterprise_id} onChange={(e) => set('enterprise_id', e.target.value)}>
+                <option value="">Aucune entreprise</option>
+                {enterprises.map((ent) => (
+                  <option key={ent.id} value={ent.id}>{ent.name ?? ent.profil?.nom ?? ent.email}</option>
+                ))}
+              </Select>
             </div>
           </div>
 
@@ -122,9 +65,9 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>Annuler</Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Annuler</Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Enregistrer
             </Button>
           </div>

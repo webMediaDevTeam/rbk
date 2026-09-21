@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
+use App\Models\Employee;
+use App\Models\User;
 use App\Support\AccountVerificationLinks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use App\Models\Employee;
-use App\Models\Enterprise;
-use App\Models\User;
+use Illuminate\Support\Str;
 
 class UserController extends Controller
 {
@@ -51,72 +51,52 @@ class UserController extends Controller
     | Role Hierarchy & Scope Helpers
     |--------------------------------------------------------------------------
     |
-    | SUPER_ADMIN → manages ADMIN, ENTREPRISE, COMERCIAL
-    | ADMIN        → manages ENTREPRISE, COMERCIAL
-    | ENTREPRISE   → manages own COMERCIAL employees only
+    | SUPER_ADMIN → manages ADMIN, COMERCIAL
+    | ADMIN        → manages COMERCIAL (and other ADMINs for viewing)
     | COMERCIAL    → no user management (sees only self)
     |
-    | The "user hierarchy" below lets us check if $actor can act on $target.
-    | Lower index = higher privilege: SUPER_ADMIN(0) > ADMIN(1) > ENTREPRISE(2) > COMERCIAL(3).
+    | Lower index = higher privilege: SUPER_ADMIN(0) > ADMIN(1) > COMERCIAL(2).
     |
     */
 
     private const ROLE_HIERARCHY = [
         'SUPER_ADMIN' => 0,
         'ADMIN'       => 1,
-        'ENTREPRISE'  => 2,
-        'COMERCIAL'   => 3,
+        'COMERCIAL'   => 2,
     ];
 
     private const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
 
     /**
      * Build a scoped query filtered by the connected user's role.
-     * Returns a Builder so callers can chain ->where / ->paginate.
      */
     protected function scopedQuery(Request $request): \Illuminate\Database\Eloquent\Builder
     {
-        $user   = $request->user();
-        $query  = User::with(['enterprise', 'employee']);
+        $user  = $request->user();
+        $query = User::with(['employee.enterprise']);
 
         return match ($user->role) {
-            // Sees everyone
             'SUPER_ADMIN' => $query,
-
-            // Sees ENTREPRISE + COMERCIAL (and other ADMINs? let's include ADMIN peers too for transparency)
-            'ADMIN' => $query->whereIn('role', ['ADMIN', 'ENTREPRISE', 'COMERCIAL']),
-
-            // Sees only COMERCIAL employees linked to their own Enterprise
-            'ENTREPRISE' => $query->where('role', 'COMERCIAL')
-                ->whereHas('employee', fn ($q) => $q->where('enterprise_id', $user->enterprise?->id)),
-
-            // Sees only themselves
-            default => $query->where('id', $user->id),
+            'ADMIN'       => $query->whereIn('role', ['ADMIN', 'COMERCIAL']),
+            default       => $query->where('id', $user->id),
         };
     }
 
     /**
      * Determine whether $actor may perform an action on $target.
-     * Returns true when allowed.
      */
     protected function canAct(User $actor, User $target, string $action = 'view'): bool
     {
-        // A user can always manage themselves
         if ($actor->id === $target->id) return true;
 
         $actorRank  = self::ROLE_HIERARCHY[$actor->role]  ?? 99;
         $targetRank = self::ROLE_HIERARCHY[$target->role] ?? 99;
 
-        // Actor must outrank (lower index) the target
-        if ($actorRank >= $targetRank) return false;
-
-        // Extra check for ENTREPRISE: can only touch their own COMERCIAL employees
-        if ($actor->role === 'ENTREPRISE') {
-            return $target->role === 'COMERCIAL'
-                && $target->employee?->enterprise_id === $actor->enterprise?->id;
+        if ($action === 'view') {
+            return $actorRank <= $targetRank;
         }
 
-        return true;
+        return $actorRank < $targetRank;
     }
 
     /*
@@ -130,11 +110,11 @@ class UserController extends Controller
         $base = request()->getSchemeAndHttpHost();
 
         return [
-            'id'        => $user->id,
-            'email'     => $user->email,
-            'role'      => $user->role,
-            'status'    => $user->status,
-            'avatar'    => $user->avatar,
+            'id'         => $user->id,
+            'email'      => $user->email,
+            'role'       => $user->role,
+            'status'     => $user->status,
+            'avatar'     => $user->avatar,
             'avatar_url' => $user->avatar
                 ? "{$base}/storage/avatars/{$user->avatar}"
                 : null,
@@ -142,33 +122,34 @@ class UserController extends Controller
             'last_name'  => $user->last_name,
             'phone'      => $user->phone,
             'created_at' => $user->created_at,
-            'profil'    => match ($user->role) {
-                'ENTREPRISE' => $user->enterprise ? [
-                    'id'              => $user->enterprise->id,
-                    'nom'             => $user->enterprise->name,
-                    'telephone'       => $user->enterprise->phone,
-                    'adresse'         => $user->enterprise->address,
-                    'numero_fiscal'   => $user->enterprise->tax_number,
-                    'logo'            => $user->enterprise->logo,
-                    'logo_url'        => $user->enterprise->logo
-                        ? "{$base}/storage/logos/{$user->enterprise->logo}"
-                        : null,
-                ] : null,
+            'profil'     => match ($user->role) {
                 'COMERCIAL' => $user->employee ? [
                     'id'              => $user->employee->id,
                     'prenom'          => $user->employee->first_name,
                     'nom'             => $user->employee->last_name,
                     'telephone'       => $user->employee->phone,
                     'entreprise_id'   => $user->employee->enterprise_id,
+                    'entreprise_name' => $user->employee->enterprise?->name,
                     'image_dp'        => $user->employee->image_dp,
                     'image_dp_url'    => $user->employee->image_dp
                         ? "{$base}/storage/avatars/{$user->employee->image_dp}"
                         : null,
                     'info_supp'       => $user->employee->additional_info,
+                    'entreprise'      => $user->employee->enterprise ? [
+                        'name'       => $user->employee->enterprise->name,
+                        'email'      => $user->employee->enterprise->email,
+                        'tax_number' => $user->employee->enterprise->tax_number,
+                        'phone'      => $user->employee->enterprise->phone,
+                        'address'    => $user->employee->enterprise->address,
+                        'status'     => $user->employee->enterprise->status,
+                        'logo_url'   => $user->employee->enterprise->logo
+                            ? "{$base}/storage/logos/{$user->employee->enterprise->logo}"
+                            : null,
+                    ] : null,
                 ] : null,
                 default => [
-                    'prenom'  => $user->first_name,
-                    'nom'     => $user->last_name,
+                    'prenom'    => $user->first_name,
+                    'nom'       => $user->last_name,
                     'telephone' => $user->phone,
                 ],
             },
@@ -181,7 +162,7 @@ class UserController extends Controller
     |--------------------------------------------------------------------------
     |
     | GET /users
-    | Query params: ?search=&role=&status=&page=&per_page=
+    | Query params: ?search=&role=&status=&page=&per_page=&sort_by=&sort_order=
     |
     */
 
@@ -189,28 +170,26 @@ class UserController extends Controller
     {
         $query = $this->scopedQuery($request);
 
-        // Search by email or profile name
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
                 $q->where('email', 'LIKE', $like)
-                  ->orWhereHas('enterprise', fn ($eq) => $eq->where('name', 'LIKE', $like))
+                  ->orWhere('first_name', 'LIKE', $like)
+                  ->orWhere('last_name', 'LIKE', $like)
                   ->orWhereHas('employee', fn ($eq) => $eq->where('first_name', 'LIKE', $like)
-                                                       ->orWhere('last_name', 'LIKE', $like));
+                                                       ->orWhere('last_name', 'LIKE', $like)
+                                                       ->orWhereHas('enterprise', fn ($entQ) => $entQ->where('name', 'LIKE', $like)));
             });
         }
 
-        // Filter by role
         if ($role = $request->input('role')) {
             $query->where('role', $role);
         }
 
-        // Filter by status
         if ($status = $request->input('status')) {
             $query->where('status', $status);
         }
 
-        // Server-side sorting
         $sortable = [
             'email'      => 'users.email',
             'role'       => 'users.role',
@@ -222,16 +201,10 @@ class UserController extends Controller
         $sortOrder = strtolower($request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if ($sortBy === 'name') {
-            // Name lives in the related profile table — order by subquery
             $role = $request->input('role');
-            if ($role === 'ENTREPRISE') {
+            if ($role === 'COMERCIAL') {
                 $query->orderBy(
-                    Enterprise::select('name')->whereColumn('enterprises.user_id', 'users.id'),
-                    $sortOrder
-                );
-            } elseif ($role === 'COMERCIAL') {
-                $query->orderBy(
-                    Employee::selectRaw("first_name || ' ' || last_name")->whereColumn('employees.user_id', 'users.id'),
+                    Employee::selectRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))")->whereColumn('employees.user_id', 'users.id'),
                     $sortOrder
                 );
             } else {
@@ -243,8 +216,8 @@ class UserController extends Controller
             $query->orderByDesc('users.created_at');
         }
 
-        $perPage  = min((int) $request->input('per_page', 20), 100);
-        $users    = $query->paginate($perPage);
+        $perPage = min((int) $request->input('per_page', 20), 100);
+        $users   = $query->paginate($perPage);
 
         return $this->respondOk([
             'utilisateurs' => $users->getCollection()->map(fn ($u) => $this->formatUser($u)),
@@ -264,9 +237,6 @@ class UserController extends Controller
     |
     | POST /users
     |
-    | The role being created must be lower in hierarchy than the actor.
-    | Validation rules adapt automatically based on the target role.
-    |
     */
 
     public function store(Request $request, AccountVerificationLinks $verificationLinks): JsonResponse
@@ -276,32 +246,22 @@ class UserController extends Controller
         $base = $request->validate([
             'email'        => 'required|email|unique:users,email',
             'mot_de_passe' => 'nullable|string|min:8|confirmed',
-            'role'         => 'required|in:ADMIN,ENTREPRISE,COMERCIAL',
+            'role'         => 'required|in:ADMIN,COMERCIAL',
         ]);
 
-        // Role hierarchy check: can only create users of LOWER privilege (higher rank number)
         $targetRank = self::ROLE_HIERARCHY[$base['role']] ?? 99;
         $actorRank  = self::ROLE_HIERARCHY[$actor->role]  ?? 99;
         if ($targetRank <= $actorRank) {
             return $this->forbidden('Vous ne pouvez pas créer un utilisateur de niveau égal ou supérieur.');
         }
 
-        // Role-specific validation
         $profile = match ($base['role']) {
-            'ENTREPRISE' => $request->validate([
-                'name'       => 'required|string|max:255',
-                'phone'      => 'nullable|string|max:255',
-                'address'    => 'nullable|string',
-                'tax_number' => 'nullable|string|max:255',
-            ]),
             'COMERCIAL' => $request->validate([
-                'first_name'       => 'required|string|max:255',
-                'last_name'        => 'required|string|max:255',
-                'phone'            => 'nullable|string|max:255',
-                'additional_info'  => 'nullable|string',
-                'enterprise_id' => $actor->role === 'ENTREPRISE'
-                    ? 'nullable'
-                    : 'required|uuid|exists:enterprises,id',
+                'first_name'      => 'required|string|max:255',
+                'last_name'       => 'required|string|max:255',
+                'phone'           => 'nullable|string|max:255',
+                'additional_info' => 'nullable|string',
+                'enterprise_id'   => 'nullable|uuid|exists:enterprises,id',
             ]),
             'ADMIN' => $request->validate([
                 'first_name' => 'nullable|string|max:255',
@@ -320,7 +280,6 @@ class UserController extends Controller
                 'phone'      => $profile['phone']      ?? null,
             ];
 
-            // If a password is provided, set it and mark verified; otherwise send a verification link.
             if (!empty($base['mot_de_passe'])) {
                 $data['password_hash'] = Hash::make($base['mot_de_passe']);
                 $data['email_verified_at'] = now();
@@ -329,45 +288,34 @@ class UserController extends Controller
             $user = User::create($data);
 
             if (empty($base['mot_de_passe'])) {
-                $verificationLinks->send($user, $this->verificationDisplayName($base['role'], $profile, $user), $request);
+                $verificationLinks->send($user, $this->verificationDisplayName($profile, $user), $request);
             }
 
-            $linked = match ($base['role']) {
-                'ENTREPRISE' => Enterprise::create([
-                    'user_id'    => $user->id,
-                    'name'       => $profile['name'],
-                    'phone'      => $profile['phone']      ?? null,
-                    'address'    => $profile['address']    ?? null,
-                    'tax_number' => $profile['tax_number'] ?? null,
-                ]),
-                'COMERCIAL' => Employee::create([
+            if ($base['role'] === 'COMERCIAL') {
+                Employee::create([
                     'user_id'         => $user->id,
-                    'enterprise_id'   => $profile['enterprise_id'] ?? $actor->enterprise?->id,
+                    'enterprise_id'   => $profile['enterprise_id'] ?? null,
                     'first_name'      => $profile['first_name'],
                     'last_name'       => $profile['last_name'],
                     'phone'           => $profile['phone']           ?? null,
                     'additional_info' => $profile['additional_info'] ?? null,
-                ]),
-                default => null,
-            };
+                ]);
+            }
 
             return $this->respondOk(
-                ['utilisateur' => $this->formatUser($user->fresh(['enterprise', 'employee']))],
+                ['utilisateur' => $this->formatUser($user->fresh(['employee.enterprise']))],
                 'Utilisateur créé avec succès.',
                 201,
             );
         });
     }
 
-    private function verificationDisplayName(string $role, array $profile, User $user): string
+    private function verificationDisplayName(array $profile, User $user): string
     {
-        return match ($role) {
-            'ENTREPRISE' => $profile['name'] ?? $user->email,
-            default => trim(implode(' ', array_filter([
-                $profile['first_name'] ?? $user->first_name,
-                $profile['last_name'] ?? $user->last_name,
-            ]))) ?: $user->email,
-        };
+        return trim(implode(' ', array_filter([
+            $profile['first_name'] ?? $user->first_name,
+            $profile['last_name'] ?? $user->last_name,
+        ]))) ?: $user->email;
     }
 
     /*
@@ -381,7 +329,7 @@ class UserController extends Controller
 
     public function show(Request $request, string $id): JsonResponse
     {
-        $target = User::with(['enterprise', 'employee'])->find($id);
+        $target = User::with(['employee.enterprise'])->find($id);
         if (!$target) return $this->notFound();
 
         if (!$this->canAct($request->user(), $target, 'view')) {
@@ -398,14 +346,11 @@ class UserController extends Controller
     |
     | PUT /users/{id}
     |
-    | Email is updatable.  Password only when provided.  Profile data updated
-    | in the linked model (Enterprise / Employee) when present.
-    |
     */
 
     public function update(Request $request, string $id): JsonResponse
     {
-        $target = User::with(['enterprise', 'employee'])->find($id);
+        $target = User::with(['employee.enterprise'])->find($id);
         if (!$target) return $this->notFound();
 
         if (!$this->canAct($request->user(), $target, 'update')) {
@@ -413,27 +358,22 @@ class UserController extends Controller
         }
 
         $data = $request->validate([
-            'email'         => 'sometimes|email|unique:users,email,' . $id,
-            'mot_de_passe'  => 'nullable|string|min:8',
-            'role'          => 'sometimes|in:ADMIN,ENTREPRISE,COMERCIAL',
-            'status'        => 'sometimes|in:' . implode(',', self::VALID_STATUSES),
-            'first_name'    => 'sometimes|nullable|string|max:255',
-            'last_name'     => 'sometimes|nullable|string|max:255',
-            'phone'         => 'sometimes|nullable|string|max:255',
+            'email'           => 'sometimes|email|unique:users,email,' . $id,
+            'mot_de_passe'    => 'nullable|string|min:8',
+            'role'            => 'sometimes|in:ADMIN,COMERCIAL',
+            'status'          => 'sometimes|in:' . implode(',', self::VALID_STATUSES),
+            'first_name'      => 'sometimes|nullable|string|max:255',
+            'last_name'       => 'sometimes|nullable|string|max:255',
+            'phone'           => 'sometimes|nullable|string|max:255',
             'additional_info' => 'sometimes|nullable|string',
-            'enterprise_id' => 'sometimes|nullable|uuid|exists:enterprises,id',
-            'name'          => 'sometimes|nullable|string|max:255',
-            'tax_number'    => 'sometimes|nullable|string|max:255',
-            'address'       => 'sometimes|nullable|string',
+            'enterprise_id'   => 'sometimes|nullable|uuid|exists:enterprises,id',
         ]);
 
-        // Password
         if (!empty($data['mot_de_passe'])) {
             $data['password_hash'] = Hash::make($data['mot_de_passe']);
         }
         unset($data['mot_de_passe']);
 
-        // Role change: validate hierarchy (can only demote, not promote)
         if (isset($data['role']) && $data['role'] !== $target->role) {
             $actorRank  = self::ROLE_HIERARCHY[$request->user()->role]  ?? 99;
             $targetRank = self::ROLE_HIERARCHY[$data['role']]           ?? 99;
@@ -444,13 +384,6 @@ class UserController extends Controller
 
         $target->update($data);
 
-        // Profile data
-        if ($target->role === 'ENTREPRISE' && $target->enterprise) {
-            $target->enterprise->update($request->only([
-                'name', 'tax_number', 'phone', 'address',
-            ]));
-        }
-
         if ($target->role === 'COMERCIAL' && $target->employee) {
             $target->employee->update($request->only([
                 'first_name', 'last_name', 'phone', 'additional_info', 'enterprise_id',
@@ -458,7 +391,7 @@ class UserController extends Controller
         }
 
         return $this->respondOk(
-            ['utilisateur' => $this->formatUser($target->fresh(['enterprise', 'employee']))],
+            ['utilisateur' => $this->formatUser($target->fresh(['employee.enterprise']))],
             'Utilisateur mis à jour.',
         );
     }
@@ -469,9 +402,6 @@ class UserController extends Controller
     |--------------------------------------------------------------------------
     |
     | DELETE /users/{id}
-    |
-    | Cascades to linked Enterprise / Employee via foreign keys.
-    | The actor cannot delete themselves.
     |
     */
 
@@ -519,7 +449,7 @@ class UserController extends Controller
         $target->update(['status' => $validated['status']]);
 
         return $this->respondOk(
-            ['utilisateur' => $this->formatUser($target->fresh())],
+            ['utilisateur' => $this->formatUser($target->fresh(['employee.enterprise']))],
             'Statut mis à jour.',
         );
     }
@@ -532,18 +462,11 @@ class UserController extends Controller
     | POST /users/{id}/avatar
     | Body: multipart/form-data  { avatar: <file> }
     |
-    | Upload logic:
-    |   • ENTREPRISE  → Enterprise.logo   (storage/app/public/logos/)
-    |   • COMERCIAL   → Employee.image_dp (storage/app/public/avatars/)
-    |   • SUPER_ADMIN / ADMIN → User.avatar (storage/app/public/avatars/)
-    |
-    | Old file is deleted when a new one is uploaded.
-    |
     */
 
     public function updateAvatar(Request $request, string $id): JsonResponse
     {
-        $target = User::with(['enterprise', 'employee'])->find($id);
+        $target = User::with(['employee.enterprise'])->find($id);
         if (!$target) return $this->notFound();
 
         if (!$this->canAct($request->user(), $target, 'update')) {
@@ -554,28 +477,32 @@ class UserController extends Controller
             'avatar' => 'required|image|max:2048|mimes:jpg,jpeg,png,gif,webp',
         ]);
 
-        // Determine disk path & DB field
         [$directory, $field, $model] = match (true) {
-            $target->role === 'ENTREPRISE' && $target->enterprise => ['logos',  'logo',   $target->enterprise],
-            $target->role === 'COMERCIAL'  && $target->employee   => ['avatars','image_dp',$target->employee],
-            default                                               => ['avatars','avatar', $target],
+            $target->role === 'COMERCIAL' && $target->employee => ['avatars', 'image_dp', $target->employee],
+            default                                            => ['avatars', 'avatar', $target],
         };
 
-        // Delete old file if exists
         $oldFile = $model->{$field};
         if ($oldFile && Storage::disk('public')->exists("{$directory}/{$oldFile}")) {
             Storage::disk('public')->delete("{$directory}/{$oldFile}");
         }
 
-        // Store new file
         $file      = $request->file('avatar');
         $extension = $file->getClientOriginalExtension();
         $filename  = Str::uuid() . ".{$extension}";
 
         $file->storeAs($directory, $filename, 'public');
 
-        // Update DB
         $model->update([$field => $filename]);
+
+        // Sync avatar between User and Employee for commercial users
+        if ($target->role === 'COMERCIAL' && $target->employee) {
+            if ($field === 'image_dp') {
+                $target->update(['avatar' => $filename]);
+            } elseif ($field === 'avatar') {
+                $target->employee->update(['image_dp' => $filename]);
+            }
+        }
 
         $url = request()->getSchemeAndHttpHost() . "/storage/{$directory}/{$filename}";
 

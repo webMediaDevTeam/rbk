@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Shared\AuthController;
+use App\Http\Controllers\Api\V1\Shared\DashboardController;
 use App\Http\Controllers\Api\V1\Shared\UserController;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
@@ -22,27 +23,25 @@ Route::get('categories', [\App\Http\Controllers\Api\V1\Shared\CategoryController
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);
     Route::post('auth/logout', [AuthController::class, 'deconnexion']);
+    Route::get('dashboard/stats', [DashboardController::class, 'stats']);
     Route::post('auth/profile/password/otp', [AuthController::class, 'sendPasswordOtp']);
     Route::post('auth/profile/password/otp/verify', [AuthController::class, 'verifyPasswordOtp']);
     Route::put('auth/profile/password', [AuthController::class, 'updateProfilePassword']);
 });
 
 // ── User Management ─────────────────────────────────────────
-// ENTREPRISE → manages COMERCIAL (own enterprise only)
-// ADMIN      → manages ENTREPRISE + COMERCIAL
+// ADMIN       → manages COMERCIAL
 // SUPER_ADMIN → manages everyone
-Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL,ENTREPRISE,ADMIN,SUPER_ADMIN'])->group(function () {
+Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
     Route::get('users',            [UserController::class, 'index']);
     Route::get('users/{id}',       [UserController::class, 'show']);
-});
-
-Route::middleware(['auth:sanctum', CheckRole::class . ':ENTREPRISE,ADMIN,SUPER_ADMIN'])->group(function () {
-    Route::post('users',            [UserController::class, 'store']);
-    Route::put('users/{id}',        [UserController::class, 'update']);
-    Route::patch('users/{id}/status', [UserController::class, 'toggleStatus']);
-    Route::post('users/{id}/avatar',  [UserController::class, 'updateAvatar']);
+    // A user may update their own avatar (self-only enforced in UserController::canAct).
+    Route::post('users/{id}/avatar', [UserController::class, 'updateAvatar']);
 });
 
 Route::middleware(['auth:sanctum', CheckRole::class . ':ADMIN,SUPER_ADMIN'])->group(function () {
-    Route::delete('users/{id}', [UserController::class, 'destroy']);
+    Route::post('users',            [UserController::class, 'store']);
+    Route::put('users/{id}',        [UserController::class, 'update']);
+    Route::patch('users/{id}/status', [UserController::class, 'toggleStatus']);
+    Route::delete('users/{id}',       [UserController::class, 'destroy']);
 });

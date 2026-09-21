@@ -1,187 +1,72 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
 import { AlertCircle, ArrowRight, Eye, EyeOff, KeyRound, Loader2, Lock, LogIn, Mail } from "lucide-react";
-import { toast } from "sonner";
-import { useTheme } from "@/context/theme-provider";
-import { useAuth } from "@/context/AuthContext";
-import faviconLight from "@/assets/icons/light_logo.svg";
-import faviconDark from "@/assets/icons/dark_logo.svg";
-import { useConnexion } from "@/hooks/useConnexion";
-import { useForgotPassword } from "@/hooks/useForgotPassword";
-import {
-  resetForgotPasswordApi,
-  sendLoginOtpApi,
-  verifyForgotPasswordOtpApi,
-  verifyLoginOtpApi,
-} from "@/api/auth.api";
-import { getApiErrorMessage, getApiFieldErrors } from "@/lib/api-errors";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { useConnexionPage } from "./useConnexionPage.js";
 
 const MODES = [
   { id: "password", label: "Par Mot De Passe", icon: Lock },
   { id: "otp", label: "Par Code", icon: Mail },
 ];
 
-const MIN_PASSWORD_LENGTH = 8;
-
 export default function ConnexionPage() {
-  const { homeForRole, login } = useAuth();
-  const navigate = useNavigate();
-  const [mode, setMode] = useState("connexion");
-  const [loginMethod, setLoginMethod] = useState("password");
-  const [forgotStep, setForgotStep] = useState("email");
-  const [showPassword, setShowPassword] = useState(false);
-  const { resolvedTheme } = useTheme();
-  const logoSrc = resolvedTheme === "dark" ? faviconDark : faviconLight;
+  const {
+    logoSrc,
+    mode,
+    loginMethod,
+    forgotStep,
+    loginOtpSent,
+    loginModes,
+    loginModeActiveIndex,
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
-  const [loginOtp, setLoginOtp] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
-  const [forgotOtp, setForgotOtp] = useState("");
-  const [passwordResetToken, setPasswordResetToken] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
-  const [localError, setLocalError] = useState(null);
-  const [canResendForgotOtp, setCanResendForgotOtp] = useState(false);
-  const [canResendLoginOtp, setCanResendLoginOtp] = useState(false);
-  const [loginOtpSent, setLoginOtpSent] = useState(false);
+    email,
+    onEmailChange,
+    emailError,
+    password,
+    onPasswordChange,
+    passwordError,
+    showPassword,
+    passwordInputType,
+    passwordToggleAriaLabel,
+    toggleShowPassword,
+    remember,
+    onRememberChange,
 
-  const completeLogin = ({ utilisateur }) => {
-    toast.success("Connexion réussie.");
-    navigate(homeForRole(utilisateur.role));
-  };
+    visibleError,
+    loginOtp,
+    onLoginOtpChange,
+    loginOtpDisabled,
+    sendLoginCode,
+    resendLoginCodeDisabled,
+    otpResendLabel,
+    isAuthBusy,
+    submitDisabled,
+    busyLabel,
+    idleLabel,
+    submitLogin,
+    openForgot,
+    backToLogin,
 
-  const connexion = useConnexion({ onSuccess: completeLogin });
-  const sendLoginOtp = useMutation({ mutationFn: sendLoginOtpApi });
-  const verifyLoginOtp = useMutation({
-    mutationFn: verifyLoginOtpApi,
-    onSuccess: (data) => {
-      login({ utilisateur: data.utilisateur, jeton: data.jeton, remember });
-      completeLogin(data);
-    },
-  });
-
-  const forgot = useForgotPassword({
-    onSuccess: ({ message }) => {
-      toast.success(message ?? "Code envoyé.");
-      setForgotStep("otp");
-      setCanResendForgotOtp(false);
-    },
-  });
-  const verifyForgotOtp = useMutation({ mutationFn: verifyForgotPasswordOtpApi });
-  const resetForgotPassword = useMutation({ mutationFn: resetForgotPasswordApi });
-
-  const switchMode = (id) => {
-    setMode(id);
-    setLocalError(null);
-    setForgotStep("email");
-    setLoginMethod("password");
-    setLoginOtp("");
-    setLoginOtpSent(false);
-    setForgotOtp("");
-    setPasswordResetToken("");
-    setCanResendForgotOtp(false);
-    setCanResendLoginOtp(false);
-    connexion.reset();
-    forgot.reset();
-    sendLoginOtp.reset();
-    verifyLoginOtp.reset();
-    verifyForgotOtp.reset();
-    resetForgotPassword.reset();
-  };
-
-  const switchLoginMethod = (id) => {
-    setLocalError(null);
-    setLoginOtp("");
-    setLoginOtpSent(false);
-    setCanResendLoginOtp(false);
-    sendLoginOtp.reset();
-    verifyLoginOtp.reset();
-    setLoginMethod(id);
-  };
-
-  const sendLoginCode = () => {
-    setLocalError(null);
-    setCanResendLoginOtp(false);
-    sendLoginOtp.mutate(
-      { email },
-      {
-        onSuccess: (data) => {
-          toast.success(data?.message ?? "Code de connexion envoyé.");
-          setLoginOtp("");
-          setLoginOtpSent(true);
-        },
-        onError: (err) => setLocalError(getApiErrorMessage(err)),
-      }
-    );
-  };
-
-  const submitForgotEmail = (e) => {
-    e.preventDefault();
-    setLocalError(null);
-    forgot.mutate({ email: resetEmail });
-  };
-
-  const submitForgotOtp = (e) => {
-    e.preventDefault();
-    setLocalError(null);
-    setCanResendForgotOtp(false);
-    verifyForgotOtp.mutate(
-      { email: resetEmail, code: forgotOtp },
-      {
-        onSuccess: (data) => {
-          setPasswordResetToken(data.password_reset_token);
-          setForgotStep("password");
-          toast.success(data?.message ?? "Code vérifié.");
-        },
-        onError: (err) => {
-          setLocalError(getApiErrorMessage(err));
-          setCanResendForgotOtp(err.response?.data?.code === "FORGOT_PASSWORD_OTP_EXPIRED");
-        },
-      }
-    );
-  };
-
-  const submitResetPassword = (e) => {
-    e.preventDefault();
-    setLocalError(null);
-    if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setLocalError(`Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`);
-      return;
-    }
-    if (newPassword !== newPasswordConfirmation) {
-      setLocalError("La confirmation ne correspond pas au mot de passe.");
-      return;
-    }
-
-    resetForgotPassword.mutate(
-      {
-        email: resetEmail,
-        password_reset_token: passwordResetToken,
-        password: newPassword,
-        password_confirmation: newPasswordConfirmation,
-      },
-      {
-        onSuccess: (data) => {
-          toast.success(data?.message ?? "Mot de passe réinitialisé.");
-          switchMode("connexion");
-          setEmail(resetEmail);
-        },
-        onError: (err) => setLocalError(getApiErrorMessage(err)),
-      }
-    );
-  };
-
-  const loginErrors = getApiFieldErrors(connexion.error);
-  const forgotErrors = getApiFieldErrors(forgot.error);
-  const loginOtpErrors = getApiFieldErrors(sendLoginOtp.error || verifyLoginOtp.error);
-  const visibleError = localError
-    || (connexion.error ? getApiErrorMessage(connexion.error) : null)
-    || (sendLoginOtp.error ? getApiErrorMessage(sendLoginOtp.error) : null)
-    || (verifyLoginOtp.error ? getApiErrorMessage(verifyLoginOtp.error) : null);
+    localError,
+    forgotError,
+    resetEmail,
+    onResetEmailChange,
+    forgotEmailError,
+    forgotPending,
+    submitForgotEmail,
+    forgotOtp,
+    onForgotOtpChange,
+    forgotOtpDisabled,
+    forgotOtpSubmitDisabled,
+    verifyForgotOtpPending,
+    submitForgotOtp,
+    canResendForgotOtp,
+    resendForgotOtp,
+    newPassword,
+    onNewPasswordChange,
+    newPasswordConfirmation,
+    onNewPasswordConfirmationChange,
+    resetPasswordPending,
+    submitResetPassword,
+  } = useConnexionPage({ modes: MODES });
 
   return (
     <>
@@ -209,16 +94,16 @@ export default function ConnexionPage() {
               className="auth-role-switch"
               role="tablist"
               aria-label="Choix du mode de connexion"
-              data-active={loginMethod === "password" ? 0 : 1}
+              data-active={loginModeActiveIndex}
             >
-              {MODES.map((m) => (
+              {loginModes.map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   role="tab"
-                  aria-selected={loginMethod === m.id}
-                  onClick={() => switchLoginMethod(m.id)}
-                  className={`auth-role-switch__btn ${loginMethod === m.id ? "auth-role-switch__btn--active" : ""}`}
+                  aria-selected={m.isActive}
+                  onClick={m.onClick}
+                  className={m.className}
                 >
                   <m.icon size={14} />
                   {m.label}
@@ -229,28 +114,7 @@ export default function ConnexionPage() {
         )}
 
         {mode === "connexion" && (
-          <form
-            className="auth-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (loginMethod === "otp") {
-                if (!loginOtpSent) {
-                  sendLoginCode();
-                  return;
-                }
-                verifyLoginOtp.mutate(
-                  { email, code: loginOtp },
-                  {
-                    onError: (err) => {
-                      setCanResendLoginOtp(err.response?.data?.code === "LOGIN_OTP_EXPIRED");
-                    },
-                  }
-                );
-                return;
-              }
-              connexion.mutate({ email, password, remember });
-            }}
-          >
+          <form className="auth-form" onSubmit={submitLogin}>
             {visibleError && (
               <div className="auth-alert" role="alert">
                 <AlertCircle className="auth-alert__icon" size={15} />
@@ -270,12 +134,12 @@ export default function ConnexionPage() {
                   className="auth-input"
                   placeholder="agent@ZdigIA.ca"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={onEmailChange}
                   required
                 />
               </div>
-              {(loginErrors.email || loginOtpErrors.email) && (
-                <p className="auth-field__error">{loginErrors.email?.[0] ?? loginOtpErrors.email?.[0]}</p>
+              {emailError && (
+                <p className="auth-field__error">{emailError}</p>
               )}
             </div>
 
@@ -288,23 +152,23 @@ export default function ConnexionPage() {
                   <Lock className="auth-input-wrap__icon" size={20} />
                   <input
                     id="auth-password"
-                    type={showPassword ? "text" : "password"}
+                    type={passwordInputType}
                     className="auth-input auth-input--with-action"
                     placeholder="••••••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={onPasswordChange}
                     required
                   />
                   <button
                     type="button"
                     className="auth-input-wrap__action"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                    onClick={toggleShowPassword}
+                    aria-label={passwordToggleAriaLabel}
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
                 </div>
-                {loginErrors.password && <p className="auth-field__error">{loginErrors.password[0]}</p>}
+                {passwordError && <p className="auth-field__error">{passwordError}</p>}
               </div>
             )}
 
@@ -325,8 +189,8 @@ export default function ConnexionPage() {
                   <InputOTP
                     maxLength={6}
                     value={loginOtp}
-                    onChange={setLoginOtp}
-                    disabled={verifyLoginOtp.isPending || sendLoginOtp.isPending}
+                    onChange={onLoginOtpChange}
+                    disabled={loginOtpDisabled}
                   >
                     <InputOTPGroup>
                       {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} />)}
@@ -340,13 +204,9 @@ export default function ConnexionPage() {
                   type="button"
                   className="auth-forgot"
                   onClick={sendLoginCode}
-                  disabled={sendLoginOtp.isPending || !email}
+                  disabled={resendLoginCodeDisabled}
                 >
-                  {sendLoginOtp.isPending
-                    ? "Envoi du code…"
-                    : canResendLoginOtp
-                      ? "Renvoyer le code"
-                      : "Recevoir un nouveau code"}
+                  {otpResendLabel}
                 </button>
               </div>
             )}
@@ -357,7 +217,7 @@ export default function ConnexionPage() {
                   type="checkbox"
                   className="auth-check__input"
                   checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
+                  onChange={onRememberChange}
                 />
                 <span>Se souvenir de moi</span>
               </label>
@@ -367,27 +227,16 @@ export default function ConnexionPage() {
                 <button
                   type="submit"
                   className="auth-submit"
-                  disabled={
-                    connexion.isPending
-                    || verifyLoginOtp.isPending
-                    || sendLoginOtp.isPending
-                    || (loginMethod === "otp" && loginOtpSent && loginOtp.length !== 6)
-                  }
+                  disabled={submitDisabled}
                 >
-                  {connexion.isPending || verifyLoginOtp.isPending || sendLoginOtp.isPending ? (
+                  {isAuthBusy ? (
                     <span className="auth-submit__spinner">
                       <Loader2 size={16} className="animate-spin" />
-                      {sendLoginOtp.isPending && loginMethod === "otp" && !loginOtpSent
-                        ? "Envoi du code…"
-                        : "Connexion en cours…"}
+                      {busyLabel}
                     </span>
                   ) : (
                     <span>
-                      {loginMethod === "otp"
-                        ? loginOtpSent
-                          ? "Valider le code"
-                          : "Envoyer le code"
-                        : "Se Connecter"}
+                      {idleLabel}
                     </span>
                   )}
                   <span className="auth-submit__arrow" aria-hidden="true">
@@ -396,7 +245,7 @@ export default function ConnexionPage() {
                 </button>
               </div>
 
-            <button type="button" className="auth-forgot-link" onClick={() => switchMode("forgot")}>
+            <button type="button" className="auth-forgot-link" onClick={openForgot}>
               Mot de passe oublié ?
             </button>
           </form>
@@ -413,10 +262,10 @@ export default function ConnexionPage() {
 
             {forgotStep === "email" && (
               <form className="auth-form" onSubmit={submitForgotEmail}>
-                {forgot.error && (
+                {forgotError && (
                   <div className="auth-alert" role="alert">
                     <AlertCircle className="auth-alert__icon" size={15} />
-                    <span>{getApiErrorMessage(forgot.error)}</span>
+                    <span>{forgotError}</span>
                   </div>
                 )}
 
@@ -432,16 +281,16 @@ export default function ConnexionPage() {
                       className="auth-input"
                       placeholder="agent@ZdigIA.ca"
                       value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
+                      onChange={onResetEmailChange}
                       required
                     />
                   </div>
-                  {forgotErrors.email && <p className="auth-field__error">{forgotErrors.email[0]}</p>}
+                  {forgotEmailError && <p className="auth-field__error">{forgotEmailError}</p>}
                 </div>
 
                 <div className="auth-submit-wrap">
-                  <button type="submit" className="auth-submit" disabled={forgot.isPending}>
-                    {forgot.isPending ? (
+                  <button type="submit" className="auth-submit" disabled={forgotPending}>
+                    {forgotPending ? (
                       <span className="auth-submit__spinner">
                         <Loader2 size={16} className="animate-spin" />
                         Envoi en cours…
@@ -462,7 +311,7 @@ export default function ConnexionPage() {
                 <div className="auth-field">
                   <label className="auth-field__label">Code de vérification</label>
                   <div className="auth-otp-wrap">
-                    <InputOTP maxLength={6} value={forgotOtp} onChange={setForgotOtp} disabled={verifyForgotOtp.isPending}>
+                    <InputOTP maxLength={6} value={forgotOtp} onChange={onForgotOtpChange} disabled={forgotOtpDisabled}>
                       <InputOTPGroup>
                         {[0, 1, 2, 3, 4, 5].map((index) => <InputOTPSlot key={index} index={index} />)}
                       </InputOTPGroup>
@@ -474,8 +323,8 @@ export default function ConnexionPage() {
                 </div>
 
                 <div className="auth-submit-wrap">
-                  <button type="submit" className="auth-submit" disabled={verifyForgotOtp.isPending || forgotOtp.length !== 6}>
-                    {verifyForgotOtp.isPending ? (
+                  <button type="submit" className="auth-submit" disabled={forgotOtpSubmitDisabled}>
+                    {verifyForgotOtpPending ? (
                       <span className="auth-submit__spinner">
                         <Loader2 size={16} className="animate-spin" />
                         Vérification…
@@ -490,7 +339,7 @@ export default function ConnexionPage() {
                 </div>
 
                 {canResendForgotOtp && (
-                  <button type="button" className="auth-forgot-link" onClick={() => forgot.mutate({ email: resetEmail })}>
+                  <button type="button" className="auth-forgot-link" onClick={resendForgotOtp}>
                     Renvoyer le code
                   </button>
                 )}
@@ -511,7 +360,7 @@ export default function ConnexionPage() {
                       className="auth-input"
                       placeholder="••••••••••••"
                       value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
+                      onChange={onNewPasswordChange}
                       required
                     />
                   </div>
@@ -527,14 +376,14 @@ export default function ConnexionPage() {
                     className="auth-input"
                     placeholder="••••••••••••"
                     value={newPasswordConfirmation}
-                    onChange={(e) => setNewPasswordConfirmation(e.target.value)}
+                    onChange={onNewPasswordConfirmationChange}
                     required
                   />
                 </div>
 
                 <div className="auth-submit-wrap">
-                  <button type="submit" className="auth-submit" disabled={resetForgotPassword.isPending}>
-                    {resetForgotPassword.isPending ? (
+                  <button type="submit" className="auth-submit" disabled={resetPasswordPending}>
+                    {resetPasswordPending ? (
                       <span className="auth-submit__spinner">
                         <Loader2 size={16} className="animate-spin" />
                         Mise à jour…
@@ -550,7 +399,7 @@ export default function ConnexionPage() {
               </form>
             )}
 
-            <button type="button" className="auth-sso" onClick={() => switchMode("connexion")}>
+            <button type="button" className="auth-sso" onClick={backToLogin}>
               Retour à la connexion
             </button>
           </>

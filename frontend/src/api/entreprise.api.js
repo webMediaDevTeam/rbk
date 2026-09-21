@@ -1,12 +1,12 @@
 import { api } from './client.js'
 
-// Commercial management (ENTREPRISE, ADMIN, SUPER_ADMIN)
+// Commercial management (ADMIN, SUPER_ADMIN)
 export function listCommerciauxApi(params = {}) {
   return api.get('/users', { params: { ...params, role: 'COMERCIAL' } })
 }
 
 export function createCommercialApi(payload) {
-  return api.post('/commerciaux', payload)
+  return api.post('/users', { ...payload, role: 'COMERCIAL' })
 }
 
 export function updateCommercialApi(id, payload) {
@@ -21,7 +21,6 @@ export function toggleCommercialStatusApi(id, status) {
   return api.patch(`/users/${id}/status`, { status })
 }
 
-// Commercial stats (ENTREPRISE, ADMIN, SUPER_ADMIN)
 export function statistiquesCommerciauxApi() {
   return api.get('/commerciaux/statistiques')
 }

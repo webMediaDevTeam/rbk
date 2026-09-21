@@ -2,10 +2,22 @@ import { Pencil, Power, Trash2 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu.jsx'
+import { useEntrepriseCard } from './useEntrepriseCard.js'
 
-export default function EntrepriseCard({ entreprise, onAvatarClick, onToggleStatus, onDelete, canDelete, onEdit }) {
-  const profil = entreprise.profil
-  const name = profil?.nom ?? entreprise.email
+export default function EntrepriseCard(props) {
+  const {
+    entreprise,
+    name,
+    email,
+    phone,
+    taxNumber,
+    toggleLabel,
+    canDelete,
+    handleAvatarClick,
+    handleEdit,
+    handleToggleStatus,
+    handleDelete,
+  } = useEntrepriseCard(props)
 
   return (
     <div className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md">
@@ -14,20 +26,20 @@ export default function EntrepriseCard({ entreprise, onAvatarClick, onToggleStat
           {(closeMenu) => (
             <>
               <button
-                onClick={() => { onEdit?.(entreprise); closeMenu() }}
+                onClick={() => handleEdit(closeMenu)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
               >
                 <Pencil className="h-3.5 w-3.5" /> Modifier
               </button>
               <button
-                onClick={() => { onToggleStatus?.(entreprise.id, entreprise.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'); closeMenu() }}
+                onClick={() => handleToggleStatus(closeMenu)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
               >
-                <Power className="h-3.5 w-3.5" /> {entreprise.status === 'ACTIVE' ? 'Désactiver' : 'Activer'}
+                <Power className="h-3.5 w-3.5" /> {toggleLabel}
               </button>
               {canDelete && (
                 <button
-                  onClick={() => { onDelete?.(entreprise.id); closeMenu() }}
+                  onClick={() => handleDelete(closeMenu)}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Supprimer
@@ -39,21 +51,21 @@ export default function EntrepriseCard({ entreprise, onAvatarClick, onToggleStat
       </div>
 
       <div className="flex items-center gap-3 mb-4">
-        <UserAvatar user={entreprise} size="md" onEdit={() => onAvatarClick?.(entreprise)} />
+        <UserAvatar user={entreprise} size="md" onEdit={handleAvatarClick} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate">{name}</p>
-          <p className="text-xs text-muted-foreground truncate">{entreprise.email}</p>
+          <p className="text-xs text-muted-foreground truncate">{email}</p>
         </div>
       </div>
 
       <div className="space-y-2 text-sm flex-1">
         <div>
           <span className="text-muted-foreground text-xs">Téléphone</span>
-          <p className="truncate">{profil?.telephone ?? '—'}</p>
+          <p className="truncate">{phone}</p>
         </div>
         <div>
           <span className="text-muted-foreground text-xs">Numéro fiscal</span>
-          <p>{profil?.numero_fiscal ?? '—'}</p>
+          <p>{taxNumber}</p>
         </div>
       </div>
 

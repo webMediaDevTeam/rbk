@@ -1,57 +1,16 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Loader2, X } from 'lucide-react'
-import { toast } from 'sonner'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
-import { createUserApi } from '@/api/shared.api.js'
-import { getApiErrorMessage } from '@/lib/api-errors.js'
+import { useAdminCreateModal } from './useAdminCreateModal.js'
 
 export default function AdminCreateModal({ open, onClose, queryKey }) {
-  const qc = useQueryClient()
-  const [form, setForm] = useState({
-    email: '', first_name: '', last_name: '', phone: '',
-  })
-  const [error, setError] = useState(null)
-
-  const mutation = useMutation({
-    mutationFn: (payload) => createUserApi(payload),
-    onSuccess: () => {
-      toast.success('Admin créé.')
-      qc.invalidateQueries({ queryKey })
-      onClose()
-    },
-    onError: (err) => {
-      const msg = getApiErrorMessage(err)
-      setError(msg)
-      toast.error(msg)
-    },
-  })
+  const { form, error, isPending, set, handleSubmit } = useAdminCreateModal({ open, onClose, queryKey })
 
   if (!open) return null
 
-  const set = (key, val) => setForm((p) => ({ ...p, [key]: val }))
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setError(null)
-    if (!form.email) {
-      setError('L\'adresse e-mail est requise.')
-      return
-    }
-    const payload = {
-      role: 'ADMIN',
-      email: form.email,
-      first_name: form.first_name || undefined,
-      last_name: form.last_name || undefined,
-      phone: form.phone || undefined,
-    }
-    mutation.mutate(payload)
-  }
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-foreground">Créer un admin</h2>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
@@ -89,9 +48,9 @@ export default function AdminCreateModal({ open, onClose, queryKey }) {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>Annuler</Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Annuler</Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Enregistrer
             </Button>
           </div>

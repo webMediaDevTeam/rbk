@@ -2,21 +2,23 @@ import { Eye } from 'lucide-react'
 import ProspectStatusBadge from './ProspectStatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar.jsx'
 
-export default function ProspectCard({ client, onViewDetail }) {
+export default function ProspectCard({ client, onViewDetail, showViewButton = true }) {
   return (
     <div
       className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
       onClick={() => onViewDetail?.(client)}
     >
-      <div className="absolute top-3 right-3">
-        <button
-          onClick={(e) => { e.stopPropagation(); onViewDetail?.(client) }}
-          className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-          aria-label="Voir détail"
-        >
-          <Eye className="h-4 w-4 text-muted-foreground" />
-        </button>
-      </div>
+      {showViewButton && (
+        <div className="absolute top-3 right-3">
+          <button
+            onClick={(e) => { e.stopPropagation(); onViewDetail?.(client) }}
+            className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+            aria-label="Voir détail"
+          >
+            <Eye className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 mb-4">
         <UserAvatar user={client} size="md" />

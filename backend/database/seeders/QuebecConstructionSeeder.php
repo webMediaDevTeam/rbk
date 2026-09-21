@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Hash;
 
 class QuebecConstructionSeeder extends Seeder
 {
-    private const DEFAULT_PASSWORD = 'password';
+    private const DEFAULT_PASSWORD = '123456789';
 
     private const CLIENTS_PER_ENTERPRISE = 50;
 
@@ -22,82 +22,65 @@ class QuebecConstructionSeeder extends Seeder
 
         $enterprises = [
             [
-                'code' => 'BOR',
-                'name' => 'Construction Boréal inc.',
-                'email' => 'admin@construction-boreal.qc.ca',
-                'tax_number' => '1149283746',
+                'code' => 'QCN',
+                'name' => 'Construction Quebec Nord Inc.',
+                'email' => 'admin@construction-quebec-nord.qc.ca',
+                'tax_number' => '1234567890',
                 'phone' => '418-555-0101',
-                'address' => '1245 boulevard Wilfrid-Hamel, Québec, QC G1N 3Y1',
+                'address' => '1500 rue Saint-Jean, Québec, QC G1R 1S6',
                 'municipality' => 'Québec',
                 'region' => 'Capitale-Nationale',
-                'admin' => ['first_name' => 'Éric', 'last_name' => 'Tremblay'],
                 'commerciaux' => [
-                    ['first_name' => 'Marie', 'last_name' => 'Gagnon'],
-                    ['first_name' => 'Luc', 'last_name' => 'Bouchard'],
+                    ['first_name' => 'Youssef', 'last_name' => 'Ben Ali', 'email' => 'youssef.benali@construction-quebec.tn'],
+                    ['first_name' => 'Meriem', 'last_name' => 'Mansouri', 'email' => 'meriem.mansouri@construction-quebec.tn'],
                 ],
             ],
             [
-                'code' => 'LAJ',
-                'name' => 'Les Entreprises Lajeunesse ltée',
-                'email' => 'admin@entreprises-lajeunesse.qc.ca',
-                'tax_number' => '1193847562',
-                'phone' => '514-555-0202',
-                'address' => '5200 rue Saint-Denis, Montréal, QC H2J 2M1',
-                'municipality' => 'Montréal',
-                'region' => 'Montréal',
-                'admin' => ['first_name' => 'Sophie', 'last_name' => 'Lévesque'],
+                'code' => 'BSL',
+                'name' => 'Les Bâtisseurs du St-Laurent',
+                'email' => 'admin@batisseurs-stlaurent.qc.ca',
+                'tax_number' => '1234567891',
+                'phone' => '418-555-0202',
+                'address' => '800 boulevard Champlain, Québec, QC G1K 7L7',
+                'municipality' => 'Québec',
+                'region' => 'Capitale-Nationale',
                 'commerciaux' => [
-                    ['first_name' => 'Jean-François', 'last_name' => 'Roy'],
-                    ['first_name' => 'Catherine', 'last_name' => 'Fortin'],
+                    ['first_name' => 'Ahmed', 'last_name' => 'Trabelsi', 'email' => 'ahmed.trabelsi@batisseurs-stlaurent.tn'],
+                    ['first_name' => 'Cyrine', 'last_name' => 'Gharbi', 'email' => 'cyrine.gharbi@batisseurs-stlaurent.tn'],
                 ],
             ],
             [
-                'code' => 'GAG',
-                'name' => 'Excavation Gagnon & Fils',
-                'email' => 'admin@excavation-gagnon.qc.ca',
-                'tax_number' => '1172638495',
-                'phone' => '450-555-0303',
-                'address' => '875 boulevard Curé-Labelle, Laval, QC H7V 2V5',
-                'municipality' => 'Laval',
-                'region' => 'Laval',
-                'admin' => ['first_name' => 'Patrick', 'last_name' => 'Gagnon'],
+                'code' => 'APS',
+                'name' => 'Apex Structures Québec',
+                'email' => 'admin@apex-structures-qc.ca',
+                'tax_number' => '1234567892',
+                'phone' => '418-555-0303',
+                'address' => '2200 avenue Pasteur, Québec, QC G2E 4H5',
+                'municipality' => 'Québec',
+                'region' => 'Capitale-Nationale',
                 'commerciaux' => [
-                    ['first_name' => 'Nathalie', 'last_name' => 'Côté'],
-                    ['first_name' => 'Mathieu', 'last_name' => 'Bergeron'],
+                    ['first_name' => 'Mohamed', 'last_name' => 'Khemir', 'email' => 'mohamed.khemir@apex-structures.tn'],
+                    ['first_name' => 'Olfa', 'last_name' => 'Hammami', 'email' => 'olfa.hammami@apex-structures.tn'],
                 ],
             ],
         ];
 
         foreach ($enterprises as $index => $data) {
-            $admin = User::updateOrCreate(
-                ['email' => $data['email']],
-                [
-                    'password_hash' => Hash::make(self::DEFAULT_PASSWORD),
-                    'role' => 'ENTREPRISE',
-                    'status' => 'ACTIVE',
-                    'first_name' => $data['admin']['first_name'],
-                    'last_name' => $data['admin']['last_name'],
-                    'phone' => $data['phone'],
-                    'email_verified_at' => now(),
-                    'verification_token' => null,
-                    'verification_sent_at' => null,
-                ],
-            );
-
             $enterprise = Enterprise::updateOrCreate(
-                ['user_id' => $admin->id],
+                ['name' => $data['name']],
                 [
-                    'name' => $data['name'],
+                    'email' => $data['email'],
                     'tax_number' => $data['tax_number'],
                     'phone' => $data['phone'],
                     'address' => $data['address'],
+                    'status' => 'ACTIVE',
                 ],
             );
 
             $commerciaux = [];
 
             foreach ($data['commerciaux'] as $commercialIndex => $commercial) {
-                $email = sprintf('commercial.%s.%d@construction-demo.qc.ca', strtolower($data['code']), $commercialIndex + 1);
+                $email = $commercial['email'] ?? sprintf('commercial.%s.%d@construction-demo.qc.ca', strtolower($data['code']), $commercialIndex + 1);
 
                 $commercialUser = User::updateOrCreate(
                     ['email' => $email],
@@ -192,13 +175,13 @@ class QuebecConstructionSeeder extends Seeder
 
         $prefix = $prefixes[(($clientIndex - 1) + ($enterpriseIndex * 7)) % count($prefixes)];
         $family = $families[(($clientIndex - 1) * 3 + ($enterpriseIndex * 11)) % count($families)];
-        $suffix = $suffixes[(($clientIndex - 1) + $enterpriseIndex) % count($suffixes)];
+        $suffix = $suffixes[(($clientIndex - 1) + ($enterpriseIndex)) % count($suffixes)];
         $name = sprintf('%s %s %s', $prefix, $family, $suffix);
 
         [$municipality, $region] = $locations[(($clientIndex - 1) + ($enterpriseIndex * 5)) % count($locations)];
 
         $clientCategories = $categories
-            ->slice(($clientIndex + $enterpriseIndex) % max(1, $categories->count()), 3)
+            ->slice(($clientIndex + ($enterpriseIndex)) % max(1, $categories->count()), 3)
             ->when(
                 fn ($slice) => $slice->count() < 3,
                 fn ($slice) => $slice->merge($categories->take(3 - $slice->count())),
@@ -229,7 +212,7 @@ class QuebecConstructionSeeder extends Seeder
                 'full_address' => sprintf('%d %s, %s, QC', 100 + (($clientIndex * 13 + $enterpriseIndex) % 3000), $this->street($clientIndex + $enterpriseIndex), $municipality),
                 'municipality' => $municipality,
                 'administrative_region' => $region,
-                'phone' => sprintf('%s-555-%04d', $areaCodes[($clientIndex + $enterpriseIndex) % count($areaCodes)], ($enterpriseIndex * 100) + $clientIndex),
+                'phone' => sprintf('%s-555-%04d', $areaCodes[($clientIndex + ($enterpriseIndex)) % count($areaCodes)], ($enterpriseIndex * 100) + $clientIndex),
                 'email' => sprintf('client%d.%02d@construction-demo.qc.ca', $enterpriseIndex + 1, $clientIndex),
                 'respondent_count' => 1,
                 'respondents' => [
@@ -237,7 +220,7 @@ class QuebecConstructionSeeder extends Seeder
                 ],
                 'sub_category_count' => $clientCategories->count(),
                 'authorized_categories' => $clientCategories->pluck('label')->all(),
-                'surety_company' => $suretyCompanies[($clientIndex + $enterpriseIndex) % count($suretyCompanies)],
+                'surety_company' => $suretyCompanies[($clientIndex + ($enterpriseIndex)) % count($suretyCompanies)],
                 'surety_amount' => 15000 + ($clientIndex * 500),
                 'licence_start_date' => now()->subMonths($clientIndex)->toDateString(),
                 'licence_end_date' => now()->addYear()->addMonths($clientIndex % 12)->toDateString(),

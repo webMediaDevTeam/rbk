@@ -1,9 +1,9 @@
-import { useState } from 'react'
 import { Mail, MoreVertical, UserPlus } from 'lucide-react'
 import Button from '@/components/ui/button'
+import { useHeader } from './useHeader.js'
 
 export default function Header({ onInvite, onAddUser }) {
-  const [menuOpen, setMenuOpen] = useState(false)
+  const { menuOpen, toggleMenu, closeMenu, handleInvite, handleAddUser } = useHeader({ onInvite, onAddUser })
 
   return (
     <div className="flex items-center justify-between gap-3">
@@ -29,7 +29,7 @@ export default function Header({ onInvite, onAddUser }) {
         <Button
           variant="secondary"
           size="icon"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={toggleMenu}
           aria-label="User actions"
         >
           <MoreVertical className="h-4 w-4" />
@@ -40,18 +40,18 @@ export default function Header({ onInvite, onAddUser }) {
               className="fixed inset-0 z-10 cursor-default"
               aria-hidden="true"
               tabIndex={-1}
-              onClick={() => setMenuOpen(false)}
+              onClick={closeMenu}
             />
             <div className="absolute right-0 top-full mt-1 z-20 w-48 rounded-lg border border-border bg-card text-card-foreground p-1 shadow-lg">
               <button
-                onClick={() => { onInvite(); setMenuOpen(false) }}
+                onClick={handleInvite}
                 className="flex w-full items-center rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors gap-2"
               >
                 <Mail className="h-4 w-4 text-muted-foreground" />
                 Invite User
               </button>
               <button
-                onClick={() => { onAddUser(); setMenuOpen(false) }}
+                onClick={handleAddUser}
                 className="flex w-full items-center rounded-md px-3 py-2 text-sm hover:bg-muted transition-colors gap-2"
               >
                 <UserPlus className="h-4 w-4 text-muted-foreground" />

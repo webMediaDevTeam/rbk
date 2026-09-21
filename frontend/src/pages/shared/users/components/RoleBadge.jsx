@@ -1,13 +1,7 @@
-import { User, Users, CreditCard } from 'lucide-react'
-
-const roleIcons = {
-  Admin: User,
-  Manager: Users,
-  Cashier: CreditCard,
-}
+import { useRoleBadge } from './useRoleBadge.js'
 
 export default function RoleBadge({ role }) {
-  const Icon = roleIcons[role] || User
+  const { Icon } = useRoleBadge({ role })
 
   return (
     <span className="inline-flex items-center gap-1.5 text-sm">

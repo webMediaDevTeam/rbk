@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, LogOut, Moon, Monitor, Sun, UserRound } from "lucide-react";
 import { useTheme } from "@/context/theme-provider";
 import { useAuth } from "@/context/AuthContext";
+import { buildAvatarUrl, getAvatarInitials } from "@/lib/avatar.js";
 
 function useDropdown() {
   const [open, setOpen] = useState(false);
@@ -83,8 +84,12 @@ export function ProfileDropdown() {
   const { ref, open, setOpen } = useDropdown();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const displayName = user?.email?.split("@")[0] ?? "User";
-  const initials = displayName.slice(0, 2).toUpperCase();
+  const displayName = user?.first_name && user?.last_name
+    ? `${user.first_name} ${user.last_name}`
+    : user?.email?.split("@")[0] ?? "User";
+  const BACKEND_URL = typeof window !== 'undefined' ? (window.location.origin.includes(':5173') ? 'http://localhost:8000' : window.location.origin) : 'http://localhost:8000';
+  const avatarUrl = user?.avatar_url || (user?.avatar ? `${BACKEND_URL}/storage/avatars/${user.avatar}` : null) || user?.profil?.image_dp_url || null;
+  const initials = getAvatarInitials(user);
 
   return (
     <div className="header-dropdown" ref={ref}>
@@ -95,14 +100,27 @@ export function ProfileDropdown() {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="header-avatar">{initials}</span>
+        <span className="header-avatar">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover rounded-full" />
+          ) : (
+            initials
+          )}
+        </span>
       </button>
       {open && (
         <div className="header-dropdown__menu header-dropdown__menu--right" role="menu">
           <div className="header-dropdown__header">
-            <span className="header-avatar header-avatar--lg">{initials}</span>
+            <span className="header-avatar header-avatar--lg">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover rounded-full" />
+              ) : (
+                initials
+              )}
+            </span>
             <div className="header-dropdown__identity">
-              <span className="header-dropdown__name">{user?.email ?? "User"}</span>
+              <span className="header-dropdown__name">{displayName}</span>
+              <span className="header-dropdown__email">{user?.email ?? ""}</span>
               <span className="header-dropdown__email">{user?.role ?? ""}</span>
             </div>
           </div>

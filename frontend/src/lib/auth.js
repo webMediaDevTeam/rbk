@@ -8,7 +8,6 @@ const TOKEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
 export const ROLE_HOME = {
   SUPER_ADMIN: '/dashboard',
   ADMIN: '/dashboard',
-  ENTREPRISE: '/dashboard',
   COMERCIAL: '/dashboard',
 }
 
@@ -20,28 +19,28 @@ export function homeForRole(role) {
 const ROLE_RANK = {
   SUPER_ADMIN: 0,
   ADMIN: 1,
-  ENTREPRISE: 2,
-  COMERCIAL: 3,
+  COMERCIAL: 2,
 }
 
 // Permission map: which roles can access which resources
 export const PERMISSIONS = {
   // User management
-  'users:list':     ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE', 'COMERCIAL'],
-  'users:create':   ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE'],
-  'users:update':   ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE'],
+  'users:list':     ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
+  'users:create':   ['SUPER_ADMIN', 'ADMIN'],
+  'users:update':   ['SUPER_ADMIN', 'ADMIN'],
   'users:delete':   ['SUPER_ADMIN', 'ADMIN'],
 
   // Entreprise management
   'entreprises:list':   ['SUPER_ADMIN', 'ADMIN'],
   'entreprises:create': ['SUPER_ADMIN', 'ADMIN'],
   'entreprises:update': ['SUPER_ADMIN', 'ADMIN'],
-  'entreprises:delete': ['SUPER_ADMIN'],
+  'entreprises:delete': ['SUPER_ADMIN', 'ADMIN'],
 
   // Commercial management
-  'commercials:list':   ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE'],
-  'commercials:create': ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE'],
-  'commercials:update': ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE'],
+  'commercials:list':   ['SUPER_ADMIN', 'ADMIN'],
+  'commercials:create': ['SUPER_ADMIN', 'ADMIN'],
+  'commercials:update': ['SUPER_ADMIN', 'ADMIN'],
+  'commercials:delete': ['SUPER_ADMIN', 'ADMIN'],
 
   // Admin management
   'admins:list':   ['SUPER_ADMIN'],
@@ -54,10 +53,10 @@ export const PERMISSIONS = {
   'blacklist:unblock': ['SUPER_ADMIN', 'ADMIN'],
 
   // Dashboard
-  'dashboard': ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE', 'COMERCIAL'],
+  'dashboard': ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
 
   // Profil
-  'profil': ['SUPER_ADMIN', 'ADMIN', 'ENTREPRISE', 'COMERCIAL'],
+  'profil': ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
 }
 
 export function hasPermission(role, permission) {

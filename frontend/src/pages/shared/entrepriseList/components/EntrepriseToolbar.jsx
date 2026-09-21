@@ -1,26 +1,18 @@
 import SearchBar from '@/components/ui/search-bar.jsx'
 import Select from '@/components/ui/select'
+import { useEntrepriseToolbar } from './useEntrepriseToolbar.js'
 
-export default function EntrepriseToolbar({
-  search,
-  setSearch,
-  statusFilter,
-  setStatusFilter,
-}) {
+export default function EntrepriseToolbar(props) {
+  const { searchInputProps, statusProps } = useEntrepriseToolbar(props)
+
   return (
     <div className="flex w-full gap-3">
       <SearchBar
         className="flex-1 min-w-0"
-        inputProps={{
-          value: search,
-          onChange: (e) => setSearch(e.target.value),
-          placeholder: 'Rechercher entreprises... (min 3 chars)',
-          'aria-label': 'Rechercher entreprises',
-        }}
+        inputProps={searchInputProps}
       />
       <Select
-        value={statusFilter}
-        onChange={(e) => setStatusFilter(e.target.value)}
+        {...statusProps}
         className="w-40 cursor-pointer shrink-0"
       >
         <option value="">Statut: Tous</option>

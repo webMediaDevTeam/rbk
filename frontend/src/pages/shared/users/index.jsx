@@ -24,12 +24,16 @@ export default function UsersPage() {
     viewMode,
     setViewMode,
     toggleSelect,
+    handleInvite,
+    handleAddUser,
+    handleSort,
+    handleHomeClick,
   } = useUsers()
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={(e) => e.preventDefault()} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+        <a href="#" onClick={handleHomeClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
           <Home className="h-3.5 w-3.5" />
           Home
         </a>
@@ -38,8 +42,8 @@ export default function UsersPage() {
       </nav>
 
       <Header
-        onInvite={() => console.log('Invite User Clicked')}
-        onAddUser={() => console.log('Add User Clicked')}
+        onInvite={handleInvite}
+        onAddUser={handleAddUser}
       />
       <Toolbar
         search={search}
@@ -57,7 +61,7 @@ export default function UsersPage() {
           users={users}
           selectedUsers={selectedUsers}
           setSelectedUsers={setSelectedUsers}
-          onSort={(column) => console.log(`Sorting by ${column}`)}
+          onSort={handleSort}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

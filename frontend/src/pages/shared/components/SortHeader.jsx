@@ -1,7 +1,8 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
+import { useSortHeader } from './useSortHeader.js'
 
 export default function SortHeader({ column, currentSortBy, sortOrder, onSort, children }) {
-  const isActive = currentSortBy === column
+  const { isActive } = useSortHeader({ column, currentSortBy })
 
   return (
     <button

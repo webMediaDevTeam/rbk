@@ -2,14 +2,10 @@ import { MoreHorizontal } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import StatusBadge from './StatusBadge'
 import RoleBadge from './RoleBadge'
+import { useUserCard } from './useUserCard.js'
 
 export default function UserCard({ user, isSelected, onSelect }) {
-  const initials = user.name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+  const { initials } = useUserCard({ user })
 
   return (
     <div

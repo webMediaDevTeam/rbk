@@ -37,3 +37,20 @@ export function getPendingReservationsCountApi() {
 export function releasePendingReservationsApi() {
   return api.post('/reservations/release-pending')
 }
+
+// Admin/Super Admin client view (read-only + blacklist management)
+export function listAdminClientsApi(params = {}) {
+  return api.get('/commercials/clients', { params })
+}
+
+export function getAdminClientApi(id) {
+  return api.get(`/commercials/clients/${id}`)
+}
+
+export function adminBlacklistClientApi(id, note) {
+  return api.post(`/commercials/clients/${id}/blacklist`, { note })
+}
+
+export function adminUnblockClientApi(id) {
+  return api.post(`/commercials/clients/${id}/unblock`)
+}

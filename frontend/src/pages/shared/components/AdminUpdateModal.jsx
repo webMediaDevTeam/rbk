@@ -1,69 +1,16 @@
-import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Loader2, X } from 'lucide-react'
-import { toast } from 'sonner'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
-import { updateUserApi } from '@/api/shared.api.js'
-import { getApiErrorMessage } from '@/lib/api-errors.js'
+import { useAdminUpdateModal } from './useAdminUpdateModal.js'
 
 export default function AdminUpdateModal({ open, onClose, user, queryKey }) {
-  const qc = useQueryClient()
-  const [error, setError] = useState(null)
-
-  const [form, setForm] = useState({
-    email: '', first_name: '', last_name: '', phone: '',
-  })
-
-  useEffect(() => {
-    if (open && user) {
-      setForm({
-        email: user.email ?? '',
-        first_name: user.first_name ?? '',
-        last_name: user.last_name ?? '',
-        phone: user.phone ?? '',
-      })
-      setError(null)
-    }
-  }, [open, user?.id])
-
-  const mutation = useMutation({
-    mutationFn: (payload) => updateUserApi(user.id, payload),
-    onSuccess: () => {
-      toast.success('Admin mis à jour.')
-      qc.invalidateQueries({ queryKey })
-      onClose()
-    },
-    onError: (err) => {
-      const msg = getApiErrorMessage(err)
-      setError(msg)
-      toast.error(msg)
-    },
-  })
+  const { form, error, isPending, set, handleSubmit } = useAdminUpdateModal({ open, onClose, user, queryKey })
 
   if (!open || !user) return null
 
-  const set = (key, val) => setForm((p) => ({ ...p, [key]: val }))
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setError(null)
-    if (!form.email) {
-      setError('L\'adresse e-mail est requise.')
-      return
-    }
-    const payload = {
-      email: form.email,
-      first_name: form.first_name || null,
-      last_name: form.last_name || null,
-      phone: form.phone || null,
-    }
-    mutation.mutate(payload)
-  }
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-foreground">Modifier l'admin</h2>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
@@ -101,9 +48,9 @@ export default function AdminUpdateModal({ open, onClose, user, queryKey }) {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>Annuler</Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Annuler</Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Enregistrer
             </Button>
           </div>

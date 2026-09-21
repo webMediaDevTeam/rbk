@@ -181,6 +181,21 @@ services:
     networks:
       - rbqbot-network
 
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: rbqbot-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+    depends_on:
+      - mysql
+    networks:
+      - rbqbot-network
+
 networks:
   rbqbot-network:
     name: rbqbot-network

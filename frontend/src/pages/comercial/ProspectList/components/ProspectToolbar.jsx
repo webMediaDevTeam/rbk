@@ -1,28 +1,10 @@
-import { useEffect, useState } from 'react'
 import SearchBar from '@/components/ui/search-bar.jsx'
 import Select from '@/components/ui/select'
-import { api } from '@/api/client.js'
+import { useProspectToolbar } from './useProspectToolbar.js'
 
-export default function ProspectToolbar({
-  search,
-  setSearch,
-  categories,
-  setCategories,
-}) {
-  const [categoriesList, setCategoriesList] = useState([])
+export default function ProspectToolbar(props) {
+  const { search, setSearch, categories, setCategories, categoriesList } = useProspectToolbar(props)
 
-  useEffect(() => {
-    let mounted = true
-    api.get('/categories')
-      .then((res) => {
-        if (!mounted) return
-        setCategoriesList(res.data?.categories || [])
-      })
-      .catch(() => {
-        // ignore failures; keep list empty
-      })
-    return () => { mounted = false }
-  }, [])
   return (
     <div className="flex w-full gap-3">
       <SearchBar
