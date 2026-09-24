@@ -52,14 +52,19 @@ export default function ProspectListPage() {
       ) : isDesktop ? (
         <ProspectTable
           clients={clients}
+          startIndex={(currentPage - 1) * rowsPerPage}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
           onViewDetail={handleViewDetail}
-          showViewButton={false}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {clients.map((c) => (
-            <ProspectCard key={c.id} client={c} onViewDetail={handleViewDetail} showViewButton={false} />
+          {clients.map((c, i) => (
+            <ProspectCard
+              key={c.id}
+              num={(currentPage - 1) * rowsPerPage + i + 1}
+              client={c}
+              onViewDetail={handleViewDetail}
+            />
           ))}
         </div>
       )}

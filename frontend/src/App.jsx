@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   List,
   Bell,
+  Voicemail,
   History,
 } from 'lucide-react'
 
@@ -28,7 +29,7 @@ const ROLE_NAV = {
       title: 'Gestion',
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
-        { title: 'Commerciaux', path: '/commerciaux', icon: List },
+        { title: 'Employés', path: '/commerciaux', icon: List },
         { title: 'Prospect list', path: '/clients-historique', icon: History },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
       ],
@@ -51,7 +52,7 @@ const ROLE_NAV = {
       title: 'Gestion',
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
-        { title: 'Commerciaux', path: '/commerciaux', icon: List },
+        { title: 'Employés', path: '/commerciaux', icon: List },
         { title: 'Prospect list', path: '/clients-historique', icon: History },
       ],
     },
@@ -75,6 +76,7 @@ const ROLE_NAV = {
         { title: 'Tous les prospects', path: '/prospects', icon: List },
         { title: 'Mes listes', path: '/mes-listes', icon: List },
         { title: 'Rappels', path: '/reminders', icon: Bell },
+        { title: 'Auto-rappels', path: '/auto-rappels', icon: Voicemail },
       ],
     },
     {

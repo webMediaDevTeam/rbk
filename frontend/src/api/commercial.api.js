@@ -26,16 +26,13 @@ export function getReservationGroupApi(id) {
   return api.get(`/reservation-groups/${id}`)
 }
 
-export function releaseGroupPendingApi(id) {
-  return api.post(`/reservation-groups/${id}/release-pending`)
+export function updateReservationGroupApi(id, payload) {
+  return api.patch(`/reservation-groups/${id}`, payload)
 }
 
-export function getPendingReservationsCountApi() {
-  return api.get('/reservations/pending-count')
-}
-
-export function releasePendingReservationsApi() {
-  return api.post('/reservations/release-pending')
+// Compteur header/sidebar : réservations actives du commercial connecté
+export function activeReservationsCountApi() {
+  return api.get('/reservations/active-count')
 }
 
 // Admin/Super Admin client view (read-only + blacklist management)
@@ -51,6 +48,7 @@ export function adminBlacklistClientApi(id, note) {
   return api.post(`/commercials/clients/${id}/blacklist`, { note })
 }
 
+// Unic endpoint d'unblock (réservé Admin / Super Admin)
 export function adminUnblockClientApi(id) {
-  return api.post(`/commercials/clients/${id}/unblock`)
+  return api.post(`/liste-noire/${id}/debloquer`)
 }

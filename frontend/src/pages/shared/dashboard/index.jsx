@@ -13,7 +13,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground">
           {isAdmin
-            ? 'Vue globale des entreprises, commerciaux, prospects et appels'
+            ? 'Vue globale des entreprises, employés, prospects et appels'
             : 'Vos statistiques personnelles'}
         </p>
       </div>

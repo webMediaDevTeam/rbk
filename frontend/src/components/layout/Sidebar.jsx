@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/context/theme-provider";
-import { useRemindersCount } from "@/pages/comercial/ClientDetail/useOutcomes.js";
+import { useRemindersCount, useActiveReservationsCount } from "@/pages/comercial/ClientDetail/useOutcomes.js";
 import faviconLight from "@/assets/icons/light_logo.svg";
 import faviconDark from "@/assets/icons/dark_logo.svg";
 
@@ -15,8 +15,16 @@ export default function Sidebar({ navGroups, collapsed, mobileOpen, onClose }) {
   const location = useLocation();
 
   const hasReminders = navGroups?.some((g) => g.items.some((i) => i.path === "/reminders"));
-  const { data: remindersData } = useRemindersCount(hasReminders);
+  const { data: remindersData } = useRemindersCount(hasReminders, "INJOINABLE");
   const remindersCount = remindersData?.data?.count ?? 0;
+
+  const hasAutoRappels = navGroups?.some((g) => g.items.some((i) => i.path === "/auto-rappels"));
+  const { data: autoRappelsData } = useRemindersCount(hasAutoRappels, "BV");
+  const autoRappelsCount = autoRappelsData?.data?.count ?? 0;
+
+  const hasMesListes = navGroups?.some((g) => g.items.some((i) => i.path === "/mes-listes"));
+  const { data: activeResaData } = useActiveReservationsCount(hasMesListes);
+  const activeReservationsCount = activeResaData?.data?.count ?? 0;
 
   const handleNav = (path) => {
     navigate(path);
@@ -60,7 +68,7 @@ export default function Sidebar({ navGroups, collapsed, mobileOpen, onClose }) {
                 <button
                   key={item.path}
                   onClick={() => handleNav(item.path)}
-                  className={`sidebar__item ${isActive ? "sidebar__item--active" : ""} ${item.path === "/reminders" && remindersCount > 0 ? "sidebar__item--has-notifications" : ""}`}
+                  className={`sidebar__item ${isActive ? "sidebar__item--active" : ""} ${(item.path === "/reminders" && remindersCount > 0) || (item.path === "/auto-rappels" && autoRappelsCount > 0) || (item.path === "/mes-listes" && activeReservationsCount > 0) ? "sidebar__item--has-notifications" : ""}`}
                   title={collapsed ? item.title : undefined}
                 >
                   <Icon className="sidebar__icon" />
@@ -68,12 +76,34 @@ export default function Sidebar({ navGroups, collapsed, mobileOpen, onClose }) {
                   {item.path === "/reminders" && remindersCount > 0 && (
                     <span
                       className="sidebar__notification"
-                      aria-label={`${remindersCount} reminder${remindersCount === 1 ? "" : "s"}`}
-                      title={`${remindersCount} reminder${remindersCount === 1 ? "" : "s"}`}
+                      aria-label={`${remindersCount} rappel(s) échu(s)`}
+                      title={`${remindersCount} rappel(s) échu(s)`}
                       role="status"
                       aria-live="polite"
                     >
                       {remindersCount > 99 ? "99+" : remindersCount}
+                    </span>
+                  )}
+                  {item.path === "/auto-rappels" && autoRappelsCount > 0 && (
+                    <span
+                      className="sidebar__notification"
+                      aria-label={`${autoRappelsCount} auto-rappel(s) échu(s)`}
+                      title={`${autoRappelsCount} auto-rappel(s) échu(s)`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {autoRappelsCount > 99 ? "99+" : autoRappelsCount}
+                    </span>
+                  )}
+                  {item.path === "/mes-listes" && activeReservationsCount > 0 && (
+                    <span
+                      className="sidebar__notification"
+                      aria-label={`${activeReservationsCount} prospect(s) réservé(s)`}
+                      title={`${activeReservationsCount} prospect(s) réservé(s)`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {activeReservationsCount > 99 ? "99+" : activeReservationsCount}
                     </span>
                   )}
                 </button>

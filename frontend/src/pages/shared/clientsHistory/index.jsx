@@ -39,7 +39,7 @@ export default function ClientsHistoryPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Prospect list</h1>
-          <p className="text-sm text-muted-foreground mt-1">Tous les clients ayant déjà été contactés par un commercial.</p>
+          <p className="text-sm text-muted-foreground mt-1">Tous les clients ayant déjà été contactés par un employé.</p>
         </div>
       </div>
 
@@ -53,13 +53,19 @@ export default function ClientsHistoryPage() {
       ) : isDesktop ? (
         <ProspectTable
           clients={clients}
+          startIndex={(currentPage - 1) * rowsPerPage}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
           onViewDetail={handleViewDetail}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {clients.map((c) => (
-            <ProspectCard key={c.id} client={c} onViewDetail={handleViewDetail} />
+          {clients.map((c, i) => (
+            <ProspectCard
+              key={c.id}
+              num={(currentPage - 1) * rowsPerPage + i + 1}
+              client={c}
+              onViewDetail={handleViewDetail}
+            />
           ))}
         </div>
       )}

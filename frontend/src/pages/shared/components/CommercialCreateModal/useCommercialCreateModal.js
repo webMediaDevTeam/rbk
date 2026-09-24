@@ -44,7 +44,7 @@ export function useCommercialCreateModal(props) {
   const mutation = useMutation({
     mutationFn: (payload) => createUserApi(payload),
     onSuccess: () => {
-      toast.success('Commercial créé.')
+      toast.success('Employé créé.')
       qc.invalidateQueries({ queryKey })
       onClose()
     },

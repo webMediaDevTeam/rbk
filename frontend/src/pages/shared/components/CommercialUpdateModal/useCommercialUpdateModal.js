@@ -48,7 +48,7 @@ export function useCommercialUpdateModal(props) {
   const mutation = useMutation({
     mutationFn: (payload) => updateUserApi(user.id, payload),
     onSuccess: () => {
-      toast.success('Commercial mis à jour.')
+      toast.success('Employé mis à jour.')
       qc.invalidateQueries({ queryKey })
       onClose()
     },

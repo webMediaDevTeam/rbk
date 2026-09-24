@@ -6,7 +6,7 @@ export default function ProspectToolbar(props) {
   const { search, setSearch, categories, setCategories, categoriesList } = useProspectToolbar(props)
 
   return (
-    <div className="flex w-full gap-3">
+    <div className="flex w-full flex-wrap gap-3">
       <SearchBar
         className="flex-1 min-w-0"
         inputProps={{
@@ -21,13 +21,14 @@ export default function ProspectToolbar(props) {
       <Select
         value={categories}
         onChange={(e) => setCategories(e.target.value)}
-        className="w-64 cursor-pointer shrink-0"
+        className="w-56 cursor-pointer shrink-0"
       >
         <option value="">Catégorie: Toutes</option>
         {Array.isArray(categoriesList) && categoriesList.map((c) => (
           <option key={c.id} value={c.id}>{c.label}</option>
         ))}
       </Select>
+      {/* Filtres de date « Du / Au » supprimés : la recherche ne filtre plus sur created_at. */}
     </div>
   )
 }

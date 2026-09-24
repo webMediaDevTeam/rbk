@@ -8,7 +8,7 @@ export default function BreadcrumbNav({ name }) {
         <Home className="h-3.5 w-3.5" /> Accueil
       </Link>
       <ChevronRight className="h-3.5 w-3.5" />
-      <Link to="/commerciaux" className="hover:text-foreground transition-colors">Commerciaux</Link>
+      <Link to="/commerciaux" className="hover:text-foreground transition-colors">Employés</Link>
       <ChevronRight className="h-3.5 w-3.5" />
       <span className="font-medium text-foreground">{name}</span>
     </nav>

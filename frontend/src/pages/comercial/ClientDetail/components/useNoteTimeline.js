@@ -36,7 +36,7 @@ const OUTCOME_CONFIG = {
     variant: 'destructive',
     nodeClass: 'bg-red-500',
   },
-  BOITE_VOCALE: {
+  BV: {
     icon: Voicemail,
     label: 'Boîte vocale',
     variant: 'warning',
@@ -44,7 +44,7 @@ const OUTCOME_CONFIG = {
   },
   INJOINABLE: {
     icon: PhoneOff,
-    label: 'Injoignable',
+    label: 'À RAPPELER',
     variant: 'info',
     nodeClass: 'bg-blue-500',
   },
@@ -81,9 +81,9 @@ export function useNoteTimeline({ notes = [], outcomes = [] }) {
   }
 
   const formatRecall = (outcome) => {
-    if (outcome.outcome !== 'BOITE_VOCALE' && outcome.outcome !== 'INJOINABLE') return null
+    if (outcome.outcome !== 'BV' && outcome.outcome !== 'INJOINABLE') return null
     if (!outcome.recall_amount) return null
-    const units = { MINUTE: 'min', HEURE: 'h', JOUR: 'j', SEMAINE: 'sem', MOIS: 'mois' }
+    const units = { MINUTE: 'min', HEURE: 'h', JOUR: 'j' }
     return `Rappel dans ${outcome.recall_amount}${units[outcome.recall_unit] ?? ''}`
   }
 

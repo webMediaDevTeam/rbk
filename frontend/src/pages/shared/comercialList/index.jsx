@@ -48,18 +48,18 @@ export default function ComercialListPage() {
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">Commerciaux</span>
+        <span className="font-medium text-foreground">Employés</span>
       </nav>
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Liste des commerciaux</h1>
-          <p className="text-sm text-muted-foreground mt-1">Gérez vos commerciaux et leurs performances ici.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Liste des employés</h1>
+          <p className="text-sm text-muted-foreground mt-1">Gérez vos employés et leurs performances ici.</p>
         </div>
         {canCreate && (
           <Button variant="default" size="md" className="px-2.5 lg:px-4" onClick={handleOpenCreate}>
             <Plus className="h-4 w-4" />
-            <span className="hidden lg:inline">Ajouter un commercial</span>
+            <span className="hidden lg:inline">Ajouter un employé</span>
           </Button>
         )}
       </div>

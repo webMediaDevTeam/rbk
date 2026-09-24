@@ -61,7 +61,7 @@ export function useClientDetail() {
     onError: (err) => toast.error(err?.response?.data?.message || 'Une erreur est survenue.'),
   })
 
-  const blacklistConfirmDisabled = blacklistMutation.isPending || !blacklistNote.trim()
+  const blacklistConfirmDisabled = blacklistMutation.isPending
 
   const handleHomeClick = (e) => {
     e.preventDefault()

@@ -1,5 +1,6 @@
 import { Building2, Mail, Phone } from 'lucide-react'
 import { useCommercialInfoCard } from './useCommercialInfoCard.js'
+import { ROLE_LABELS } from '@/pages/shared/profil/components/SettingsSidebar.jsx'
 
 export default function CommercialInfoCard(props) {
   const {
@@ -25,9 +26,9 @@ export default function CommercialInfoCard(props) {
   return (
     <div className="grid grid-cols-1 gap-6">
       <div className="rounded-xl bg-card text-card-foreground shadow-sm p-6 space-y-6">
-        {/* Commercial */}
+        {/* Employé */}
         <div className="space-y-4">
-          <div className="text-sm font-semibold text-muted-foreground">Commercial</div>
+          <div className="text-sm font-semibold text-muted-foreground">Employé</div>
           <div className="flex items-center gap-3">
             {avatarUrl ? (
               <img src={avatarUrl} alt={name} className="h-12 w-12 rounded-full object-cover" />
@@ -38,13 +39,13 @@ export default function CommercialInfoCard(props) {
             )}
             <div>
               <div className="text-lg font-semibold">{name}</div>
-              <div className="text-sm text-muted-foreground">Commercial</div>
+              <div className="text-sm text-muted-foreground">Employé</div>
             </div>
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" /> {email}</div>
             <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {phone}</div>
-            <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" /> Rôle : <span className="uppercase text-[11px] font-bold">{role}</span></div>
+            <div className="flex items-center gap-2"><Building2 className="h-4 w-4 text-muted-foreground" /> Rôle : <span className="uppercase text-[11px] font-bold">{ROLE_LABELS[role] ?? role}</span></div>
             <div className="flex items-center gap-2"><span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs font-semibold">Statut</span> {employeeStatus}</div>
             {additionalInfo && (
               <div><span className="inline-flex items-center rounded bg-muted px-2 py-0.5 text-xs font-semibold">Notes</span><p className="mt-1 text-muted-foreground">{additionalInfo}</p></div>

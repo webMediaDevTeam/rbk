@@ -20,9 +20,10 @@ export default function Pagination({
             onChange={(e) => onRowsPerPageChange(Number(e.target.value))}
             className="w-auto pr-8 appearance-none cursor-pointer"
           >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
             <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={200}>200</option>
+            <option value={300}>300</option>
           </Select>
         </div>
         <span className="font-bold">Lignes par page</span>

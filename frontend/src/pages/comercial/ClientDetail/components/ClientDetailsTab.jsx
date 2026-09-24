@@ -27,6 +27,12 @@ export default function ClientDetailsTab({ client }) {
     licenceEndDate,
     suretyAmount,
     licencePropre,
+    licencePropreNumero,
+    suretyCompanyList,
+    suretyCompanies,
+    categoryList,
+    respondentList,
+    respondentsCount,
     hasCategories,
     hasRespondents,
     hasActivity,
@@ -45,18 +51,21 @@ export default function ClientDetailsTab({ client }) {
 
       <DetailSection title="Licence">
         <DetailRow label="Numéro de licence" value={client.licence_number} />
+        <DetailRow label="Licence (propre) n°" value={licencePropreNumero} />
         <DetailRow label="Statut" value={client.licence_status} />
-        <DetailRow label="Intervenant" value={client.intervenant_name} />
+        <DetailRow label="Intervenant / Entreprise" value={client.intervenant_name} />
         <DetailRow label="Licence propre" value={licencePropre} />
-        <DetailRow label="Date de début" value={licenceStartDate} />
-        <DetailRow label="Date de fin" value={licenceEndDate} />
+        <DetailRow label="Date de début / délivrance" value={licenceStartDate} />
+        <DetailRow label="Date de fin / paiement annuel" value={licenceEndDate} />
       </DetailSection>
 
       {hasCategories && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Catégories</h3>
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">
+            Catégories et sous-catégories autorisées
+          </h3>
           <div className="flex flex-wrap gap-1.5">
-            {client.authorized_categories.map((cat, i) => (
+            {categoryList.map((cat, i) => (
               <Badge key={i} variant="info">{cat}</Badge>
             ))}
           </div>
@@ -64,17 +73,30 @@ export default function ClientDetailsTab({ client }) {
       )}
 
       <DetailSection title="Cautionnement">
-        <DetailRow label="Compagnie" value={client.surety_company} />
-        <DetailRow label="Montant" value={suretyAmount} />
+        <DetailRow label="Compagnie / Association" value={suretyCompanyList} />
+        <DetailRow label="Montant de la caution ($)" value={suretyAmount} />
       </DetailSection>
+
+      {suretyCompanies.length > 1 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">
+            Cautionnements ({suretyCompanies.length})
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {suretyCompanies.map((c, i) => (
+              <Badge key={i} variant="secondary">{c}</Badge>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasRespondents && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">
-            Répondants ({client.respondent_count})
+            Répondants ({respondentsCount})
           </h3>
           <div className="space-y-2">
-            {client.respondents.map((r, i) => (
+            {respondentList.map((r, i) => (
               <div key={i} className="flex items-center gap-2 text-sm">
                 <span className="font-medium">{r.name}</span>
                 {r.role && <span className="text-xs text-muted-foreground">({r.role})</span>}

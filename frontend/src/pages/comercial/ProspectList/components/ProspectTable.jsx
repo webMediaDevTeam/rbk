@@ -1,78 +1,136 @@
 import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import ProspectStatusBadge from './ProspectStatusBadge'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import { respondentsText, categoriesText } from './prospectFormat'
 
-export default function ProspectTable({ clients, sortBy, sortOrder, onSort, onViewDetail, showViewButton = true }) {
+/** Compte à rebours concis : "2 mois 3j" / "18j 04h" / "5h 30m". */
+export function formatReturnCountdown(returnedAt) {
+  if (!returnedAt) return '—'
+  const diff = new Date(returnedAt).getTime() - Date.now()
+  if (diff <= 0) return 'Bientôt'
+
+  const totalDays = Math.floor(diff / 86400000)
+  const hours = Math.floor((diff % 86400000) / 3600000)
+  const minutes = Math.floor((diff % 3600000) / 60000)
+
+  if (totalDays >= 30) {
+    const months = Math.floor(totalDays / 30)
+    const days = totalDays % 30
+    return `${months} mois ${days}j`
+  }
+  if (totalDays >= 1) {
+    return `${totalDays}j ${String(hours).padStart(2, '0')}h`
+  }
+  return `${hours}h ${String(minutes).padStart(2, '0')}m`
+}
+
+export default function ProspectTable({ clients, startIndex = 0, sortBy, sortOrder, onSort, onViewDetail, showViewButton = true }) {
+  // Largeurs fixes par colonne (table-fixed) : le tableau garde sa largeur réelle
+  // et le conteneur défile horizontalement (overflow-x) au lieu de couper les colonnes.
+  const minWidth =
+    60 + 240 + 200 + 150 + 150 + 180 + 220 + 140 +
+    (showViewButton ? 60 : 0)
+
   return (
     <div className="rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-background hover:bg-background">
-            <TableHead>
-              <SortHeader column="name" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
+      <div className="w-full overflow-x-auto" data-slot="prospect-scroll">
+        <Table className="table-fixed" style={{ minWidth }}>
+          <TableHeader>
+            <TableRow className="bg-background hover:bg-background">
+              <TableHead className="w-[60px] text-center">N°</TableHead>
+              <TableHead className="w-[240px]">
+                <SortHeader column="name" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
 Prospect
-              </SortHeader>
-            </TableHead>
-            <TableHead>
-              <SortHeader column="email" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
-                Email
-              </SortHeader>
-            </TableHead>
-            <TableHead>Téléphone</TableHead>
-            <TableHead>Municipalité</TableHead>
-            <TableHead>
-              <SortHeader column="status" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
-                Statut
-              </SortHeader>
-            </TableHead>
-            <TableHead>
-              <SortHeader column="licence_end_date" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
-                Fin licence
-              </SortHeader>
-            </TableHead>
-            {showViewButton && <TableHead className="w-10" />}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {clients.map((c) => (
-            <TableRow
-              key={c.id}
-              className="cursor-pointer hover:bg-muted/50 transition-colors"
-              onClick={() => onViewDetail?.(c)}
-            >              <TableCell>
-                <div className="flex items-center gap-2.5">
-                  <UserAvatar user={c} size="sm" />
-                  <div>
-                    <span className="font-medium">{c.name}</span>
-                    <p className="text-xs text-muted-foreground">{c.enterprise_name}</p>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="text-muted-foreground">{c.email ?? '—'}</TableCell>
-              <TableCell className="text-muted-foreground">{c.phone ?? '—'}</TableCell>
-              <TableCell className="text-muted-foreground">{c.municipality ?? '—'}</TableCell>
-              <TableCell><ProspectStatusBadge status={c.status} isBlacklisted={c.is_blacklisted} /></TableCell>
-              <TableCell className="text-muted-foreground">{c.licence_end_date ? new Date(c.licence_end_date).toLocaleDateString('fr-FR') : '—'}</TableCell>
-              {showViewButton && (
-                <TableCell className="text-right">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onViewDetail?.(c) }}
-                    className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                    aria-label="Voir détail"
-                  >
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </TableCell>
-              )}
+                </SortHeader>
+              </TableHead>
+              <TableHead className="w-[200px]">Répondants</TableHead>
+              <TableHead className="w-[150px]">N° de licence</TableHead>
+              <TableHead className="w-[150px]">NEQ</TableHead>
+              <TableHead className="w-[180px]">Catégorie</TableHead>
+              <TableHead className="w-[220px]">
+                <SortHeader column="email" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
+                  Contact
+                </SortHeader>
+              </TableHead>
+              <TableHead className="w-[140px]">Municipalité</TableHead>
+              {showViewButton && <TableHead className="w-[60px]" />}
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {clients.length === 0 && (
-        <div className="h-24 flex items-center justify-center text-muted-foreground">Aucun prospect trouvé.</div>
-      )}
+          </TableHeader>
+          <TableBody>
+            {clients.map((c, i) => (
+              <TableRow
+                key={c.id}
+                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => onViewDetail?.(c)}
+              >
+                <TableCell className="text-center text-muted-foreground tabular-nums">
+                  {startIndex + i + 1}
+                </TableCell>
+                <TableCell>
+                  <div
+                    className="flex items-center gap-2.5"
+                    title={[c.enterprise_name, c.name].filter(Boolean).join(' — ')}
+                  >
+                    <UserAvatar user={c} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">{c.enterprise_name ?? '—'}</p>
+                      <p className="truncate font-light text-small">{c.name}</p>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  <div className="truncate" title={respondentsText(c) ?? undefined}>
+                    {respondentsText(c) ?? '—'}
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground tabular-nums">
+                  <div className="truncate" title={c.licence_number ?? undefined}>
+                    {c.licence_number ?? '—'}
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground tabular-nums">
+                  <div className="truncate" title={c.neq ?? undefined}>
+                    {c.neq ?? '—'}
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  <div className="truncate" title={categoriesText(c) ?? undefined}>
+                    {categoriesText(c) ?? '—'}
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  <div className="truncate" title={c.phone ?? undefined}>
+                    {c.phone ?? '—'}
+                  </div>
+                  <div className="truncate" title={c.email ?? undefined}>
+                    {c.email ?? '—'}
+                  </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  <div className="truncate" title={c.municipality ?? undefined}>
+                    {c.municipality ?? '—'}
+                  </div>
+                </TableCell>
+                {showViewButton && (
+                  <TableCell className="text-right">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onViewDetail?.(c) }}
+                      className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                      aria-label="Voir détail"
+                    >
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {clients.length === 0 && (
+          <div className="h-24 flex items-center justify-center text-muted-foreground">Aucun prospect trouvé.</div>
+        )}
+      </div>
     </div>
   )
 }

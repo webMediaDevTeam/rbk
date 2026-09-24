@@ -13,7 +13,7 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-foreground">Créer un commercial</h2>
+          <h2 className="text-lg font-semibold text-foreground">Créer un employé</h2>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
             <X className="h-4 w-4" />
           </button>
@@ -22,7 +22,7 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-bold mb-1">Adresse e-mail *</label>
-            <Input type="email" required value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="email@commercial.com" />
+            <Input type="email" required value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="email@employe.com" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

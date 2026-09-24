@@ -45,7 +45,7 @@ export function useDashboard() {
       iconClass: 'bg-primary/10 text-primary',
     },
     {
-      label: 'Commerciaux',
+      label: 'Employés',
       value: formatCount(stats.commercials),
       icon: Briefcase,
       iconClass: 'bg-primary/10 text-primary',

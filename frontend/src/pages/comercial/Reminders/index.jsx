@@ -1,9 +1,20 @@
 import { ChevronRight, Home, Phone, Clock } from 'lucide-react'
 import { useRemindersPage } from './useRemindersPage.js'
 import Button from '@/components/ui/button.jsx'
+import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
 
-export default function RemindersPage() {
-  const { isLoading, reminders, handleAccueilClick, formatRecallAt, UNIT_LABELS } = useRemindersPage()
+/**
+ * Liste des rappels du commercial connecté.
+ *
+ * type : 'INJOINABLE' (page « Rappels ») ou 'BV' (page « Auto-rappels »).
+ */
+export default function RemindersPage({
+  type = 'INJOINABLE',
+  title = 'Rappels',
+  subtitle = 'Clients injoignables en attente de rappel.',
+  emptyText = 'Aucun rappel en attente.',
+}) {
+  const { isLoading, reminders, handleAccueilClick, formatRecallAt, UNIT_LABELS } = useRemindersPage(type)
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -12,19 +23,19 @@ export default function RemindersPage() {
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">Rappels</span>
+        <span className="font-medium text-foreground">{title}</span>
       </nav>
 
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Rappels</h1>
-        <p className="text-sm text-muted-foreground mt-1">Rappels de boîte vocale en attente.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+        <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
       </div>
 
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
       ) : reminders.length === 0 ? (
         <div className="rounded-xl bg-card text-card-foreground shadow-sm h-48 flex items-center justify-center text-muted-foreground">
-          Aucun rappel en attente.
+          {emptyText}
         </div>
       ) : (
         <div className="space-y-3">
@@ -43,6 +54,7 @@ export default function RemindersPage() {
                       <span>{r.client_municipality}</span>
                     </>
                   )}
+                  <ReservationStatusBadge status={r.status} />
                 </div>
               </div>
 

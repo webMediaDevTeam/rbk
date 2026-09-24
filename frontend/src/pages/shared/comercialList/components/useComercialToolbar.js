@@ -3,8 +3,8 @@ export function useComercialToolbar({ search, setSearch, statusFilter, setStatus
     searchInputProps: {
       value: search,
       onChange: (e) => setSearch(e.target.value),
-      placeholder: 'Rechercher commerciaux... (min 3 chars)',
-      'aria-label': 'Rechercher commerciaux',
+      placeholder: 'Rechercher employés... (min 3 chars)',
+      'aria-label': 'Rechercher employés',
     },
     statusProps: {
       value: statusFilter,

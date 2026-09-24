@@ -1,8 +1,9 @@
 import { Eye } from 'lucide-react'
 import ProspectStatusBadge from './ProspectStatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import { respondentsText, categoriesText } from './prospectFormat'
 
-export default function ProspectCard({ client, onViewDetail, showViewButton = true }) {
+export default function ProspectCard({ client, num, onViewDetail, showViewButton = true }) {
   return (
     <div
       className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
@@ -23,6 +24,7 @@ export default function ProspectCard({ client, onViewDetail, showViewButton = tr
       <div className="flex items-center gap-3 mb-4">
         <UserAvatar user={client} size="md" />
         <div className="min-w-0 flex-1">
+          {num != null && <p className="text-[11px] text-muted-foreground">N° {num}</p>}
           <p className="text-sm font-semibold truncate">{client.name}</p>
           <p className="text-xs text-muted-foreground truncate">{client.enterprise_name ?? '—'}</p>
         </div>
@@ -40,6 +42,22 @@ export default function ProspectCard({ client, onViewDetail, showViewButton = tr
         <div>
           <span className="text-muted-foreground text-xs">Municipalité</span>
           <p className="truncate">{client.municipality ?? '—'}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs">N° de licence</span>
+          <p className="truncate">{client.licence_number ?? '—'}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs">NEQ</span>
+          <p className="truncate">{client.neq ?? '—'}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs">Catégorie</span>
+          <p className="truncate">{categoriesText(client) ?? '—'}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs">Répondants</span>
+          <p className="truncate">{respondentsText(client) ?? '—'}</p>
         </div>
       </div>
 

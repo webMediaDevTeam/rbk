@@ -71,7 +71,7 @@ export default function ComercialCard(props) {
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
         <StatusBadge status={comercial.status} />
         <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-          Commercial
+          Employé
         </span>
       </div>
     </div>

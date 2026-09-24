@@ -3,52 +3,40 @@ import { toast } from 'sonner'
 import { useStoreOutcome } from '../useOutcomes.js'
 
 const OUTCOMES = [
-  { value: 'OUI', label: 'Oui — intéressé', noteRequired: true, hasRecall: true },
-  { value: 'NON', label: 'Non — refuse', noteRequired: true, hasRecall: false },
-  { value: 'BOITE_VOCALE', label: 'Boîte vocale', noteRequired: true, hasRecall: true },
-  { value: 'INJOINABLE', label: 'Injoignable', noteRequired: true, hasRecall: true },
+  { value: 'OUI', label: 'Oui — intéressé', recall: 'none' },
+  { value: 'NON', label: 'Non — refuse', recall: 'none' },
+  { value: 'BV', label: 'Boîte vocale', recall: 'auto' },
+  { value: 'INJOINABLE', label: 'Injoignable (à rappeler)', recall: 'custom' },
 ]
 
-const RECALL_UNITS = [
-  { value: 'MINUTE', label: 'Minute(s)' },
-  { value: 'HEURE', label: 'Heure(s)' },
-  { value: 'JOUR', label: 'Jour(s)' },
-  { value: 'SEMAINE', label: 'Semaine(s)' },
-]
+/** Valeur locale au format `datetime-local` (sans fuseau). */
+const toLocalDateTimeValue = (date) => {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
 
-const RECALL_SUGGESTIONS = [
-  { label: '30 min', amount: 30, unit: 'MINUTE' },
-  { label: '1h', amount: 1, unit: 'HEURE' },
-  { label: '6h', amount: 6, unit: 'HEURE' },
-  { label: '1j', amount: 1, unit: 'JOUR' },
-  { label: '2j', amount: 2, unit: 'JOUR' },
-  { label: '1sem', amount: 1, unit: 'SEMAINE' },
-]
+/** Rappel INJOINABLE : datetime libre, valeur par défaut = now + 3 jours. */
+const defaultRecallAt = () => toLocalDateTimeValue(new Date(Date.now() + 3 * 86400000))
 
 export function useActionModal({ open, onClose, onActionSuccess, clientId }) {
   const storeOutcome = useStoreOutcome()
 
   const [outcome, setOutcome] = useState('OUI')
   const [note, setNote] = useState('')
-  const [recallEnabled, setRecallEnabled] = useState(false)
-  const [recallAmount, setRecallAmount] = useState(1)
-  const [recallUnit, setRecallUnit] = useState('JOUR')
+  const [recallAt, setRecallAt] = useState(defaultRecallAt())
   const [error, setError] = useState(null)
 
   const selectedOutcome = OUTCOMES.find((o) => o.value === outcome)
-  const hasRecallOption = selectedOutcome?.hasRecall ?? false
-  const showRecall = hasRecallOption && (outcome !== 'OUI' || recallEnabled)
-  const noteRequired = selectedOutcome?.noteRequired ?? true
-
-  const isRecallSuggestion = (s) => recallAmount === s.amount && recallUnit === s.unit
+  // BV : rappel automatique à 3 jours (encart informatif).
+  const showsAutoRecallInfo = selectedOutcome?.recall === 'auto'
+  // INJOINABLE : l'employé choisit la date/heure du rappel (datetime, pas de selects).
+  const showsRecallInput = selectedOutcome?.recall === 'custom'
 
   useEffect(() => {
     if (open) {
       setOutcome('OUI')
       setNote('')
-      setRecallEnabled(false)
-      setRecallAmount(1)
-      setRecallUnit('JOUR')
+      setRecallAt(defaultRecallAt())
       setError(null)
     }
   }, [open])
@@ -59,20 +47,15 @@ export function useActionModal({ open, onClose, onActionSuccess, clientId }) {
     e.preventDefault()
     setError(null)
 
-    if (noteRequired && !note.trim()) {
-      setError('La note est requise pour ce choix.')
-      return
-    }
+    const payload = { clientId, outcome, note: note.trim() || null }
 
-    const payload = {
-      clientId,
-      outcome,
-      note: note.trim() || null,
-    }
-
-    if (showRecall) {
-      payload.recall_amount = recallAmount
-      payload.recall_unit = recallUnit
+    if (showsRecallInput) {
+      const when = new Date(recallAt)
+      if (!recallAt || Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+        setError('Choisissez une date de rappel dans le futur.')
+        return
+      }
+      payload.recall_at = when.toISOString()
     }
 
     storeOutcome.mutate(payload, {
@@ -82,7 +65,10 @@ export function useActionModal({ open, onClose, onActionSuccess, clientId }) {
         onClose()
       },
       onError: (err) => {
-        const msg = err?.response?.data?.message || 'Une erreur est survenue.'
+        const msg =
+          err?.response?.data?.message ||
+          Object.values(err?.response?.data?.errors ?? {})[0]?.[0] ||
+          'Une erreur est survenue.'
         setError(msg)
         toast.error(msg)
       },
@@ -90,36 +76,22 @@ export function useActionModal({ open, onClose, onActionSuccess, clientId }) {
   }
 
   const handleSelectOutcome = (value) => setOutcome(value)
-  const handleRecallEnabledChange = (e) => setRecallEnabled(e.target.checked)
-  const handleSelectRecallSuggestion = (s) => {
-    setRecallAmount(s.amount)
-    setRecallUnit(s.unit)
-  }
-  const handleRecallAmountChange = (e) => setRecallAmount(Number(e.target.value))
-  const handleRecallUnitChange = (e) => setRecallUnit(e.target.value)
   const handleNoteChange = (e) => setNote(e.target.value)
+  const handleRecallChange = (e) => setRecallAt(e.target.value)
 
   return {
     pending,
     outcome,
     note,
+    recallAt,
     error,
-    recallEnabled,
-    recallAmount,
-    recallUnit,
-    hasRecallOption,
-    showRecall,
-    noteRequired,
-    isRecallSuggestion,
+    showsAutoRecallInfo,
+    showsRecallInput,
+    minRecallAt: toLocalDateTimeValue(new Date()),
     handleSubmit,
     handleSelectOutcome,
-    handleRecallEnabledChange,
-    handleSelectRecallSuggestion,
-    handleRecallAmountChange,
-    handleRecallUnitChange,
     handleNoteChange,
+    handleRecallChange,
     OUTCOMES,
-    RECALL_UNITS,
-    RECALL_SUGGESTIONS,
   }
 }

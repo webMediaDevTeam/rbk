@@ -8,20 +8,26 @@ export default function ProspectStatusBadge({ status, isBlacklisted }) {
   const variants = {
     AVAILABLE: 'success',
     RESERVED: 'warning',
+    SUCCESS: 'success',
+    UNAVAILABLE_TEMP: 'destructive',
+    BLACKLISTED: 'destructive',
+    // Anciens statuts conservés pour données historiques non migrées
     VOICEMAIL: 'info',
     INJOINABLE: 'info',
     BLOCKED: 'destructive',
-    BLACKLISTED: 'destructive',
     ARCHIVED: 'outline',
   }
 
   const labels = {
     AVAILABLE: 'Disponible',
     RESERVED: 'Réservé',
-    VOICEMAIL: 'Boîte vocale',
-    INJOINABLE: 'Injoignable',
-    BLOCKED: 'Bloqué',
+    SUCCESS: 'Confirmé',
+    UNAVAILABLE_TEMP: 'Indisponible',
     BLACKLISTED: 'Liste noire',
+    // Anciens statuts
+    VOICEMAIL: 'Boîte vocale',
+    INJOINABLE: 'À RAPPELER',
+    BLOCKED: 'Bloqué',
     ARCHIVED: 'Archivé',
   }
 

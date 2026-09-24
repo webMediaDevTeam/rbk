@@ -1,10 +1,14 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   storeOutcomeApi,
-  releaseClientApi,
   listRemindersApi,
   remindersCountApi,
 } from '@/api/outcomes.api.js'
+import { activeReservationsCountApi } from '@/api/commercial.api.js'
 
 export function useStoreOutcome() {
   const qc = useQueryClient()
@@ -17,33 +21,32 @@ export function useStoreOutcome() {
       qc.invalidateQueries({ queryKey: ['reservation-groups'] })
       qc.invalidateQueries({ queryKey: ['reminders'] })
       qc.invalidateQueries({ queryKey: ['reminders-count'] })
+      qc.invalidateQueries({ queryKey: ['active-reservations-count'] })
     },
   })
 }
 
-export function useReleaseClient() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (clientId) => releaseClientApi(clientId),
-    onSuccess: (_data, clientId) => {
-      qc.invalidateQueries({ queryKey: ['commercial-prospect', clientId] })
-      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
-      qc.invalidateQueries({ queryKey: ['reservation-groups'] })
-    },
+// type : 'INJOINABLE' (page « Rappels ») ou 'BV' (page « Auto-rappels »).
+export function useReminders(type = 'INJOINABLE') {
+  return useQuery({
+    queryKey: ['reminders', type],
+    queryFn: () => listRemindersApi(type),
   })
 }
 
-export function useReminders() {
+export function useRemindersCount(enabled = true, type = 'INJOINABLE') {
   return useQuery({
-    queryKey: ['reminders'],
-    queryFn: listRemindersApi,
+    queryKey: ['reminders-count', type],
+    queryFn: () => remindersCountApi(type),
+    refetchInterval: 60000,
+    enabled,
   })
 }
 
-export function useRemindersCount(enabled = true) {
+export function useActiveReservationsCount(enabled = true) {
   return useQuery({
-    queryKey: ['reminders-count'],
-    queryFn: remindersCountApi,
+    queryKey: ['active-reservations-count'],
+    queryFn: activeReservationsCountApi,
     refetchInterval: 60000,
     enabled,
   })

@@ -16,7 +16,7 @@ export default function ComercialTable(props) {
         <TableHeader>
           <TableRow className="bg-background hover:bg-background">
             <TableHead>
-              <SortHeader column="name" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Commercial</SortHeader>
+              <SortHeader column="name" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Employé</SortHeader>
             </TableHead>
             <TableHead>
               <SortHeader column="email" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Adresse e-mail</SortHeader>

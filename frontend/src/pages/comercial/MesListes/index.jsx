@@ -1,4 +1,4 @@
-import { ChevronRight, Home, Eye, RotateCcw } from 'lucide-react'
+import { ChevronRight, Home, Eye } from 'lucide-react'
 import { useMesListes } from './useMesListes.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
@@ -14,7 +14,6 @@ export default function MesListesPage() {
     handleAccueilClick,
     openGroupClick,
     openGroupStopClick,
-    releaseGroupClick,
     handlePageChange,
     handleRowsPerPageChange,
     formatDate,
@@ -47,9 +46,15 @@ export default function MesListesPage() {
             <TableHeader>
               <TableRow className="bg-background hover:bg-background">
                 <TableHead>Nom</TableHead>
-                <TableHead>Réservés</TableHead>
-                <TableHead>Total demandé</TableHead>
-                <TableHead>En attente</TableHead>
+                <TableHead className="text-center">Clients</TableHead>
+                <TableHead className="text-center">Demandé</TableHead>
+                <TableHead className="text-center">Traités</TableHead>
+                <TableHead className="text-center">OUI</TableHead>
+                <TableHead className="text-center">NON</TableHead>
+                <TableHead className="text-center">BV</TableHead>
+                <TableHead className="text-center">Injoinable</TableHead>
+                <TableHead className="text-center">Restant</TableHead>
+                <TableHead>Employé</TableHead>
                 <TableHead>Créé le</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -62,31 +67,19 @@ export default function MesListesPage() {
                   onClick={openGroupClick(g.id)}
                 >
                   <TableCell className="font-medium">{g.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{g.reserved_count}</TableCell>
-                  <TableCell className="text-muted-foreground">{g.total}</TableCell>
-                  <TableCell>
-                    {g.pending_count > 0 ? (
-                      <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                        {g.pending_count} en attente
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
+                  <TableCell className="text-center text-muted-foreground tabular-nums">{g.clients_count ?? 0}</TableCell>
+                  <TableCell className="text-center text-muted-foreground tabular-nums">{g.total}</TableCell>
+                  <TableCell className="text-center text-muted-foreground tabular-nums">{g.traites_count ?? 0}</TableCell>
+                  <TableCell className="text-center tabular-nums">{g.oui_count ?? 0}</TableCell>
+                  <TableCell className="text-center tabular-nums">{g.non_count ?? 0}</TableCell>
+                  <TableCell className="text-center tabular-nums">{g.bv_count ?? 0}</TableCell>
+                  <TableCell className="text-center tabular-nums">{g.injoinable_count ?? 0}</TableCell>
+                  <TableCell className="text-center tabular-nums">{g.restant_count ?? 0}</TableCell>
+                  <TableCell className="text-muted-foreground">{g.employe ?? '—'}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatDate(g.created_at)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {g.pending_count > 0 && (
-                      <button
-                        onClick={releaseGroupClick(g.id)}
-                        className="p-1.5 rounded-lg hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
-                        title="Retourner à disponible"
-                        aria-label="Retourner à disponible"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </button>
-                    )}
                     <button
                       onClick={openGroupStopClick(g.id)}
                       className="p-1.5 rounded-lg hover:bg-muted transition-colors"
@@ -108,27 +101,21 @@ export default function MesListesPage() {
               className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
               onClick={openGroupClick(g.id)}
             >
-              {g.pending_count > 0 && (
-                <button
-                  onClick={releaseGroupClick(g.id)}
-                  className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
-                  title="Retourner à disponible"
-                  aria-label="Retourner à disponible"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                </button>
-              )}
               <p className="text-sm font-semibold truncate">{g.name}</p>
-              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                <span>{g.reserved_count} réservé(s)</span>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                <span>{g.clients_count ?? 0} client(s)</span>
                 <span>{g.total} demandé(s)</span>
+                <span>{g.traites_count ?? 0} traité(s)</span>
+                <span>{g.restant_count ?? 0} restant(s)</span>
               </div>
-              {g.pending_count > 0 && (
-                <span className="inline-flex items-center self-start mt-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-600 dark:text-amber-400">
-                  {g.pending_count} en attente
-                </span>
-              )}
-              <span className="text-xs text-muted-foreground mt-3">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
+                <span>OUI {g.oui_count ?? 0}</span>
+                <span>NON {g.non_count ?? 0}</span>
+                <span>BV {g.bv_count ?? 0}</span>
+                <span>Injoinable {g.injoinable_count ?? 0}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 truncate">Employé : {g.employe ?? '—'}</p>
+              <span className="text-xs text-muted-foreground mt-3 block">
                 {formatDate(g.created_at)}
               </span>
             </div>

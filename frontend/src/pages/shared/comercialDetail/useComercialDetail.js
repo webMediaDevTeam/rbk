@@ -5,7 +5,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { api } from '@/api/client.js'
 
 const TABS = [
-  { value: 'details', label: 'Détails commercial' },
+  { value: 'details', label: 'Détails employé' },
   { value: 'historique', label: 'Historique' },
 ]
 
@@ -22,7 +22,7 @@ export function useComercialDetailPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('details')
   const [page, setPage] = useState(1)
-  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const [rowsPerPage, setRowsPerPage] = useState(50)
   const [search, setSearch] = useState('')
 
   const debouncedSearch = useDebouncedValue(search, 400)

@@ -93,7 +93,8 @@ export default function ClientDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {!isAdmin && (
+              {/* Bouton masqué si le client n'est pas réservé par le connecté (F-xx). */}
+              {!isAdmin && hasReservation && (
                 <Button onClick={openAction}>
                   <Phone className="h-4 w-4 mr-1" />
                   Suite appel
@@ -181,12 +182,12 @@ export default function ClientDetailPage() {
             </div>
 
             <p className="text-sm text-muted-foreground mb-4">
-              Ce prospect sera marqué comme indisponible pour tous les commerciaux. Cette action est irréversible.
+              Ce prospect sera marqué comme indisponible pour tous les employés. Cette action est irréversible.
             </p>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold mb-1">Note *</label>
+                <label className="block text-sm font-bold mb-1">Note (optionnel — 8 mots max)</label>
                 <textarea
                   value={blacklistNote}
                   onChange={handleBlacklistNoteChange}

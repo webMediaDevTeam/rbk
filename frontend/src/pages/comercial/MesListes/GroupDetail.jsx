@@ -1,21 +1,82 @@
-import { ChevronRight, Home, ArrowLeft, Eye } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronRight, Home, ArrowLeft, Eye, Pencil, Check, X, Loader2 } from 'lucide-react'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
 import ClientStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
+import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import Input from '@/components/ui/input.jsx'
+import Button from '@/components/ui/button.jsx'
+
+function GroupNameEditor({ group, renameMutation }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(group.name ?? '')
+
+  useEffect(() => {
+    setValue(group.name ?? '')
+  }, [group.name])
+
+  const save = (e) => {
+    e?.stopPropagation()
+    const name = value.trim()
+    if (!name || name === group.name) {
+      setEditing(false)
+      return
+    }
+    renameMutation.mutate(name, { onSuccess: () => setEditing(false) })
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">{group.name}</h1>
+        <button
+          onClick={() => setEditing(true)}
+          className="p-1.5 rounded-md hover:bg-muted text-muted-foreground"
+          aria-label="Renommer la liste"
+          title="Renommer la liste"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <Input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save(e)
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        className="h-9 w-72"
+      />
+      <Button size="sm" onClick={save} disabled={renameMutation.isPending}>
+        {renameMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+      </Button>
+      <Button size="sm" variant="secondary" onClick={() => setEditing(false)} disabled={renameMutation.isPending}>
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  )
+}
 
 export default function GroupDetailPage() {
   const {
     isLoading,
     group,
     reservations,
+    hiddenCount,
     isDesktop,
+    renameMutation,
     handleMesListesClick,
     goBackClick,
     openProspectClick,
     openProspectStopClick,
     formatDate,
-    formatExpiry,
   } = useGroupDetail()
 
   return (
@@ -43,9 +104,14 @@ export default function GroupDetailPage() {
               <ArrowLeft className="h-4 w-4" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">{group.name}</h1>
+              <GroupNameEditor group={group} renameMutation={renameMutation} />
               <p className="text-sm text-muted-foreground mt-1">
                 {group.reserved_count} prospect(s) réservé(s) sur {group.total} demandé(s) — {formatDate(group.created_at)}
+                {hiddenCount > 0 && (
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    ({hiddenCount} rappel(s) planifié(s) masqué(s) — voir « Rappels » / « Auto-rappels »)
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -63,7 +129,7 @@ export default function GroupDetailPage() {
                     <TableHead>Téléphone</TableHead>
                     <TableHead>Municipalité</TableHead>
                     <TableHead>Statut</TableHead>
-                    <TableHead>Expire le</TableHead>
+                    <TableHead>Réservation</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
@@ -71,7 +137,11 @@ export default function GroupDetailPage() {
                   {reservations.map((r) => (
                     <TableRow
                       key={r.id}
-                      className="cursor-pointer hover:bg-muted/50 transition-colors"
+                      className={`cursor-pointer transition-colors ${
+                        r.status === 'BV' || r.status === 'INJOINABLE'
+                          ? 'bg-muted/40 hover:bg-muted/70'
+                          : 'hover:bg-muted/50'
+                      }`}
                       onClick={openProspectClick(r.client?.id)}
                     >
                       <TableCell>
@@ -88,8 +158,8 @@ export default function GroupDetailPage() {
                       <TableCell>
                         <ClientStatusBadge status={r.client?.status} />
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(r.expires_at)}
+                      <TableCell>
+                        <ReservationStatusBadge status={r.status} />
                       </TableCell>
                       <TableCell className="text-right">
                         <button
@@ -110,7 +180,11 @@ export default function GroupDetailPage() {
               {reservations.map((r) => (
                 <div
                   key={r.id}
-                  className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
+                  className={`relative flex flex-col rounded-xl border border-border text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer ${
+                    r.status === 'BV' || r.status === 'INJOINABLE'
+                      ? 'bg-muted/40'
+                      : 'bg-card'
+                  }`}
                   onClick={openProspectClick(r.client?.id)}
                 >
                   <div className="flex items-center gap-3 mb-3">
@@ -130,11 +204,9 @@ export default function GroupDetailPage() {
                       <p className="truncate">{r.client?.municipality ?? '—'}</p>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-border">
                     <ClientStatusBadge status={r.client?.status} />
-                    <span className="text-xs text-muted-foreground">
-                      {formatExpiry(r.expires_at)}
-                    </span>
+                    <ReservationStatusBadge status={r.status} />
                   </div>
                 </div>
               ))}

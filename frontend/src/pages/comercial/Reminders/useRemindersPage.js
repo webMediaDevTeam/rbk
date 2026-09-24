@@ -5,8 +5,6 @@ export const UNIT_LABELS = {
   MINUTE: 'min',
   HEURE: 'h',
   JOUR: 'j',
-  SEMAINE: 'sem',
-  MOIS: 'mois',
 }
 
 export function formatRecallAt(dateStr) {
@@ -28,9 +26,9 @@ export function formatRecallAt(dateStr) {
   return `dans ${diffD}j`
 }
 
-export function useRemindersPage() {
+export function useRemindersPage(type = 'INJOINABLE') {
   const navigate = useNavigate()
-  const { data, isLoading } = useReminders()
+  const { data, isLoading } = useReminders(type)
 
   const reminders = data?.data ?? []
 

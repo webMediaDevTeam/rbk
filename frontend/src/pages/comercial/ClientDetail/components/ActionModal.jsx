@@ -1,7 +1,5 @@
-import { AlertCircle, Loader2, X } from 'lucide-react'
+import { AlertCircle, Loader2, X, Clock } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
-import Input from '@/components/ui/input.jsx'
-import Select from '@/components/ui/select.jsx'
 import { cn } from '@/lib/utils.js'
 import { useActionModal } from './useActionModal.js'
 
@@ -17,24 +15,16 @@ export default function ActionModal({
     pending,
     outcome,
     note,
+    recallAt,
     error,
-    recallEnabled,
-    recallAmount,
-    recallUnit,
-    hasRecallOption,
-    showRecall,
-    noteRequired,
-    isRecallSuggestion,
+    showsAutoRecallInfo,
+    showsRecallInput,
+    minRecallAt,
     handleSubmit,
     handleSelectOutcome,
-    handleRecallEnabledChange,
-    handleSelectRecallSuggestion,
-    handleRecallAmountChange,
-    handleRecallUnitChange,
     handleNoteChange,
+    handleRecallChange,
     OUTCOMES,
-    RECALL_UNITS,
-    RECALL_SUGGESTIONS,
   } = useActionModal({ open, onClose, onActionSuccess, clientId })
 
   if (!open) return null
@@ -84,68 +74,42 @@ export default function ActionModal({
             )}
           </div>
 
-          {hasRecallOption && outcome === 'OUI' && (
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="recall-toggle"
-                checked={recallEnabled}
-                onChange={handleRecallEnabledChange}
-                className="h-4 w-4 rounded border-border accent-primary"
-              />
-              <label htmlFor="recall-toggle" className="text-sm font-bold cursor-pointer">
-                Ajouter un rappel
-              </label>
+          {showsAutoRecallInfo && (
+            <div className="flex items-start gap-2 rounded-lg bg-blue-500/10 p-3 text-sm text-blue-700 dark:text-blue-400">
+              <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>Rappel automatique planifié sous 3 jours.</span>
             </div>
           )}
 
-          {showRecall && (
+          {showsRecallInput && (
             <div>
-              <label className="block text-sm font-bold mb-2">Rappel dans</label>
-              <div className="flex flex-wrap gap-2">
-                {RECALL_SUGGESTIONS.map((s) => (
-                  <button
-                    key={s.label}
-                    type="button"
-                    onClick={() => handleSelectRecallSuggestion(s)}
-                    className={cn(
-                      'px-3 py-1.5 text-sm rounded-lg border transition-colors',
-                      isRecallSuggestion(s)
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background hover:bg-muted text-foreground'
-                    )}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-              <label className="block text-sm font-bold mb-1 mt-3">Ou saisir un nombre</label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  value={recallAmount}
-                  onChange={handleRecallAmountChange}
-                  className="w-24"
-                />
-                <Select value={recallUnit} onChange={handleRecallUnitChange}>
-                  {RECALL_UNITS.map((u) => (
-                    <option key={u.value} value={u.value}>{u.label}</option>
-                  ))}
-                </Select>
-              </div>
+              <label htmlFor="recall-at" className="block text-sm font-bold mb-1">
+                Date et heure du rappel *
+              </label>
+              <input
+                id="recall-at"
+                type="datetime-local"
+                value={recallAt}
+                onChange={handleRecallChange}
+                min={minRecallAt}
+                required
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:border-ring"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Choisissez librement la date et l'heure du rappel (aucune durée imposée).
+              </p>
             </div>
           )}
 
           <div>
             <label className="block text-sm font-bold mb-1">
-              {noteRequired ? 'Note *' : 'Note (optionnel)'}
+              Note (optionnel — 8 mots max)
             </label>
             <textarea
               value={note}
               onChange={handleNoteChange}
               rows={3}
-              placeholder={noteRequired ? 'Décrivez votre note...' : 'Ajoutez un commentaire...'}
+              placeholder="Ajoutez un commentaire..."
               className={cn(
                 'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background',
                 'placeholder:text-muted-foreground',

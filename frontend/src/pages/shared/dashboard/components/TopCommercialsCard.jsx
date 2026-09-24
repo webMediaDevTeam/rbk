@@ -6,7 +6,7 @@ export default function TopCommercialsCard({ commercials = [] }) {
 
   return (
     <div className="rounded-2xl bg-card p-6 text-card-foreground shadow-sm">
-      <h3 className="text-base font-semibold">Meilleurs commerciaux</h3>
+      <h3 className="text-base font-semibold">Meilleurs employés</h3>
       <p className="text-sm text-muted-foreground">Classés par clients convertis (OUI)</p>
 
       <ul className="mt-5 space-y-5">

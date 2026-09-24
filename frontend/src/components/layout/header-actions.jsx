@@ -4,6 +4,7 @@ import { Check, LogOut, Moon, Monitor, Sun, UserRound } from "lucide-react";
 import { useTheme } from "@/context/theme-provider";
 import { useAuth } from "@/context/AuthContext";
 import { buildAvatarUrl, getAvatarInitials } from "@/lib/avatar.js";
+import { ROLE_LABELS } from "@/pages/shared/profil/components/SettingsSidebar.jsx";
 
 function useDropdown() {
   const [open, setOpen] = useState(false);
@@ -121,7 +122,9 @@ export function ProfileDropdown() {
             <div className="header-dropdown__identity">
               <span className="header-dropdown__name">{displayName}</span>
               <span className="header-dropdown__email">{user?.email ?? ""}</span>
-              <span className="header-dropdown__email">{user?.role ?? ""}</span>
+              <span className="header-dropdown__email">
+                {user?.role ? (ROLE_LABELS[user.role] ?? user.role) : ""}
+              </span>
             </div>
           </div>
           <div className="header-dropdown__divider" />
