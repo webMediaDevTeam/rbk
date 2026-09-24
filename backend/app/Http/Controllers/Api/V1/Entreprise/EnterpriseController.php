@@ -71,7 +71,7 @@ class EnterpriseController extends Controller
             $query->orderByDesc('created_at');
         }
 
-        $perPage     = min((int) $request->input('per_page', 20), 100);
+        $perPage     = min((int) $request->input('per_page', 20), 300);
         $enterprises = $query->paginate($perPage);
 
         return response()->json([

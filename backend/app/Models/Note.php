@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitsNoteWords;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +13,8 @@ class Note extends Model
     use HasFactory, HasUuids;
 
     public const UPDATED_AT = null;
+
+    use LimitsNoteWords;
 
     protected $fillable = [
         'client_id',
@@ -37,5 +40,10 @@ class Note extends Model
     public function comercial(): BelongsTo
     {
         return $this->belongsTo(User::class, 'comercial_id');
+    }
+
+    protected function noteWordField(): string
+    {
+        return 'content';
     }
 }

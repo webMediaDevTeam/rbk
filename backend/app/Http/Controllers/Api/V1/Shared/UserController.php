@@ -216,7 +216,7 @@ class UserController extends Controller
             $query->orderByDesc('users.created_at');
         }
 
-        $perPage = min((int) $request->input('per_page', 20), 100);
+        $perPage = min((int) $request->input('per_page', 20), 300);
         $users   = $query->paginate($perPage);
 
         return $this->respondOk([

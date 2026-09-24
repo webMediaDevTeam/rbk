@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\LimitsNoteWords;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,6 +13,11 @@ class CallOutcome extends Model
     use HasFactory, HasUuids;
 
     public const UPDATED_AT = null;
+
+    use LimitsNoteWords;
+
+    /** Statuts d'appel autorisés (alignés sur reservation.status). */
+    public const OUTCOMES = ['OUI', 'NON', 'BV', 'INJOINABLE', 'BLACKLIST', 'UNBLACKLIST'];
 
     protected $fillable = [
         'client_id',
@@ -37,5 +43,10 @@ class CallOutcome extends Model
     public function comercial(): BelongsTo
     {
         return $this->belongsTo(User::class, 'comercial_id');
+    }
+
+    protected function noteWordField(): string
+    {
+        return 'note';
     }
 }

@@ -28,7 +28,7 @@ class AdminController extends Controller
             $client->update([
                 'status' => 'AVAILABLE',
                 'is_blacklisted' => false,
-                'blocked_until' => null,
+                'returned_at' => null,
             ]);
 
             $client->reservations()->delete();

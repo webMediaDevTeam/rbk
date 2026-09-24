@@ -14,21 +14,40 @@ class ReservationGroupController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $perPage = min((int) $request->input('per_page', 20), 100);
+        $perPage = min((int) $request->input('per_page', 20), 300);
 
-        $groups = ReservationGroup::withCount('reservations')
+        // Tableau « Mes listes » : compteurs par statut + employé, calculés
+        // automatiquement côté serveur (jointures), jamais à la main côté client.
+        $groups = ReservationGroup::query()
+            ->with(['comercial' => fn ($q) => $q->select(['id', 'first_name', 'last_name', 'email'])])
+            ->withCount([
+                'reservations as clients_count',
+                'reservations as traites_count' => fn ($q) => $q
+                    ->whereIn('status', ['OUI', 'NON', 'BV', 'INJOINABLE']),
+                'reservations as oui_count' => fn ($q) => $q->where('status', 'OUI'),
+                'reservations as non_count' => fn ($q) => $q->where('status', 'NON'),
+                'reservations as bv_count' => fn ($q) => $q->where('status', 'BV'),
+                'reservations as injoinable_count' => fn ($q) => $q->where('status', 'INJOINABLE'),
+                // Restant : pas encore appelés (EN_ATTENT).
+                'reservations as restant_count' => fn ($q) => $q->where('status', 'EN_ATTENT'),
+            ])
             ->where('comercial_id', $user->id)
             ->orderByDesc('created_at')
             ->paginate($perPage);
 
-        $groups->getCollection()->each(function ($group) {
-            $group->pending_count = \App\Models\Reservation::pendingFor($group->comercial_id, $group->id)->count();
+        $items = $groups->getCollection()->map(function (ReservationGroup $group) {
+            $data = $group->toArray();
+            $owner = $group->comercial;
+            $fullName = $owner ? trim(($owner->first_name ?? '') . ' ' . ($owner->last_name ?? '')) : '';
+            $data['employe'] = $fullName !== '' ? $fullName : ($owner?->email ?? null);
+
+            return $data;
         });
 
         return response()->json([
             'success' => true,
             'data' => [
-                'groups' => $groups->getCollection(),
+                'groups' => $items,
                 'pagination' => [
                     'current_page' => $groups->currentPage(),
                     'last_page'    => $groups->lastPage(),
@@ -57,8 +76,10 @@ class ReservationGroupController extends Controller
         $reservations = $group->reservations->map(fn ($r) => [
             'id' => $r->id,
             'status' => $r->status,
+            'bv_count' => $r->bv_count,
+            'injoinable_count' => $r->injoinable_count,
+            'recall_at' => $r->recall_at,
             'created_at' => $r->created_at,
-            'expires_at' => $r->expires_at,
             'client' => $r->client ? [
                 'id' => $r->client->id,
                 'name' => $r->client->rbq_data['name'] ?? null,
@@ -84,34 +105,36 @@ class ReservationGroupController extends Controller
         ]);
     }
 
-    public function releasePending(Request $request, string $id): JsonResponse
+    /**
+     * Renommer un groupe : propriétaire du groupe ou Admin / Super Admin.
+     */
+    public function update(Request $request, string $id): JsonResponse
     {
         $user = $request->user();
 
-        $group = ReservationGroup::where('id', $id)
-            ->where('comercial_id', $user->id)
-            ->first();
+        $group = ReservationGroup::where('id', $id)->first();
 
         if (! $group) {
             return response()->json(['success' => false, 'message' => 'Groupe introuvable.'], 404);
         }
 
-        return DB::transaction(function () use ($user, $group) {
-            $reservations = Reservation::pendingFor($user->id, $group->id)->get();
+        $isOwner = $group->comercial_id === $user->id;
+        $isAdmin = in_array($user->role, ['ADMIN', 'SUPER_ADMIN'], true);
 
-            $released = 0;
-            foreach ($reservations as $reservation) {
-                $client = $reservation->client;
-                $reservation->delete();
-                $client->update(['status' => 'AVAILABLE']);
-                $released++;
-            }
+        if (! $isOwner && ! $isAdmin) {
+            return response()->json(['success' => false, 'message' => 'Non autorisé.'], 403);
+        }
 
-            return response()->json([
-                'success' => true,
-                'message' => "$released prospect(s) retourné(s) à disponible.",
-                'data' => ['released' => $released],
-            ]);
-        });
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        DB::table('reservation_groups')->where('id', $group->id)->update(['name' => $validated['name']]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Liste renommée.',
+            'data' => ['id' => $group->id, 'name' => $validated['name']],
+        ]);
     }
 }

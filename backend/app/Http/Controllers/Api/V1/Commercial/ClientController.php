@@ -3,14 +3,19 @@
 namespace App\Http\Controllers\Api\V1\Commercial;
 
 use App\Http\Controllers\Controller;
-use App\Models\CallOutcome;
 use App\Models\Client;
+use App\Models\Reservation;
+use App\Services\CallWorkflowService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
+    public function __construct(private CallWorkflowService $workflow)
+    {
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = Client::query();
@@ -23,17 +28,24 @@ class ClientController extends Controller
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
                 $q->where('rbq_data->name', 'LIKE', $like)
+                  ->orWhere('rbq_data->entreprise_name', 'LIKE', $like)
                   ->orWhere('email', 'LIKE', $like)
                   ->orWhere('phone', 'LIKE', $like)
                   ->orWhere('neq', 'LIKE', $like)
                   ->orWhere('municipality', 'LIKE', $like)
-                  ->orWhere('licence_number', 'LIKE', $like);
+                  ->orWhere('licence_number', 'LIKE', $like)
+                  ->orWhere('licence_propre_numero', 'LIKE', $like)
+                  ->orWhereRaw('CAST(respondents AS CHAR) LIKE ?', [$like])
+                  ->orWhereRaw('CAST(categories AS CHAR) LIKE ?', [$like])
+                  ->orWhereRaw('CAST(authorized_categories AS CHAR) LIKE ?', [$like]);
             });
         }
 
+        // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
+
         $query->where('is_blacklisted', false)
-              ->where('status', 'AVAILABLE')
-              ->whereDoesntHave('reservations');
+              ->available()
+              ->whereDoesntHave('reservations', fn ($q) => $q->active());
 
         $sortable = [
             'name'        => 'rbq_data->name',
@@ -54,7 +66,7 @@ class ClientController extends Controller
             $query->orderByDesc('created_at');
         }
 
-        $perPage = min((int) $request->input('per_page', 20), 100);
+        $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
 
         $formatted = $clients->getCollection()->map(fn ($client) => $this->formatClient($client));
@@ -82,7 +94,7 @@ class ClientController extends Controller
                 $q->where('comercial_id', $user->id);
             });
 
-        $perPage = min((int) $request->input('per_page', 20), 100);
+        $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
 
         $formatted = $clients->getCollection()->map(fn ($client) => $this->formatClient($client));
@@ -124,27 +136,20 @@ class ClientController extends Controller
     public function blacklist(Request $request, string $id): JsonResponse
     {
         $validated = $request->validate([
-            'note' => 'required|string|max:5000',
+            'note' => 'nullable|string|max:5000',
         ]);
 
         $user = $request->user();
         $client = Client::findOrFail($id);
 
         return DB::transaction(function () use ($client, $user, $validated) {
-            CallOutcome::create([
-                'client_id' => $client->id,
-                'comercial_id' => $user->id,
-                'outcome' => 'BLACKLIST',
-                'note' => $validated['note'],
-            ]);
+            $this->workflow->apply($client, null, 'BLACKLIST', $validated, $user);
 
             $client->update([
                 'status' => 'BLACKLISTED',
                 'is_blacklisted' => true,
-                'blocked_until' => null,
+                'returned_at' => null,
             ]);
-
-            $client->reservations()->delete();
 
             return response()->json([
                 'success' => true,
@@ -167,7 +172,13 @@ class ClientController extends Controller
             'is_blacklisted' => $client->is_blacklisted,
             'municipality' => $client->municipality,
             'administrative_region' => $client->administrative_region,
+            'neq' => $client->neq,
+            'categories' => $client->categories,
+            'respondents' => $client->respondents,
+            'respondent_count' => $client->respondent_count,
+            'authorized_categories' => $client->authorized_categories,
             'licence_number' => $client->licence_number,
+            'licence_propre_numero' => $client->licence_propre_numero,
             'licence_status' => $client->licence_status,
             'licence_end_date' => $client->licence_end_date,
             'enterprise_name' => $enterpriseName,
@@ -179,10 +190,22 @@ class ClientController extends Controller
                 ->sortByDesc('created_at')
                 ->first();
 
+            // Réservation du connecté, seulement si elle est encore active :
+            // c'est elle qui conditionne l'affichage du bouton « Suite appel ».
             $myReservation = $client->reservations
                 ->where('comercial_id', auth()->id())
                 ->sortByDesc('created_at')
                 ->first();
+
+            if ($myReservation
+                && ! in_array($myReservation->status, Reservation::ACTIVE_STATUSES, true)) {
+                $myReservation = null;
+            }
+
+            if ($myReservation
+                && ! in_array($client->status, ['RESERVED', 'SUCCESS'], true)) {
+                $myReservation = null;
+            }
 
             $assignedCommercial = $activeReservation?->comercial;
 
@@ -200,6 +223,7 @@ class ClientController extends Controller
                 'sub_category_count' => $client->sub_category_count,
                 'authorized_categories' => $client->authorized_categories,
                 'surety_company' => $client->surety_company,
+                'cautionnement_compagnie' => $client->cautionnement_compagnie,
                 'surety_amount' => $client->surety_amount,
                 'representative_name' => $client->representative_name,
                 'enterprise_id' => $client->rbq_data['entreprise_id'] ?? null,
@@ -211,7 +235,7 @@ class ClientController extends Controller
                 ] : null,
                 'reservations_count' => $client->reservations_count ?? $client->reservations()->count(),
                 'notes_count' => $client->notes_count ?? $client->notes()->count(),
-                'blocked_until' => $client->blocked_until,
+                'returned_at' => $client->returned_at,
                 'call_outcomes' => $client->callOutcomes->map(fn ($o) => [
                     'id' => $o->id,
                     'outcome' => $o->outcome,
@@ -227,7 +251,10 @@ class ClientController extends Controller
                 ]),
                 'my_reservation' => $myReservation ? [
                     'id' => $myReservation->id,
-                    'expires_at' => $myReservation->expires_at,
+                    'status' => $myReservation->status,
+                    'bv_count' => $myReservation->bv_count,
+                    'injoinable_count' => $myReservation->injoinable_count,
+                    'recall_at' => $myReservation->recall_at,
                     'rappel_after' => $myReservation->rappel_after,
                     'rappel_type' => $myReservation->rappel_type,
                 ] : null,

@@ -2,99 +2,49 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Client;
-use App\Models\CallOutcome;
+use App\Models\Reservation;
+use App\Services\CallWorkflowService;
 use Illuminate\Console\Command;
 
 class ProcessTimeouts extends Command
 {
     protected $signature = 'clients:process-timeouts';
-    protected $description = 'Process voicemail timeouts and blocked client expirations';
+    protected $description = 'Process expired recalls (BV / Injoignable) without deleting reservations';
+
+    public function __construct(private CallWorkflowService $workflow)
+    {
+        parent::__construct();
+    }
 
     public function handle(): int
     {
-        $this->processVoicemailTimeouts();
-        $this->processExpiredReservations();
-        $this->processBlockedExpirations();
+        $this->processExpiredRecalls();
 
         $this->info('Timeouts processed successfully.');
 
         return self::SUCCESS;
     }
 
-    private function processExpiredReservations(): void
+    /**
+     * Rappel expiré sans action -> échec automatique (compteur++,
+     * >= 2 -> UNAVAILABLE_TEMP 21 jours). La réservation est conservée,
+     * recall_at est vidé : le client réapparaît dans les listes.
+     */
+    private function processExpiredRecalls(): void
     {
-        $reservations = \App\Models\Reservation::whereNull('recall_at')
-            ->where('expires_at', '<=', now())
+        $reservations = Reservation::whereNotNull('recall_at')
+            ->where('recall_at', '<=', now())
             ->with('client')
             ->get();
 
         foreach ($reservations as $reservation) {
-            $client = $reservation->client;
+            $blocked = $this->workflow->handleRecallExpired($reservation);
 
-            $reservation->delete();
-
-            if ($client && $client->status === 'RESERVED') {
-                $client->update(['status' => 'AVAILABLE']);
+            if ($blocked) {
+                $this->line("Client {$reservation->client_id} : tentatives épuisées -> UNAVAILABLE_TEMP 21 jours.");
             }
         }
-    }
 
-    private function processVoicemailTimeouts(): void
-    {
-        $reservations = \App\Models\Reservation::whereNotNull('recall_at')
-            ->where('expires_at', '<=', now())
-            ->with('client')
-            ->get();
-
-        foreach ($reservations as $reservation) {
-            $client = $reservation->client;
-            $comercialId = $reservation->comercial_id;
-
-            if (!$client || $client->status !== 'VOICEMAIL') {
-                $reservation->delete();
-                continue;
-            }
-
-            $reservation->delete();
-
-            $client->update(['status' => 'AVAILABLE']);
-
-            CallOutcome::create([
-                'client_id' => $client->id,
-                'comercial_id' => $comercialId,
-                'outcome' => 'NON',
-                'note' => 'Rappel boîte vocale expiré après 1 mois. Client rendu disponible.',
-            ]);
-
-            $this->checkAutoBlacklist($client);
-        }
-    }
-
-    private function processBlockedExpirations(): void
-    {
-        Client::where('status', 'AVAILABLE')
-            ->whereNotNull('blocked_until')
-            ->where('blocked_until', '<=', now())
-            ->update(['blocked_until' => null]);
-    }
-
-    private function checkAutoBlacklist(Client $client): void
-    {
-        $nonCount = CallOutcome::where('client_id', $client->id)
-            ->where('outcome', 'NON')
-            ->distinct('comercial_id')
-            ->count();
-
-        $activeCommercials = \App\Models\User::where('role', 'COMERCIAL')
-            ->where('status', 'ACTIVE')
-            ->count();
-
-        if ($nonCount >= $activeCommercials && $activeCommercials > 0) {
-            $client->update([
-                'is_blacklisted' => true,
-                'status' => 'BLACKLISTED',
-            ]);
-        }
+        $this->info($reservations->count().' rappel(s) expiré(s) traité(s).');
     }
 }

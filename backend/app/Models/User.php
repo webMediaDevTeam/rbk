@@ -52,7 +52,7 @@ class User extends Authenticatable
     {
         return Client::whereHas('reservations', function ($q) {
             $q->where('comercial_id', $this->id)
-              ->where('expires_at', '>', now());
+              ->whereIn('status', Reservation::ACTIVE_STATUSES);
         });
     }
 

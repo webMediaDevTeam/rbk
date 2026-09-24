@@ -13,6 +13,10 @@ use App\Models\CallOutcome;
 
 class CommercialAdminController extends Controller
 {
+    public function __construct(private \App\Services\CallWorkflowService $workflow)
+    {
+    }
+
     public function index()
     {
         $users = User::where('role', 'COMERCIAL')->with('employee')->get();
@@ -45,7 +49,7 @@ class CommercialAdminController extends Controller
         $clientsCalled = CallOutcome::where('comercial_id', $id)->distinct()->count('client_id');
         $clientsOui = CallOutcome::where('comercial_id', $id)->where('outcome', 'OUI')->distinct()->count('client_id');
 
-        $perPage = min((int) $request->input('per_page', 10), 100);
+        $perPage = min((int) $request->input('per_page', 10), 300);
         $page = max((int) $request->input('page', 1), 1);
 
         $historyQuery = Client::query()
@@ -144,13 +148,19 @@ class CommercialAdminController extends Controller
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
                 $q->where('rbq_data->name', 'LIKE', $like)
+                  ->orWhere('rbq_data->entreprise_name', 'LIKE', $like)
                   ->orWhere('email', 'LIKE', $like)
                   ->orWhere('phone', 'LIKE', $like)
                   ->orWhere('municipality', 'LIKE', $like)
                   ->orWhere('neq', 'LIKE', $like)
-                  ->orWhere('licence_number', 'LIKE', $like);
+                  ->orWhere('licence_number', 'LIKE', $like)
+                  ->orWhereRaw('CAST(respondents AS CHAR) LIKE ?', [$like])
+                  ->orWhereRaw('CAST(categories AS CHAR) LIKE ?', [$like])
+                  ->orWhereRaw('CAST(authorized_categories AS CHAR) LIKE ?', [$like]);
             });
         }
+
+        // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
 
         if ($status = $request->input('status')) {
             $query->where('status', $status);
@@ -173,7 +183,7 @@ class CommercialAdminController extends Controller
             $query->orderByDesc('created_at');
         }
 
-        $perPage = min((int) $request->input('per_page', 10), 100);
+        $perPage = min((int) $request->input('per_page', 10), 300);
         $page = max((int) $request->input('page', 1), 1);
         $clientsPage = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -186,7 +196,14 @@ class CommercialAdminController extends Controller
                 'phone' => $c->phone,
                 'status' => $c->status,
                 'is_blacklisted' => $c->is_blacklisted,
+                'returned_at' => $c->returned_at,
                 'municipality' => $c->municipality,
+                'neq' => $c->neq,
+                'licence_number' => $c->licence_number,
+                'categories' => $c->categories,
+                'respondents' => $c->respondents,
+                'respondent_count' => $c->respondent_count,
+                'authorized_categories' => $c->authorized_categories,
                 'enterprise_name' => $c->rbq_data['entreprise_name'] ?? '—',
                 'licence_end_date' => $c->licence_end_date,
                 'created_at' => $c->created_at,
@@ -235,16 +252,28 @@ class CommercialAdminController extends Controller
                     'phone' => $client->phone,
                     'status' => $client->status,
                     'is_blacklisted' => $client->is_blacklisted,
-                    'blocked_until' => $client->blocked_until,
+                    'returned_at' => $client->returned_at,
                     'municipality' => $client->municipality,
                     'administrative_region' => $client->administrative_region,
                     'licence_number' => $client->licence_number,
+                    'licence_propre_numero' => $client->licence_propre_numero,
                     'licence_status' => $client->licence_status,
                     'licence_end_date' => $client->licence_end_date,
+                    'licence_start_date' => $client->licence_start_date,
+                    'intervenant_name' => $client->intervenant_name,
+                    'licence_propre' => $client->licence_propre,
                     'enterprise_name' => $client->rbq_data['entreprise_name'] ?? '—',
                     'neq' => $client->neq,
                     'full_address' => $client->full_address,
                     'categories' => $client->categories,
+                    'categories_id' => $client->categories_id,
+                    'respondent_count' => $client->respondent_count,
+                    'respondents' => $client->respondents,
+                    'sub_category_count' => $client->sub_category_count,
+                    'authorized_categories' => $client->authorized_categories,
+                    'surety_company' => $client->surety_company,
+                    'cautionnement_compagnie' => $client->cautionnement_compagnie,
+                    'surety_amount' => $client->surety_amount,
                     'rbq_data' => $client->rbq_data,
                     'representative_name' => $client->representative_name,
                     'assigned_commercial' => $assigned ? [
@@ -294,58 +323,23 @@ class CommercialAdminController extends Controller
     public function blacklist(Request $request, $id)
     {
         $validated = $request->validate([
-            'note' => 'required|string|max:5000',
+            'note' => 'nullable|string|max:5000',
         ]);
 
         $client = Client::findOrFail($id);
 
         return DB::transaction(function () use ($client, $request, $validated) {
-            CallOutcome::create([
-                'client_id' => $client->id,
-                'comercial_id' => $request->user()->id,
-                'outcome' => 'BLACKLIST',
-                'note' => $validated['note'],
-            ]);
+            $this->workflow->apply($client, null, 'BLACKLIST', $validated, $request->user());
 
             $client->update([
                 'is_blacklisted' => true,
                 'status' => 'BLACKLISTED',
+                'returned_at' => null,
             ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Client mis en liste noire.',
-            ]);
-        });
-    }
-
-    /**
-     * Admin unblock of a client.
-     * POST /commercials/clients/{id}/unblock
-     */
-    public function unblock(Request $request, $id)
-    {
-        $client = Client::findOrFail($id);
-
-        return DB::transaction(function () use ($client, $request) {
-            $client->update([
-                'status' => 'AVAILABLE',
-                'is_blacklisted' => false,
-                'blocked_until' => null,
-            ]);
-
-            $client->reservations()->delete();
-
-            CallOutcome::create([
-                'client_id' => $client->id,
-                'comercial_id' => $request->user()->id,
-                'outcome' => 'UNBLACKLIST',
-                'note' => 'Client débloqué par un administrateur.',
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Client débloqué avec succès.',
             ]);
         });
     }

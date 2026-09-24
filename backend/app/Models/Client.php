@@ -19,9 +19,10 @@ class Client extends Model
         'rbq_data',
         'status',
         'is_blacklisted',
-        'blocked_until',
+        'returned_at',
         'licence_number',
         'licence_propre',
+        'licence_propre_numero',
         'intervenant_name',
         'licence_status',
         'neq',
@@ -35,6 +36,7 @@ class Client extends Model
         'sub_category_count',
         'authorized_categories',
         'surety_company',
+        'cautionnement_compagnie',
         'surety_amount',
         'licence_start_date',
         'licence_end_date',
@@ -49,13 +51,27 @@ class Client extends Model
             'rbq_data' => 'array',
             'is_blacklisted' => 'boolean',
             'licence_propre' => 'boolean',
+            'licence_propre_numero' => 'integer',
             'respondents' => 'array',
             'authorized_categories' => 'array',
+            'cautionnement_compagnie' => 'array',
             'surety_amount' => 'decimal:2',
             'licence_start_date' => 'date',
             'licence_end_date' => 'date',
-            'blocked_until' => 'datetime',
+            'returned_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Clients réellement disponibles : le statut AVAILABLE prime, et un
+     * returned_at passé ne bloque plus (réactivation prise en charge même
+     * si le cron horaire n'a pas encore tourné).
+     */
+    public function scopeAvailable($query)
+    {
+        return $query
+            ->where('status', 'AVAILABLE')
+            ->where(fn ($q) => $q->whereNull('returned_at')->orWhere('returned_at', '<=', now()));
     }
 
     public function reservations(): HasMany

@@ -13,23 +13,42 @@ class Reservation extends Model
 
     public const UPDATED_AT = null;
 
+    /** Tous les statuts de réservation (INJOINABLE s'affiche "à RAPPELER"). */
+    public const STATUSES = ['EN_ATTENT', 'OUI', 'NON', 'BV', 'INJOINABLE'];
+
+    /** Réservations encore "tenues" par le commercial (le client est RESERVED/SUCCESS). */
+    public const ACTIVE_STATUSES = ['EN_ATTENT', 'OUI', 'BV', 'INJOINABLE'];
+
     protected $fillable = [
         'client_id',
         'comercial_id',
         'reservation_group_id',
         'status',
+        'bv_count',
+        'injoinable_count',
         'rappel_after',
         'rappel_type',
         'recall_at',
-        'expires_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'expires_at' => 'datetime',
+            'bv_count' => 'integer',
+            'injoinable_count' => 'integer',
             'recall_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Réservations actives : le couple (statut de réservation, statut client)
+     * montre que le client est toujours tenu par le commercial.
+     */
+    public function scopeActive($query)
+    {
+        return $query
+            ->whereIn('status', self::ACTIVE_STATUSES)
+            ->whereHas('client', fn ($q) => $q->whereIn('status', ['RESERVED', 'SUCCESS']));
     }
 
     public function client(): BelongsTo
@@ -40,23 +59,5 @@ class Reservation extends Model
     public function comercial(): BelongsTo
     {
         return $this->belongsTo(User::class, 'comercial_id');
-    }
-
-    public static function pendingFor(string $comercialId, ?string $groupId = null)
-    {
-        $query = static::query()
-            ->where('comercial_id', $comercialId);
-
-        if ($groupId) {
-            $query->where('reservation_group_id', $groupId);
-        }
-
-        return $query->whereHas('client', function ($q) {
-            $q->whereIn('status', ['VOICEMAIL', 'INJOINABLE'])
-              ->orWhere(function ($q2) {
-                  $q2->where('status', 'RESERVED')
-                     ->whereDoesntHave('callOutcomes');
-              });
-        });
     }
 }

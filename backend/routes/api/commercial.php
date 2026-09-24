@@ -17,16 +17,20 @@ Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL'])->group(func
     Route::delete('notes/{id}', [NoteController::class, 'destroy']);
 
     Route::post('clients/{clientId}/outcome', [OutcomeController::class, 'store']);
-    Route::post('clients/{clientId}/release', [OutcomeController::class, 'release']);
 
     Route::get('reminders', [ReminderController::class, 'index']);
     Route::get('reminders/count', [ReminderController::class, 'count']);
 
     Route::get('reservation-groups', [\App\Http\Controllers\Api\V1\Commercial\ReservationGroupController::class, 'index']);
     Route::get('reservation-groups/{id}', [\App\Http\Controllers\Api\V1\Commercial\ReservationGroupController::class, 'show']);
-    Route::post('reservation-groups/{id}/release-pending', [\App\Http\Controllers\Api\V1\Commercial\ReservationGroupController::class, 'releasePending']);
     Route::post('clients/reserver', [\App\Http\Controllers\Api\V1\Commercial\ReservationController::class, 'store']);
 
-    Route::get('reservations/pending-count', [\App\Http\Controllers\Api\V1\Commercial\ReservationController::class, 'pendingCount']);
-    Route::post('reservations/release-pending', [\App\Http\Controllers\Api\V1\Commercial\ReservationController::class, 'releasePending']);
+    // Compteur header : réservations actives du commercial connecté
+    Route::get('reservations/active-count', [\App\Http\Controllers\Api\V1\Commercial\ReservationController::class, 'activeCount']);
+});
+
+// Renommage de liste : propriétaire (COMERCIAL) ou ADMIN / SUPER_ADMIN.
+// Route hors groupe COMERCIAL pur pour que le contrôleur puisse autoriser un admin.
+Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
+    Route::patch('reservation-groups/{id}', [\App\Http\Controllers\Api\V1\Commercial\ReservationGroupController::class, 'update']);
 });

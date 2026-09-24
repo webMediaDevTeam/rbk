@@ -12,6 +12,5 @@ Route::middleware(['auth:sanctum', CheckRole::class . ':ADMIN,SUPER_ADMIN'])->gr
     Route::get('commercials/clients', [CommercialAdminController::class, 'clients']);
     Route::get('commercials/clients/{id}', [CommercialAdminController::class, 'client']);
     Route::post('commercials/clients/{id}/blacklist', [CommercialAdminController::class, 'blacklist']);
-    Route::post('commercials/clients/{id}/unblock', [CommercialAdminController::class, 'unblock']);
     Route::get('commercials/{id}', [CommercialAdminController::class, 'show']);
 });
