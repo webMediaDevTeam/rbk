@@ -20,24 +20,36 @@ class ClientController extends Controller
     {
         $query = Client::query();
 
-        if ($categoryId = $request->input('category_id')) {
-            $query->whereJsonContains('categories_id', $categoryId);
+        // Filtres = scopes Eloquent, sur les valeurs distinctes de la table
+        // clients (plus de table categories).
+        if ($municipality = $request->input('municipality')) {
+            $query->filterByMunicipalities($municipality);
+        }
+
+        if ($category = $request->input('category')) {
+            $query->filterByCategories($category);
+        }
+
+        if ($region = $request->input('administrative_region')) {
+            $query->filterByAdministrativeRegions($region);
         }
 
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
-                $q->where('rbq_data->name', 'LIKE', $like)
-                  ->orWhere('rbq_data->entreprise_name', 'LIKE', $like)
+                $q->where('name', 'LIKE', $like)
+                  ->orWhere('enterprise_name', 'LIKE', $like)
                   ->orWhere('email', 'LIKE', $like)
                   ->orWhere('phone', 'LIKE', $like)
                   ->orWhere('neq', 'LIKE', $like)
                   ->orWhere('municipality', 'LIKE', $like)
                   ->orWhere('licence_number', 'LIKE', $like)
                   ->orWhere('licence_propre_numero', 'LIKE', $like)
-                  ->orWhereRaw('CAST(respondents AS CHAR) LIKE ?', [$like])
-                  ->orWhereRaw('CAST(categories AS CHAR) LIKE ?', [$like])
-                  ->orWhereRaw('CAST(authorized_categories AS CHAR) LIKE ?', [$like]);
+                  // Colonnes JSON : sous-chaîne via le scope dédié
+                  // (voir Client::scopeOrWhereJsonTextLike).
+                  ->orWhereJsonTextLike('respondents', $like)
+                  ->orWhereJsonTextLike('categories', $like)
+                  ->orWhereJsonTextLike('authorized_categories', $like);
             });
         }
 
@@ -48,12 +60,14 @@ class ClientController extends Controller
               ->whereDoesntHave('reservations', fn ($q) => $q->active());
 
         $sortable = [
-            'name'        => 'rbq_data->name',
+            'name'        => 'name',
+            'enterprise_name' => 'enterprise_name',
             'email'       => 'email',
             'phone'       => 'phone',
             'status'      => 'status',
             'municipality' => 'municipality',
             'created_at'  => 'created_at',
+            'updated_at'  => 'updated_at',
             'licence_end_date' => 'licence_end_date',
         ];
 
@@ -68,6 +82,10 @@ class ClientController extends Controller
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
+
+        // Statut affiché : dernière réservation de chaque client en 1 requête
+        // (sinon une requête par ligne à formatter).
+        Client::loadLatestReservations($clients->getCollection());
 
         $formatted = $clients->getCollection()->map(fn ($client) => $this->formatClient($client));
 
@@ -96,6 +114,10 @@ class ClientController extends Controller
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
+
+        // Statut affiché : dernière réservation de chaque client en 1 requête
+        // (sinon une requête par ligne à formatter).
+        Client::loadLatestReservations($clients->getCollection());
 
         $formatted = $clients->getCollection()->map(fn ($client) => $this->formatClient($client));
 
@@ -160,8 +182,8 @@ class ClientController extends Controller
 
     protected function formatClient(Client $client, bool $detailed = false): array
     {
-        $name = $client->rbq_data['name'] ?? '—';
-        $enterpriseName = $client->rbq_data['entreprise_name'] ?? '—';
+        $name = $client->name ?? '—';
+        $enterpriseName = $client->enterprise_name ?? '—';
 
         $base = [
             'id' => $client->id,
@@ -169,7 +191,11 @@ class ClientController extends Controller
             'email' => $client->email,
             'phone' => $client->phone,
             'status' => $client->status,
+            // Statut affiché (règle §2 : RESERVED qualifié par sa dernière
+            // réservation) + retour éventuel du blocage temporaire.
+            'display_status' => $client->displayStatus(),
             'is_blacklisted' => $client->is_blacklisted,
+            'returned_at' => $client->returned_at,
             'municipality' => $client->municipality,
             'administrative_region' => $client->administrative_region,
             'neq' => $client->neq,
@@ -183,6 +209,7 @@ class ClientController extends Controller
             'licence_end_date' => $client->licence_end_date,
             'enterprise_name' => $enterpriseName,
             'created_at' => $client->created_at,
+            'updated_at' => $client->updated_at,
         ];
 
         if ($detailed) {
@@ -213,8 +240,6 @@ class ClientController extends Controller
                 'neq' => $client->neq,
                 'full_address' => $client->full_address,
                 'categories' => $client->categories,
-                'categories_id' => $client->categories_id,
-                'rbq_data' => $client->rbq_data,
                 'licence_propre' => $client->licence_propre,
                 'intervenant_name' => $client->intervenant_name,
                 'licence_start_date' => $client->licence_start_date,
@@ -226,7 +251,6 @@ class ClientController extends Controller
                 'cautionnement_compagnie' => $client->cautionnement_compagnie,
                 'surety_amount' => $client->surety_amount,
                 'representative_name' => $client->representative_name,
-                'enterprise_id' => $client->rbq_data['entreprise_id'] ?? null,
                 'assigned_comercial' => $assignedCommercial ? [
                     'id' => $assignedCommercial->id,
                     'email' => $assignedCommercial->email,

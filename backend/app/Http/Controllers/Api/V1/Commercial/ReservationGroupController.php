@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Commercial;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use Illuminate\Http\JsonResponse;
@@ -67,11 +68,27 @@ class ReservationGroupController extends Controller
             ->with(['reservations' => function ($q) {
                 $q->with('client')->latest('created_at');
             }])
+            // Compteurs traités / restant calculés en SQL, comme pour le
+            // tableau « Mes listes » (index) — jamais côté client.
+            ->withCount([
+                'reservations as clients_count',
+                'reservations as traites_count' => fn ($q) => $q
+                    ->whereIn('status', ['OUI', 'NON', 'BV', 'INJOINABLE']),
+                'reservations as restant_count' => fn ($q) => $q->where('status', 'EN_ATTENT'),
+                'reservations as oui_count' => fn ($q) => $q->where('status', 'OUI'),
+                'reservations as non_count' => fn ($q) => $q->where('status', 'NON'),
+                'reservations as bv_count' => fn ($q) => $q->where('status', 'BV'),
+                'reservations as injoinable_count' => fn ($q) => $q->where('status', 'INJOINABLE'),
+            ])
             ->first();
 
         if (! $group) {
             return response()->json(['success' => false, 'message' => 'Groupe introuvable.'], 404);
         }
+
+        // Statut affiché : dernière réservation des clients de la liste
+        // préchargée en une seule requête.
+        Client::loadLatestReservations($group->reservations->pluck('client')->filter());
 
         $reservations = $group->reservations->map(fn ($r) => [
             'id' => $r->id,
@@ -82,11 +99,14 @@ class ReservationGroupController extends Controller
             'created_at' => $r->created_at,
             'client' => $r->client ? [
                 'id' => $r->client->id,
-                'name' => $r->client->rbq_data['name'] ?? null,
+                'name' => $r->client->name ?? null,
                 'phone' => $r->client->phone,
                 'email' => $r->client->email,
                 'municipality' => $r->client->municipality,
                 'status' => $r->client->status,
+                'display_status' => $r->client->displayStatus(),
+                'is_blacklisted' => $r->client->is_blacklisted,
+                'returned_at' => $r->client->returned_at,
             ] : null,
         ]);
 
@@ -98,6 +118,13 @@ class ReservationGroupController extends Controller
                     'name' => $group->name,
                     'total' => $group->total,
                     'reserved_count' => $group->reserved_count,
+                    'clients_count' => (int) $group->clients_count,
+                    'traites_count' => (int) $group->traites_count,
+                    'restant_count' => (int) $group->restant_count,
+                    'oui_count' => (int) $group->oui_count,
+                    'non_count' => (int) $group->non_count,
+                    'bv_count' => (int) $group->bv_count,
+                    'injoinable_count' => (int) $group->injoinable_count,
                     'created_at' => $group->created_at,
                 ],
                 'reservations' => $reservations,

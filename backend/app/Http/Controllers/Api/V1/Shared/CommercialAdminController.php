@@ -59,7 +59,7 @@ class CommercialAdminController extends Controller
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
             $historyQuery->where(function ($q) use ($like) {
-                $q->where('rbq_data->name', 'LIKE', $like)
+                $q->where('name', 'LIKE', $like)
                   ->orWhere('email', 'LIKE', $like)
                   ->orWhere('phone', 'LIKE', $like)
                   ->orWhere('municipality', 'LIKE', $like);
@@ -68,19 +68,25 @@ class CommercialAdminController extends Controller
 
         $clientsPage = $historyQuery->paginate($perPage, ['*'], 'page', $page);
 
+        // Statut affiché : dernière réservation de chaque client en 1 requête.
+        Client::loadLatestReservations($clientsPage->getCollection());
+
         $historique = $clientsPage->getCollection()->map(function ($c) {
             $last = $c->callOutcomes->first();
             return [
                 'id' => $c->id,
-                'name' => $c->rbq_data['name'] ?? '—',
+                'name' => $c->name ?? '—',
                 'email' => $c->email,
                 'phone' => $c->phone,
                 'status' => $c->status,
+                'display_status' => $c->displayStatus(),
                 'is_blacklisted' => $c->is_blacklisted,
+                'returned_at' => $c->returned_at,
                 'municipality' => $c->municipality,
-                'enterprise_name' => $c->rbq_data['entreprise_name'] ?? '—',
+                'enterprise_name' => $c->enterprise_name ?? '—',
                 'licence_end_date' => $c->licence_end_date,
                 'created_at' => $c->created_at,
+                'updated_at' => $c->updated_at,
                 'last_call' => $last ? [
                     'outcome' => $last->outcome,
                     'note' => $last->note,
@@ -147,16 +153,18 @@ class CommercialAdminController extends Controller
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
-                $q->where('rbq_data->name', 'LIKE', $like)
-                  ->orWhere('rbq_data->entreprise_name', 'LIKE', $like)
+                $q->where('name', 'LIKE', $like)
+                  ->orWhere('enterprise_name', 'LIKE', $like)
                   ->orWhere('email', 'LIKE', $like)
                   ->orWhere('phone', 'LIKE', $like)
                   ->orWhere('municipality', 'LIKE', $like)
                   ->orWhere('neq', 'LIKE', $like)
                   ->orWhere('licence_number', 'LIKE', $like)
-                  ->orWhereRaw('CAST(respondents AS CHAR) LIKE ?', [$like])
-                  ->orWhereRaw('CAST(categories AS CHAR) LIKE ?', [$like])
-                  ->orWhereRaw('CAST(authorized_categories AS CHAR) LIKE ?', [$like]);
+                  // Colonnes JSON : sous-chaîne via le scope dédié
+                  // (voir Client::scopeOrWhereJsonTextLike).
+                  ->orWhereJsonTextLike('respondents', $like)
+                  ->orWhereJsonTextLike('categories', $like)
+                  ->orWhereJsonTextLike('authorized_categories', $like);
             });
         }
 
@@ -166,13 +174,28 @@ class CommercialAdminController extends Controller
             $query->where('status', $status);
         }
 
+        // Filtres de listes (scopes Eloquent) : mêmes paramètres que la liste
+        // commerciale — municipalité, catégorie et région administrative.
+        if ($municipality = $request->input('municipality')) {
+            $query->filterByMunicipalities($municipality);
+        }
+
+        if ($category = $request->input('category')) {
+            $query->filterByCategories($category);
+        }
+
+        if ($region = $request->input('administrative_region')) {
+            $query->filterByAdministrativeRegions($region);
+        }
+
         $sortable = [
-            'name'             => 'rbq_data->name',
+            'name'             => 'name',
             'email'            => 'email',
             'phone'            => 'phone',
             'status'           => 'status',
             'municipality'     => 'municipality',
             'created_at'       => 'created_at',
+            'updated_at'       => 'updated_at',
             'licence_end_date' => 'licence_end_date',
         ];
         $sortBy    = $request->input('sort_by', 'created_at');
@@ -187,14 +210,18 @@ class CommercialAdminController extends Controller
         $page = max((int) $request->input('page', 1), 1);
         $clientsPage = $query->paginate($perPage, ['*'], 'page', $page);
 
+        // Statut affiché : dernière réservation de chaque client en 1 requête.
+        Client::loadLatestReservations($clientsPage->getCollection());
+
         $clients = $clientsPage->getCollection()->map(function ($c) {
             $last = $c->callOutcomes->first();
             return [
                 'id' => $c->id,
-                'name' => $c->rbq_data['name'] ?? '—',
+                'name' => $c->name ?? '—',
                 'email' => $c->email,
                 'phone' => $c->phone,
                 'status' => $c->status,
+                'display_status' => $c->displayStatus(),
                 'is_blacklisted' => $c->is_blacklisted,
                 'returned_at' => $c->returned_at,
                 'municipality' => $c->municipality,
@@ -204,9 +231,10 @@ class CommercialAdminController extends Controller
                 'respondents' => $c->respondents,
                 'respondent_count' => $c->respondent_count,
                 'authorized_categories' => $c->authorized_categories,
-                'enterprise_name' => $c->rbq_data['entreprise_name'] ?? '—',
+                'enterprise_name' => $c->enterprise_name ?? '—',
                 'licence_end_date' => $c->licence_end_date,
                 'created_at' => $c->created_at,
+                'updated_at' => $c->updated_at,
                 'last_call' => $last ? [
                     'outcome' => $last->outcome,
                     'created_at' => $last->created_at,
@@ -247,10 +275,11 @@ class CommercialAdminController extends Controller
             'data' => [
                 'client' => [
                     'id' => $client->id,
-                    'name' => $client->rbq_data['name'] ?? '—',
+                    'name' => $client->name ?? '—',
                     'email' => $client->email,
                     'phone' => $client->phone,
                     'status' => $client->status,
+                    'display_status' => $client->displayStatus(),
                     'is_blacklisted' => $client->is_blacklisted,
                     'returned_at' => $client->returned_at,
                     'municipality' => $client->municipality,
@@ -262,11 +291,12 @@ class CommercialAdminController extends Controller
                     'licence_start_date' => $client->licence_start_date,
                     'intervenant_name' => $client->intervenant_name,
                     'licence_propre' => $client->licence_propre,
-                    'enterprise_name' => $client->rbq_data['entreprise_name'] ?? '—',
+                    'enterprise_name' => $client->enterprise_name ?? '—',
+                    'created_at' => $client->created_at,
+                    'updated_at' => $client->updated_at,
                     'neq' => $client->neq,
                     'full_address' => $client->full_address,
                     'categories' => $client->categories,
-                    'categories_id' => $client->categories_id,
                     'respondent_count' => $client->respondent_count,
                     'respondents' => $client->respondents,
                     'sub_category_count' => $client->sub_category_count,
@@ -274,7 +304,6 @@ class CommercialAdminController extends Controller
                     'surety_company' => $client->surety_company,
                     'cautionnement_compagnie' => $client->cautionnement_compagnie,
                     'surety_amount' => $client->surety_amount,
-                    'rbq_data' => $client->rbq_data,
                     'representative_name' => $client->representative_name,
                     'assigned_commercial' => $assigned ? [
                         'id' => $assigned->id,

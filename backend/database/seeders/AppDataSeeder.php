@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Category;
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Enterprise;
@@ -248,15 +247,8 @@ class AppDataSeeder extends Seeder
             ['licence_number' => sprintf('RBQ-%s-%03d', $data['code'], $clientIndex)],
             [
                 'categories' => $clientCategories->pluck('label')->all(),
-                'categories_id' => $clientCategories->pluck('id')->all(),
-                'rbq_data' => [
-                    'name' => $name,
-                    'source' => 'quebec-construction',
-                    'entreprise_id' => $enterprise->id,
-                    'entreprise_name' => $enterprise->name,
-                    'entreprise_index' => $enterpriseIndex + 1,
-                    'client_index' => $clientIndex,
-                ],
+                'name' => $name,
+                'enterprise_name' => $enterprise->name,
                 'status' => 'AVAILABLE',
                 'is_blacklisted' => false,
                 'licence_propre' => true,
@@ -308,15 +300,7 @@ class AppDataSeeder extends Seeder
             ['name' => 'generale', 'label' => 'Entrepreneur général'],
         ];
 
-        return collect($definitions)
-            ->map(fn (array $category) => Category::updateOrCreate(
-                ['name' => $category['name']],
-                [
-                    'label' => $category['label'],
-                    'description' => sprintf('Catégorie %s — clients construction du Québec.', $category['label']),
-                ],
-            ))
-            ->values();
+        return collect($definitions)->values();
     }
 
     private function phone(int $enterpriseIndex, int $commercialIndex): string

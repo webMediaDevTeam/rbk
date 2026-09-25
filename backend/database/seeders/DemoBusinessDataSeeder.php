@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Category;
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Enterprise;
@@ -23,13 +22,7 @@ class DemoBusinessDataSeeder extends Seeder
             ['name' => 'electricite', 'label' => 'Électricité'],
             ['name' => 'plomberie', 'label' => 'Plomberie'],
             ['name' => 'structure', 'label' => 'Structure'],
-        ])->map(fn (array $category) => Category::updateOrCreate(
-            ['name' => $category['name']],
-            [
-                'label' => $category['label'],
-                'description' => "Catégorie {$category['label']} pour les clients démo.",
-            ],
-        ))->values();
+        ])->values();
 
         for ($enterpriseIndex = 1; $enterpriseIndex <= 32; $enterpriseIndex++) {
             $enterprise = Enterprise::updateOrCreate(
@@ -93,12 +86,8 @@ class DemoBusinessDataSeeder extends Seeder
                         'enterprise_id' => $enterprise->id,
                         'assigned_comercial_id' => $assignedCommercial->id,
                         'categories' => $clientCategories->pluck('label')->all(),
-                        'categories_id' => $clientCategories->pluck('id')->all(),
-                        'rbq_data' => [
-                            'source' => 'demo',
-                            'enterprise_index' => $enterpriseIndex,
-                            'client_index' => $clientIndex,
-                        ],
+                        'name' => sprintf('Client Démo %02d-%02d', $enterpriseIndex, $clientIndex),
+                        'enterprise_name' => $enterprise->name,
                         'status' => $clientIndex % 5 === 0 ? 'RESERVED' : 'AVAILABLE',
                         'is_blacklisted' => false,
                         'licence_propre' => $clientIndex % 3 !== 0,

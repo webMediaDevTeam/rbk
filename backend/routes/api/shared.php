@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Api\V1\Shared\AuthController;
 use App\Http\Controllers\Api\V1\Shared\DashboardController;
+use App\Http\Controllers\Api\V1\Shared\ProspectFilterController;
+use App\Http\Controllers\Api\V1\Shared\ProspectOverviewController;
 use App\Http\Controllers\Api\V1\Shared\UserController;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
@@ -16,9 +18,6 @@ Route::post('auth/forgot-password/reset', [AuthController::class, 'resetForgotPa
 Route::post('auth/verify-account', [AuthController::class, 'verifyAccount']);
 Route::post('auth/resend-verification', [AuthController::class, 'resendVerification']);
 
-// Public: category list used by frontend filters
-Route::get('categories', [\App\Http\Controllers\Api\V1\Shared\CategoryController::class, 'index']);
-
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);
@@ -27,6 +26,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('auth/profile/password/otp', [AuthController::class, 'sendPasswordOtp']);
     Route::post('auth/profile/password/otp/verify', [AuthController::class, 'verifyPasswordOtp']);
     Route::put('auth/profile/password', [AuthController::class, 'updateProfilePassword']);
+
+    // Distinct values (no repetitions) read from the clients table,
+    // cached 1 week server-side — Client::distinctValues().
+    Route::get('filters', [ProspectFilterController::class, 'index']);          // {categories, municipalities, administrative_regions}
+    Route::get('categories', [ProspectFilterController::class, 'categories']);  // list<string>
+    Route::get('municipalities', [ProspectFilterController::class, 'municipalities']);
+    Route::get('administrative-regions', [ProspectFilterController::class, 'administrativeRegions']);
+
+    // Cartes KPI « Overview » des deux listes de prospects (chiffres
+    // globaux). Déclarée avant `clients/{id}` (routes/api/commercial.php) :
+    // les routes se lisent dans l'ordre de chargement des fichiers.
+    Route::get('clients/overview', [ProspectOverviewController::class, 'overview']);
 });
 
 // ── User Management ─────────────────────────────────────────

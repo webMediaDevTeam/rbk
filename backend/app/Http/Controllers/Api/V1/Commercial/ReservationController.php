@@ -79,7 +79,7 @@ class ReservationController extends Controller
                     $owner = $active->comercial;
                     $conflicts[] = [
                         'client_id' => $c->id,
-                        'name' => $c->rbq_data['name'] ?? null,
+                        'name' => $c->name ?? null,
                         'status' => $c->status,
                         'reserved_by' => $owner
                             ? (trim(($owner->first_name ?? '') . ' ' . ($owner->last_name ?? '')) ?: $owner->email)
@@ -105,7 +105,7 @@ class ReservationController extends Controller
                 DB::rollBack();
                 $conflicts[] = [
                     'client_id' => $client->id,
-                    'name' => $client->rbq_data['name'] ?? null,
+                    'name' => $client->name ?? null,
                     'status' => $client->status ?? null,
                     'error' => $e->getMessage(),
                 ];

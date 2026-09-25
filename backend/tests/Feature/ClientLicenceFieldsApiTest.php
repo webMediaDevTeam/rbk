@@ -36,7 +36,7 @@ class ClientLicenceFieldsApiTest extends TestCase
     private function makeN8nClient(): Client
     {
         return Client::create([
-            'rbq_data' => ['name' => 'Jean Dupont', 'entreprise_name' => 'Entreprise Exemple Inc.'],
+            'name' => 'Jean Dupont', 'enterprise_name' => 'Entreprise Exemple Inc.',
             'status' => 'AVAILABLE',
             'licence_number' => 'LIC-2026-99',
             'licence_propre_numero' => 12345678,
@@ -75,7 +75,7 @@ class ClientLicenceFieldsApiTest extends TestCase
         $this->expectException(\Illuminate\Database\QueryException::class);
 
         Client::create([
-            'rbq_data' => ['name' => 'Doublon'],
+            'name' => 'Doublon',
             'status' => 'AVAILABLE',
             'licence_propre_numero' => 12345678,
         ]);
@@ -135,7 +135,7 @@ class ClientLicenceFieldsApiTest extends TestCase
         $commercial = $this->makeUser('COMERCIAL');
         $target = $this->makeN8nClient();
         $other = Client::create([
-            'rbq_data' => ['name' => 'Autre Inc'],
+            'name' => 'Autre Inc',
             'status' => 'AVAILABLE',
             'licence_propre_numero' => 87654321,
         ]);
@@ -154,7 +154,7 @@ class ClientLicenceFieldsApiTest extends TestCase
     {
         $commercial = $this->makeUser('COMERCIAL');
         $target = Client::create([
-            'rbq_data' => ['name' => 'Jean Dupont', 'entreprise_name' => 'Bâtiments Ltee'],
+            'name' => 'Jean Dupont', 'enterprise_name' => 'Bâtiments Ltee',
             'status' => 'AVAILABLE',
             'licence_number' => 'LIC-777',
             'neq' => '9876543210',
@@ -163,7 +163,7 @@ class ClientLicenceFieldsApiTest extends TestCase
             'respondents' => ['Suzanne Répondant'],
         ]);
         $other = Client::create([
-            'rbq_data' => ['name' => 'Autre Inc', 'entreprise_name' => 'Autre Groupe'],
+            'name' => 'Autre Inc', 'enterprise_name' => 'Autre Groupe',
             'status' => 'AVAILABLE',
         ]);
 
@@ -203,7 +203,7 @@ class ClientLicenceFieldsApiTest extends TestCase
     public function test_per_page_accepts_50_100_200_300_without_silent_clamp(): void
     {
         $commercial = $this->makeUser('COMERCIAL');
-        Client::create(['rbq_data' => ['name' => 'Seed'], 'status' => 'AVAILABLE']);
+        Client::create(['name' => 'Seed', 'status' => 'AVAILABLE']);
 
         Sanctum::actingAs($commercial);
 

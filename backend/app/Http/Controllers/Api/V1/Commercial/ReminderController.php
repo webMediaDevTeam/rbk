@@ -25,14 +25,14 @@ class ReminderController extends Controller
         $reservations = Reservation::where('comercial_id', $user->id)
             ->whereNotNull('recall_at')
             ->where('status', $this->recallType($request))
-            ->with('client:id,rbq_data,status,phone,email,municipality')
+            ->with('client:id,name,enterprise_name,status,phone,email,municipality')
             ->orderBy('recall_at', 'asc')
             ->get();
 
         $formatted = $reservations->map(fn ($r) => [
             'id' => $r->id,
             'client_id' => $r->client_id,
-            'client_name' => $r->client->rbq_data['name'] ?? '—',
+            'client_name' => $r->client->name ?? '—',
             'client_phone' => $r->client->phone,
             'client_municipality' => $r->client->municipality,
             'status' => $r->status,

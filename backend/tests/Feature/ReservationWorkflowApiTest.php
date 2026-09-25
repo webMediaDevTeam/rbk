@@ -28,7 +28,7 @@ class ReservationWorkflowApiTest extends TestCase
     private function makeClient(array $attrs = []): Client
     {
         return Client::create(array_merge([
-            'rbq_data' => ['name' => 'ACME Construction'],
+            'name' => 'ACME Construction',
             'status' => 'AVAILABLE',
         ], $attrs));
     }
@@ -536,12 +536,12 @@ class ReservationWorkflowApiTest extends TestCase
 
         $target = $this->makeClient([
             'status' => 'AVAILABLE',
-            'rbq_data' => ['name' => 'Bâtiments Ltee', 'entreprise_name' => 'Groupe Construction XYZ'],
+            'name' => 'Bâtiments Ltee', 'enterprise_name' => 'Groupe Construction XYZ',
             'categories' => ['Résidentiel'],
         ]);
         $other = $this->makeClient([
             'status' => 'AVAILABLE',
-            'rbq_data' => ['name' => 'Autre Inc', 'entreprise_name' => 'Autre Groupe'],
+            'name' => 'Autre Inc', 'enterprise_name' => 'Autre Groupe',
             'categories' => ['Industriel'],
         ]);
 

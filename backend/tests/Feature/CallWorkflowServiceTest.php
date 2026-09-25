@@ -42,7 +42,7 @@ class CallWorkflowServiceTest extends TestCase
     private function makeClient(array $attrs = []): Client
     {
         return Client::create(array_merge([
-            'rbq_data' => ['name' => 'ACME Construction'],
+            'name' => 'ACME Construction',
             'status' => 'AVAILABLE',
             'municipality' => 'Québec',
         ], $attrs));
