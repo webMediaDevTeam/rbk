@@ -1,4 +1,5 @@
-import { ChevronRight, Home, Eye } from 'lucide-react'
+import { ChevronRight, Home, Eye, ListChecks } from 'lucide-react'
+import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useMesListes } from './useMesListes.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
@@ -7,6 +8,7 @@ export default function MesListesPage() {
   const {
     isLoading,
     groups,
+    total,
     isDesktop,
     currentPage,
     totalPages,
@@ -33,6 +35,20 @@ export default function MesListesPage() {
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Mes listes</h1>
         <p className="text-sm text-muted-foreground mt-1">Groupes de réservations.</p>
       </div>
+
+      {!isLoading && total > 0 && (
+        <KpiBar>
+          <KpiPill
+            label="Listes"
+            value={formatCount(total)}
+            suffix={total > 1 ? 'total' : 'liste'}
+            suffixClass="text-muted-foreground"
+            icon={ListChecks}
+            iconClass="bg-primary/10 text-primary"
+            title="Nombre total de listes (toutes pages confondues)"
+          />
+        </KpiBar>
+      )}
 
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>

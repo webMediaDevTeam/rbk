@@ -17,6 +17,9 @@ export function useClientsHistoryPage() {
   const isDesktop = useIsDesktop()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [municipality, setMunicipality] = useState('')
+  const [categories, setCategories] = useState('')
+  const [region, setRegion] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [sortBy, setSortBy] = useState('created_at')
@@ -28,6 +31,9 @@ export function useClientsHistoryPage() {
   const { data, isLoading } = useAdminClientsHistory({
     search: searchParam,
     status: status || undefined,
+    municipality: municipality || undefined,
+    category: categories || undefined,
+    administrative_region: region || undefined,
     page: currentPage,
     per_page: rowsPerPage,
     sort_by: sortBy,
@@ -59,6 +65,21 @@ export function useClientsHistoryPage() {
     setCurrentPage(1)
   }
 
+  const handleMunicipalityChange = (value) => {
+    setMunicipality(value)
+    setCurrentPage(1)
+  }
+
+  const handleCategoryChange = (value) => {
+    setCategories(value)
+    setCurrentPage(1)
+  }
+
+  const handleRegionChange = (value) => {
+    setRegion(value)
+    setCurrentPage(1)
+  }
+
   const handleRowsPerPageChange = (n) => {
     setRowsPerPage(n)
     setCurrentPage(1)
@@ -73,6 +94,12 @@ export function useClientsHistoryPage() {
     handleSearchChange,
     status,
     handleStatusChange,
+    municipality,
+    handleMunicipalityChange,
+    categories,
+    handleCategoryChange,
+    region,
+    handleRegionChange,
     currentPage,
     setCurrentPage,
     rowsPerPage,

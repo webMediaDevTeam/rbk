@@ -1,7 +1,7 @@
 import { ChevronRight, Copy, Home, ArrowLeft, Phone, Ban, Loader2, AlertCircle, X, Unlock } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs.jsx'
-import ProspectStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
+import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import ClientDetailsTab from './components/ClientDetailsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
@@ -68,7 +68,11 @@ export default function ClientDetailPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{client.name ?? '—'}</h1>
-                  <ProspectStatusBadge status={client.status} isBlacklisted={client.is_blacklisted} />
+                  <ClientStatus
+                    status={client.display_status ?? client.status}
+                    isBlacklisted={client.is_blacklisted}
+                    returnedAt={client.returned_at}
+                  />
                 </div>
                 <p className="text-sm text-muted-foreground">{client.enterprise_name ?? '—'}</p>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">

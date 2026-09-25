@@ -1,5 +1,5 @@
 import { Eye } from 'lucide-react'
-import ProspectStatusBadge from './ProspectStatusBadge'
+import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { respondentsText, categoriesText } from './prospectFormat'
 
@@ -62,7 +62,11 @@ export default function ProspectCard({ client, num, onViewDetail, showViewButton
       </div>
 
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-        <ProspectStatusBadge status={client.status} isBlacklisted={client.is_blacklisted} />
+        <ClientStatus
+          status={client.display_status ?? client.status}
+          isBlacklisted={client.is_blacklisted}
+          returnedAt={client.returned_at}
+        />
         <span className="text-xs text-muted-foreground">
           {client.licence_end_date ? `Licence: ${new Date(client.licence_end_date).toLocaleDateString('fr-FR')}` : '—'}
         </span>

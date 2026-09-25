@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Home, ArrowLeft, Eye, Pencil, Check, X, Loader2 } from 'lucide-react'
+import { ChevronRight, Home, ArrowLeft, Eye, Pencil, Check, X, Loader2, PhoneCall, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff } from 'lucide-react'
+import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
-import ClientStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
+import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import Input from '@/components/ui/input.jsx'
@@ -79,6 +80,65 @@ export default function GroupDetailPage() {
     formatDate,
   } = useGroupDetail()
 
+  // Compteurs renvoyés par le serveur (avecCount) : traités = statut
+  // OUI / NON / BV / INJOINABLE, non traités = EN_ATTENT.
+  const listPills = [
+    {
+      primary: group?.traites_count ?? 0,
+      label: 'Traités',
+      value: formatCount(group?.traites_count),
+      suffix: `sur ${formatCount(group?.clients_count)} prospect(s)`,
+      suffixClass: 'text-muted-foreground',
+      icon: PhoneCall,
+      iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      title: 'Prospects déjà traités (OUI, NON, BV ou INJOINABLE)',
+    },
+    {
+      primary: group?.restant_count ?? 0,
+      label: 'Non traités',
+      value: formatCount(group?.restant_count),
+      suffix: `sur ${formatCount(group?.clients_count)} prospect(s)`,
+      suffixClass: 'text-muted-foreground',
+      icon: Hourglass,
+      iconClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+      title: 'Prospects pas encore appelés (en attente)',
+    },
+    // Détail des issues, mêmes couleurs que les badges de statut
+    // (ReservationStatusBadge) : success / destructive / warning / info.
+    {
+      primary: group?.oui_count ?? 0,
+      label: 'OUI',
+      value: formatCount(group?.oui_count),
+      icon: ThumbsUp,
+      iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+      title: 'Réservations au statut OUI (confirmées)',
+    },
+    {
+      primary: group?.non_count ?? 0,
+      label: 'NON',
+      value: formatCount(group?.non_count),
+      icon: ThumbsDown,
+      iconClass: 'bg-destructive/10 text-destructive',
+      title: 'Réservations au statut NON (refusées)',
+    },
+    {
+      primary: group?.bv_count ?? 0,
+      label: 'BV',
+      value: formatCount(group?.bv_count),
+      icon: Voicemail,
+      iconClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+      title: 'Réservations au statut BV (boîte vocale)',
+    },
+    {
+      primary: group?.injoinable_count ?? 0,
+      label: 'Injoinable',
+      value: formatCount(group?.injoinable_count),
+      icon: PhoneOff,
+      iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+      title: 'Réservations au statut INJOINABLE (à rappeler)',
+    },
+  ].filter((pill) => pill.primary > 0)
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -116,6 +176,14 @@ export default function GroupDetailPage() {
             </div>
           </div>
 
+          {listPills.length > 0 && (
+            <KpiBar>
+              {listPills.map((pill) => (
+                <KpiPill key={pill.label} {...pill} />
+              ))}
+            </KpiBar>
+          )}
+
           {reservations.length === 0 ? (
             <div className="rounded-xl bg-card text-card-foreground shadow-sm h-32 flex items-center justify-center text-muted-foreground">
               Aucun prospect dans cette liste.
@@ -128,8 +196,8 @@ export default function GroupDetailPage() {
                     <TableHead>Prospect</TableHead>
                     <TableHead>Téléphone</TableHead>
                     <TableHead>Municipalité</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Réservation</TableHead>
+                    <TableHead>Etat</TableHead>
+                    <TableHead>Traitement</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
@@ -156,10 +224,15 @@ export default function GroupDetailPage() {
                       <TableCell className="text-muted-foreground">{r.client?.phone ?? '—'}</TableCell>
                       <TableCell className="text-muted-foreground">{r.client?.municipality ?? '—'}</TableCell>
                       <TableCell>
-                        <ClientStatusBadge status={r.client?.status} />
+                        <ClientStatus
+                          status={r.client?.display_status ?? r.client?.status}
+                          isBlacklisted={r.client?.is_blacklisted}
+                          returnedAt={r.client?.returned_at}
+                        />
                       </TableCell>
                       <TableCell>
                         <ReservationStatusBadge status={r.status} />
+                     
                       </TableCell>
                       <TableCell className="text-right">
                         <button
@@ -205,7 +278,11 @@ export default function GroupDetailPage() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-border">
-                    <ClientStatusBadge status={r.client?.status} />
+                    <ClientStatus
+                      status={r.client?.display_status ?? r.client?.status}
+                      isBlacklisted={r.client?.is_blacklisted}
+                      returnedAt={r.client?.returned_at}
+                    />
                     <ReservationStatusBadge status={r.status} />
                   </div>
                 </div>

@@ -10,7 +10,7 @@ export default function ReservationStatusBadge({ status }) {
     OUI: 'success',
     NON: 'destructive',
     BV: 'warning',
-    INJOINABLE: 'info',
+    INJOINABLE: 'warning',
   }
 
   const labels = {
@@ -18,7 +18,7 @@ export default function ReservationStatusBadge({ status }) {
     OUI: 'Confirmé',
     NON: 'Refusé',
     BV: 'Boîte vocale',
-    INJOINABLE: 'À RAPPELER',
+    INJOINABLE: 'Injoignable',
   }
 
   if (!status) return null

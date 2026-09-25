@@ -53,6 +53,13 @@
   --sidebar-accent-foreground: var(--color-accent-foreground);
   --sidebar-border: var(--color-border);
   --sidebar-ring: var(--color-ring);
+
+  /* Badge « Liste noire » (ClientStatus) : neutre — NOIR en mode clair. */
+  --status-badge: var(--foreground);
+  --status-badge-foreground: var(--background);
+
+  /* Variant « warning » des badges : ambre un cran plus sombre en clair. */
+  --warning-fg: #b45309; /* amber-700 (au lieu d'amber-600) */
 }
 
 .dark {
@@ -88,4 +95,11 @@
   --sidebar-accent-foreground: var(--color-accent-foreground);
   --sidebar-border: oklch(0.25 0.02 260);
   --sidebar-ring: var(--color-ring);
+
+  /* Badge « Liste noire » (ClientStatus) : neutre — GRIS en mode sombre. */
+  --status-badge: var(--color-muted-foreground);
+  --status-badge-foreground: var(--color-background);
+
+  /* Variant « warning » des badges : ambre clair, inchangé en sombre. */
+  --warning-fg: #fbbf24; /* amber-400 */
 }

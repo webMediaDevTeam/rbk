@@ -5,14 +5,19 @@ import ProspectCard from './components/ProspectCard.jsx'
 import ProspectToolbar from './components/ProspectToolbar.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ReservationModal from './components/ReservationModal.jsx'
+import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 import Button from '@/components/ui/button.jsx'
 
 export default function ProspectListPage() {
   const {
     isDesktop,
     search, setSearch,
+    municipality,
     categories,
+    region,
+    handleMunicipalityChange,
     handleCategoriesChange,
+    handleRegionChange,
     currentPage, setCurrentPage,
     rowsPerPage, handleRowsPerPageChange,
     sortBy, sortOrder, handleSort,
@@ -42,9 +47,13 @@ export default function ProspectListPage() {
         </div>
       </div>
 
+      <ProspectKpis />
+
       <ProspectToolbar
         search={search} setSearch={setSearch}
+        municipality={municipality} setMunicipality={handleMunicipalityChange}
         categories={categories} setCategories={handleCategoriesChange}
+        region={region} setRegion={handleRegionChange}
       />
 
       {isLoading ? (

@@ -13,7 +13,9 @@ export function useCommercialProspectList() {
   const navigate = useNavigate()
   const isDesktop = useIsDesktop()
   const [search, setSearch] = useState('')
+  const [municipality, setMunicipality] = useState('')
   const [categories, setCategories] = useState('')
+  const [region, setRegion] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [sortBy, setSortBy] = useState('created_at')
@@ -24,7 +26,9 @@ export function useCommercialProspectList() {
 
   const params = {
     search: searchParam,
-    category_id: categories || undefined,
+    municipality: municipality || undefined,
+    category: categories || undefined,
+    administrative_region: region || undefined,
     page: currentPage,
     per_page: rowsPerPage,
     sort_by: sortBy,
@@ -52,8 +56,16 @@ export function useCommercialProspectList() {
   const [showReserve, setShowReserve] = useState(false)
 
   const handleViewDetail = (client) => navigate(`/prospects/${client.id}`)
+  const handleMunicipalityChange = (value) => {
+    setMunicipality(value)
+    setCurrentPage(1)
+  }
   const handleCategoriesChange = (value) => {
     setCategories(value)
+    setCurrentPage(1)
+  }
+  const handleRegionChange = (value) => {
+    setRegion(value)
     setCurrentPage(1)
   }
   const handleRowsPerPageChange = (value) => {
@@ -66,8 +78,12 @@ export function useCommercialProspectList() {
   return {
     isDesktop,
     search, setSearch,
+    municipality, setMunicipality,
     categories, setCategories,
+    region, setRegion,
+    handleMunicipalityChange,
     handleCategoriesChange,
+    handleRegionChange,
     currentPage, setCurrentPage,
     rowsPerPage, setRowsPerPage,
     handleRowsPerPageChange,

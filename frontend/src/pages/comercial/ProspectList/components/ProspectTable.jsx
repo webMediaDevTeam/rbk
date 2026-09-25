@@ -2,34 +2,14 @@ import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import { respondentsText, categoriesText } from './prospectFormat'
-
-/** Compte à rebours concis : "2 mois 3j" / "18j 04h" / "5h 30m". */
-export function formatReturnCountdown(returnedAt) {
-  if (!returnedAt) return '—'
-  const diff = new Date(returnedAt).getTime() - Date.now()
-  if (diff <= 0) return 'Bientôt'
-
-  const totalDays = Math.floor(diff / 86400000)
-  const hours = Math.floor((diff % 86400000) / 3600000)
-  const minutes = Math.floor((diff % 3600000) / 60000)
-
-  if (totalDays >= 30) {
-    const months = Math.floor(totalDays / 30)
-    const days = totalDays % 30
-    return `${months} mois ${days}j`
-  }
-  if (totalDays >= 1) {
-    return `${totalDays}j ${String(hours).padStart(2, '0')}h`
-  }
-  return `${hours}h ${String(minutes).padStart(2, '0')}m`
-}
 
 export default function ProspectTable({ clients, startIndex = 0, sortBy, sortOrder, onSort, onViewDetail, showViewButton = true }) {
   // Largeurs fixes par colonne (table-fixed) : le tableau garde sa largeur réelle
   // et le conteneur défile horizontalement (overflow-x) au lieu de couper les colonnes.
   const minWidth =
-    60 + 240 + 200 + 150 + 150 + 180 + 220 + 140 +
+    60 + 240 + 200 + 150 + 150 + 180 + 220 + 140 + 170 +
     (showViewButton ? 60 : 0)
 
   return (
@@ -54,6 +34,7 @@ Prospect
                 </SortHeader>
               </TableHead>
               <TableHead className="w-[140px]">Municipalité</TableHead>
+              <TableHead className="w-[170px]">Statut</TableHead>
               {showViewButton && <TableHead className="w-[60px]" />}
             </TableRow>
           </TableHeader>
@@ -111,6 +92,13 @@ Prospect
                   <div className="truncate" title={c.municipality ?? undefined}>
                     {c.municipality ?? '—'}
                   </div>
+                </TableCell>
+                <TableCell>
+                  <ClientStatus
+                    status={c.display_status ?? c.status}
+                    isBlacklisted={c.is_blacklisted}
+                    returnedAt={c.returned_at}
+                  />
                 </TableCell>
                 {showViewButton && (
                   <TableCell className="text-right">

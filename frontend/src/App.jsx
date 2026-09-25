@@ -12,9 +12,10 @@ import {
   Building2,
   ShieldCheck,
   List,
+  ListChecks,
   Bell,
   Voicemail,
-  History,
+  UserSearch,
 } from 'lucide-react'
 
 const ROLE_NAV = {
@@ -30,7 +31,7 @@ const ROLE_NAV = {
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
         { title: 'Employés', path: '/commerciaux', icon: List },
-        { title: 'Prospect list', path: '/clients-historique', icon: History },
+        { title: 'Prospect list', path: '/clients-historique', icon: UserSearch },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
       ],
     },
@@ -53,7 +54,7 @@ const ROLE_NAV = {
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
         { title: 'Employés', path: '/commerciaux', icon: List },
-        { title: 'Prospect list', path: '/clients-historique', icon: History },
+        { title: 'Prospect list', path: '/clients-historique', icon: UserSearch },
       ],
     },
     {
@@ -73,8 +74,8 @@ const ROLE_NAV = {
     {
       title: 'Prospects',
       items: [
-        { title: 'Tous les prospects', path: '/prospects', icon: List },
-        { title: 'Mes listes', path: '/mes-listes', icon: List },
+        { title: 'Tous les prospects', path: '/prospects', icon: UserSearch },
+        { title: 'Mes listes', path: '/mes-listes', icon: ListChecks },
         { title: 'Rappels', path: '/reminders', icon: Bell },
         { title: 'Auto-rappels', path: '/auto-rappels', icon: Voicemail },
       ],

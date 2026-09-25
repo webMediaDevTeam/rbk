@@ -35,6 +35,7 @@ export function useMesListes() {
   return {
     isLoading,
     groups,
+    total,
     isDesktop,
     currentPage,
     totalPages,

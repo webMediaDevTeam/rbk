@@ -1,6 +1,6 @@
 import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import ProspectStatusBadge from '@/pages/comercial/ProspectList/components/ProspectStatusBadge.jsx'
+import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { useHistoryTable } from './useHistoryTable.js'
 
@@ -40,7 +40,13 @@ export default function HistoryTable(props) {
               <TableCell className="text-muted-foreground">{row.c.email ?? '—'}</TableCell>
               <TableCell className="text-muted-foreground">{row.c.phone ?? '—'}</TableCell>
               <TableCell className="text-muted-foreground">{row.c.municipality ?? '—'}</TableCell>
-              <TableCell><ProspectStatusBadge status={row.c.status} isBlacklisted={row.c.is_blacklisted} /></TableCell>
+              <TableCell>
+                <ClientStatus
+                  status={row.c.display_status ?? row.c.status}
+                  isBlacklisted={row.c.is_blacklisted}
+                  returnedAt={row.c.returned_at}
+                />
+              </TableCell>
               <TableCell className="text-muted-foreground">{row.licenceDate}</TableCell>
               <TableCell className="text-right">
                 <button

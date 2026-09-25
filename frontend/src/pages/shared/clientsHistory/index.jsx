@@ -4,6 +4,7 @@ import ProspectTable from '@/pages/comercial/ProspectList/components/ProspectTab
 import ProspectCard from '@/pages/comercial/ProspectList/components/ProspectCard.jsx'
 import ClientsHistoryToolbar from './components/ClientsHistoryToolbar.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
+import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 export default function ClientsHistoryPage() {
   const {
@@ -13,6 +14,12 @@ export default function ClientsHistoryPage() {
     handleSearchChange,
     status,
     handleStatusChange,
+    municipality,
+    handleMunicipalityChange,
+    categories,
+    handleCategoryChange,
+    region,
+    handleRegionChange,
     currentPage,
     setCurrentPage,
     rowsPerPage,
@@ -43,9 +50,14 @@ export default function ClientsHistoryPage() {
         </div>
       </div>
 
+      <ProspectKpis />
+
       <ClientsHistoryToolbar
         search={search} setSearch={handleSearchChange}
         status={status} setStatus={handleStatusChange}
+        municipality={municipality} setMunicipality={handleMunicipalityChange}
+        categories={categories} setCategories={handleCategoryChange}
+        region={region} setRegion={handleRegionChange}
       />
 
       {isLoading ? (
