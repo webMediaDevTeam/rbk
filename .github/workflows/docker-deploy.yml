@@ -1,0 +1,76 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }} # Set this secret to 'deploy'
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            # 1. Navigate to your app folder
+            cd ~/apps/main
+
+            # 2. Fetch and pull the latest changes
+            git fetch --all
+            git reset --hard origin/master
+
+            # 3. Create or update root .env file dynamically with VPS IP
+            cat << 'EOF' > .env
+            APP_NAME="RBQBot"
+            APP_ENV=production
+            APP_DEBUG=false
+            VPS_IP=${{ secrets.VPS_HOST }}
+            APP_URL=http://${{ secrets.VPS_HOST }}
+            FRONTEND_URL=http://${{ secrets.VPS_HOST }}
+
+            DB_CONNECTION=mysql
+            DB_HOST=mysql
+            DB_PORT=3306
+            DB_DATABASE=rbqbot
+            DB_USERNAME=rbqbot
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
+
+            CACHE_STORE=redis
+            QUEUE_CONNECTION=redis
+            SESSION_DRIVER=redis
+            BROADCAST_CONNECTION=reverb
+            REDIS_HOST=redis
+            REDIS_PORT=6379
+            REDIS_PASSWORD=null
+
+            REVERB_HOST=0.0.0.0
+            REVERB_PORT=8080
+            VITE_API_URL=http://${{ secrets.VPS_HOST }}:8000
+            APP_KEY=${{ secrets.APP_KEY }}
+            EOF
+
+            # 4. Copy .env to backend for Laravel
+            cp .env ./backend/.env
+
+            # 5. Build and run containers
+            docker compose -f docker-compose.prod.yml up -d --build
+
+            # 6. Install dependencies and run migrations
+            docker compose -f docker-compose.prod.yml exec -T backend composer install --no-interaction --prefer-dist --optimize-autoloader
+            docker compose -f docker-compose.prod.yml exec -T backend php artisan migrate --force
+            docker compose -f docker-compose.prod.yml exec -T backend php artisan db:seed --force
+
+            # 7. Optimize Laravel caches
+            docker compose -f docker-compose.prod.yml exec -T backend php artisan config:cache
+            docker compose -f docker-compose.prod.yml exec -T backend php artisan route:cache
+            docker compose -f docker-compose.prod.yml exec -T backend php artisan view:cache
