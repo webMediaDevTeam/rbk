@@ -26,15 +26,15 @@ export function useStoreOutcome() {
   })
 }
 
-// type : 'INJOINABLE' (page « Rappels ») ou 'BV' (page « Auto-rappels »).
-export function useReminders(type = 'INJOINABLE') {
+// type : 'CALL_BACK' (page « Rappels ») ou 'BV' (page « Auto-rappels »).
+export function useReminders(type = 'CALL_BACK') {
   return useQuery({
     queryKey: ['reminders', type],
     queryFn: () => listRemindersApi(type),
   })
 }
 
-export function useRemindersCount(enabled = true, type = 'INJOINABLE') {
+export function useRemindersCount(enabled = true, type = 'CALL_BACK') {
   return useQuery({
     queryKey: ['reminders-count', type],
     queryFn: () => remindersCountApi(type),

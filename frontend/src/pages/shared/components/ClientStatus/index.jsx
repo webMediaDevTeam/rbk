@@ -28,8 +28,8 @@ export function formatReturnCountdown(returnedAt) {
  * Statuts affichés (source unique, toutes les listes/tableaux clients) :
  *
  *  - `display_status` renvoyé par l'API (Client::displayStatus()) — un client
- *    RESERVED est qualifié par sa dernière réservation (OUI / NON / BV /
- *    INJOINABLE) ;
+ *    RESERVED est qualifié par sa dernière réservation (YES / NO / BV /
+ *    CALL_BACK) ;
  *  - `status` brut en repli pour les payloads plus anciens.
  *
  * Couleur par statut (variant du composant `Badge`), **sauf** le badge
@@ -40,13 +40,15 @@ export function formatReturnCountdown(returnedAt) {
 const STYLES = {
   AVAILABLE: { label: 'Disponible', variant: 'success' },
   RESERVED: { label: 'Réservé', variant: 'warning' },
+  CONFIRMED: { label: 'Confirmé', variant: 'success' },
+  UNAVAILABLE: { label: 'Non disponible', variant: 'destructive' },
+  BLACKLISTED: { label: 'Liste noire', variant: 'neutral' },
+  // Statut affiché dérivé de la réservation en cours (jamais stocké) :
+  IN_PROGRESS: { label: 'En cours de traitement', variant: 'warning' },
+  // Anciennes valeurs conservées pour données historiques non migrées :
   SUCCESS: { label: 'Confirmé', variant: 'success' },
   UNAVAILABLE_TEMP: { label: 'Non disponible', variant: 'destructive' },
-  BLACKLISTED: { label: 'Liste noire', variant: 'neutral' },
-  // Statuts affichés dérivés de la réservation en cours :
-  IN_PROGRESS: { label: 'En cours de traitement', variant: 'warning' },
   IN_PROGRESS_RECALL: { label: 'En cours de traitement', variant: 'info' },
-  // Anciens statuts conservés pour données historiques non migrées :
   VOICEMAIL: { label: 'Boîte vocale', variant: 'info' },
   INJOINABLE: { label: 'À RAPPELER', variant: 'info' },
   BLOCKED: { label: 'Bloqué', variant: 'destructive' },

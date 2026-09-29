@@ -221,10 +221,10 @@ class ClientLicenceFieldsApiTest extends TestCase
         $client = $this->makeN8nClient();
 
         // La liste admin ne montre que les clients avec historique d'appel.
-        \App\Models\CallOutcome::create([
+        \App\Models\Note::create([
             'client_id' => $client->id,
-            'comercial_id' => $commercial->id,
-            'outcome' => 'OUI',
+            'sender_id' => $commercial->id,
+            'type' => \App\Models\Note::TYPE_YES,
         ]);
 
         Sanctum::actingAs($admin);

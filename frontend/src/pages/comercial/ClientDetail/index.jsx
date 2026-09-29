@@ -15,7 +15,6 @@ export default function ClientDetailPage() {
     isLoading,
     client,
     notes,
-    outcomes,
     historyCount,
     hasReservation,
     reservedByName,
@@ -124,7 +123,7 @@ export default function ClientDetailPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-foreground">Historique des interactions</h3>
                 </div>
-                <NoteTimeline notes={notes} outcomes={outcomes} clientId={id} readOnly={isAdmin} />
+                <NoteTimeline notes={notes} readOnly={isAdmin} />
               </div>
             </TabsContent>
           </Tabs>

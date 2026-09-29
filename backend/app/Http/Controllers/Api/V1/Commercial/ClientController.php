@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Commercial;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Note;
 use App\Models\Reservation;
 use App\Services\CallWorkflowService;
 use Illuminate\Http\JsonResponse;
@@ -137,7 +138,7 @@ class ClientController extends Controller
 
     public function show(Request $request, string $id): JsonResponse
     {
-        $client = Client::with(['reservations.comercial', 'notes', 'callOutcomes.comercial'])
+        $client = Client::with(['reservations.comercial', 'reservations.rappel', 'notes.sender'])
             ->find($id);
 
         if (!$client) {
@@ -165,10 +166,10 @@ class ClientController extends Controller
         $client = Client::findOrFail($id);
 
         return DB::transaction(function () use ($client, $user, $validated) {
-            $this->workflow->apply($client, null, 'BLACKLIST', $validated, $user);
+            $this->workflow->apply($client, null, Note::TYPE_BLACKLISTED, $validated, $user);
 
             $client->update([
-                'status' => 'BLACKLISTED',
+                'status' => Client::STATUS_BLACKLISTED,
                 'is_blacklisted' => true,
                 'returned_at' => null,
             ]);
@@ -230,11 +231,15 @@ class ClientController extends Controller
             }
 
             if ($myReservation
-                && ! in_array($client->status, ['RESERVED', 'SUCCESS'], true)) {
+                && ! in_array($client->status, [Client::STATUS_RESERVED, Client::STATUS_CONFIRMED], true)) {
                 $myReservation = null;
             }
 
             $assignedCommercial = $activeReservation?->comercial;
+
+            // Délai d'affichage du rappel de la réservation de l'employé
+            // (table `rappels`) : [montant, unité] ou [null, null].
+            $rappelDelay = $myReservation?->rappel?->delay() ?? [null, null];
 
             $base = array_merge($base, [
                 'neq' => $client->neq,
@@ -260,17 +265,17 @@ class ClientController extends Controller
                 'reservations_count' => $client->reservations_count ?? $client->reservations()->count(),
                 'notes_count' => $client->notes_count ?? $client->notes()->count(),
                 'returned_at' => $client->returned_at,
-                'call_outcomes' => $client->callOutcomes->map(fn ($o) => [
-                    'id' => $o->id,
-                    'outcome' => $o->outcome,
-                    'note' => $o->note,
-                    'recall_amount' => $o->recall_amount,
-                    'recall_unit' => $o->recall_unit,
-                    'created_at' => $o->created_at,
-                    'comercial' => $o->comercial ? [
-                        'id' => $o->comercial->id,
-                        'first_name' => $o->comercial->first_name,
-                        'last_name' => $o->comercial->last_name,
+                // Journal unique du client : issues d'appel, réservation,
+                // listes noires et commentaires (plus de double source).
+                'notes' => $client->notes->map(fn ($n) => [
+                    'id' => $n->id,
+                    'type' => $n->type,
+                    'description' => $n->description,
+                    'created_at' => $n->created_at,
+                    'sender' => $n->sender ? [
+                        'id' => $n->sender->id,
+                        'first_name' => $n->sender->first_name,
+                        'last_name' => $n->sender->last_name,
                     ] : null,
                 ]),
                 'my_reservation' => $myReservation ? [
@@ -278,9 +283,10 @@ class ClientController extends Controller
                     'status' => $myReservation->status,
                     'bv_count' => $myReservation->bv_count,
                     'injoinable_count' => $myReservation->injoinable_count,
-                    'recall_at' => $myReservation->recall_at,
-                    'rappel_after' => $myReservation->rappel_after,
-                    'rappel_type' => $myReservation->rappel_type,
+                    // Rappel : table `rappels`, délai recalculé à la volée.
+                    'recall_at' => $myReservation->rappel?->reminder_date,
+                    'recall_after' => $rappelDelay[0],
+                    'recall_unit' => $rappelDelay[1],
                 ] : null,
             ]);
         }

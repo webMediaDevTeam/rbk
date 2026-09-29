@@ -17,11 +17,11 @@ class ProspectOverviewController extends Controller
      *
      * Définitions métier :
      *  - « traité » (`processed`) : le client porte au moins une issue
-     *    d'appel (`call_outcomes`) — le commercial qui l'a réservé a appelé
-     *    et/ou fait évoluer son statut ;
+     *    d'appel (note `YES` / `NO` / `BV` / `CALL_BACK`) — le commercial qui
+     *    l'a réservé a appelé et/ou fait évoluer son statut ;
      *  - « en cours » : traité mais encore `RESERVED` (BV / À rappeler /
      *    suite à donner) ;
-     *  - « succès » : traité et `SUCCESS` (issue « OUI »).
+     *  - « succès » : traité et `CONFIRMED` (issue « YES »).
      *
      * Requêtes en direct (pas de cache) : les compteurs bougent à chaque
      * appel réservé, inutile de les figer une semaine comme les listes
@@ -38,21 +38,21 @@ class ProspectOverviewController extends Controller
             ->count();
 
         // ── 2/3. Réservés : traités / non traités ───────────────────────
-        $reservedTotal = Client::query()->where('status', 'RESERVED')->count();
+        $reservedTotal = Client::query()->where('status', Client::STATUS_RESERVED)->count();
         $reservedProcessed = Client::query()
-            ->where('status', 'RESERVED')
-            ->whereHas('callOutcomes')
+            ->where('status', Client::STATUS_RESERVED)
+            ->whereHas('notes', fn ($q) => $q->calls())
             ->count();
 
         // ── 4. Traités : succès / en cours ──────────────────────────────
-        $processedTotal = Client::query()->whereHas('callOutcomes')->count();
+        $processedTotal = Client::query()->whereHas('notes', fn ($q) => $q->calls())->count();
         $processedSuccess = Client::query()
-            ->whereHas('callOutcomes')
-            ->where('status', 'SUCCESS')
+            ->whereHas('notes', fn ($q) => $q->calls())
+            ->where('status', Client::STATUS_CONFIRMED)
             ->count();
         $processedInProgress = Client::query()
-            ->whereHas('callOutcomes')
-            ->where('status', 'RESERVED')
+            ->whereHas('notes', fn ($q) => $q->calls())
+            ->where('status', Client::STATUS_RESERVED)
             ->count();
 
         return response()->json([

@@ -1,24 +1,26 @@
 import Badge from '@/components/ui/badge.jsx'
 
 /**
- * Badge du statut de réservation.
- * INJOINABLE s'affiche "À RAPPELER" (UDAPTE.md).
+ * Badge du statut de réservation (valeurs du modèle, docs/models.puml).
+ * CALL_BACK s'affiche « À RAPPELER » (UDAPTE.md).
  */
 export default function ReservationStatusBadge({ status }) {
   const variants = {
-    EN_ATTENT: 'outline',
-    OUI: 'success',
-    NON: 'destructive',
-    BV: 'warning',
-    INJOINABLE: 'warning',
+    PENDING: 'outline',
+    YES: 'success',
+    NO: 'destructive',
+    BV_VOICEMAIL: 'warning',
+    CALL_BACK: 'warning',
+    REALIZED: 'success',
   }
 
   const labels = {
-    EN_ATTENT: 'En attente',
-    OUI: 'Confirmé',
-    NON: 'Refusé',
-    BV: 'Boîte vocale',
-    INJOINABLE: 'Injoignable',
+    PENDING: 'En attente',
+    YES: 'Confirmé',
+    NO: 'Refusé',
+    BV_VOICEMAIL: 'Boîte vocale',
+    CALL_BACK: 'À rappeler',
+    REALIZED: 'Réalisé',
   }
 
   if (!status) return null

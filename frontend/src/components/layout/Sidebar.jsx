@@ -15,7 +15,7 @@ export default function Sidebar({ navGroups, collapsed, mobileOpen, onClose }) {
   const location = useLocation();
 
   const hasReminders = navGroups?.some((g) => g.items.some((i) => i.path === "/reminders"));
-  const { data: remindersData } = useRemindersCount(hasReminders, "INJOINABLE");
+  const { data: remindersData } = useRemindersCount(hasReminders, "CALL_BACK");
   const remindersCount = remindersData?.data?.count ?? 0;
 
   const hasAutoRappels = navGroups?.some((g) => g.items.some((i) => i.path === "/auto-rappels"));

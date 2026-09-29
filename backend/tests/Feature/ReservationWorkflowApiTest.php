@@ -3,10 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Note;
+use App\Models\Rappel;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -38,8 +41,23 @@ class ReservationWorkflowApiTest extends TestCase
         return Reservation::create(array_merge([
             'client_id' => $client->id,
             'comercial_id' => $commercial->id,
-            'status' => 'EN_ATTENT',
+            'status' => Reservation::STATUS_PENDING,
         ], $attrs));
+    }
+
+    /** Rappel planifié (table `rappels`, plus les colonnes de la réservation). */
+    private function makeRappel(Reservation $reservation, ?Carbon $at): ?Rappel
+    {
+        if ($at === null) {
+            return null; // réservation sans rappel : hors page « Rappels »
+        }
+
+        return Rappel::create([
+            'client_id' => $reservation->client_id,
+            'comercial_id' => $reservation->comercial_id,
+            'reservation_id' => $reservation->id,
+            'reminder_date' => $at,
+        ]);
     }
 
     // ------------------------------------------------------- Compteur actives
@@ -52,9 +70,9 @@ class ReservationWorkflowApiTest extends TestCase
         $activeClient = $this->makeClient(['status' => 'RESERVED']);
         $this->makeReservation($activeClient, $commercial);
 
-        // Réservation inactive (client passée en UNAVAILABLE_TEMP) : non comptée
-        $inactiveClient = $this->makeClient(['status' => 'UNAVAILABLE_TEMP']);
-        $this->makeReservation($inactiveClient, $commercial, ['status' => 'NON']);
+        // Réservation inactive (client passée en UNAVAILABLE) : non comptée
+        $inactiveClient = $this->makeClient(['status' => 'UNAVAILABLE']);
+        $this->makeReservation($inactiveClient, $commercial, ['status' => Reservation::STATUS_NO]);
 
         // Réservation d'un autre commercial : non comptée
         $otherClient = $this->makeClient(['status' => 'RESERVED']);
@@ -70,14 +88,14 @@ class ReservationWorkflowApiTest extends TestCase
 
     // ------------------------------------------------------------- Outcome API
 
-    public function test_outcome_requires_reservation_for_oui(): void
+    public function test_outcome_requires_reservation_for_yes(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'AVAILABLE']);
 
         Sanctum::actingAs($commercial);
 
-        $this->postJson("/api/v1/clients/{$client->id}/outcome", ['outcome' => 'OUI'])
+        $this->postJson("/api/v1/clients/{$client->id}/outcome", ['outcome' => 'YES'])
             ->assertStatus(422)
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Vous devez réserver ce client avant de changer son statut.');
@@ -85,7 +103,7 @@ class ReservationWorkflowApiTest extends TestCase
         $this->assertSame('AVAILABLE', $client->fresh()->status);
     }
 
-    public function test_outcome_oui_with_reservation_returns_success_status(): void
+    public function test_outcome_yes_with_reservation_returns_confirmed_status(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
@@ -94,15 +112,23 @@ class ReservationWorkflowApiTest extends TestCase
         Sanctum::actingAs($commercial);
 
         $this->postJson("/api/v1/clients/{$client->id}/outcome", [
-            'outcome' => 'OUI',
+            'outcome' => 'YES',
             'note' => 'très intéressé par le devis',
         ])->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.client_status', 'SUCCESS')
+            ->assertJsonPath('data.client_status', 'CONFIRMED')
             ->assertJsonPath('data.blacklisted', false);
 
-        $this->assertSame('SUCCESS', $client->fresh()->status);
-        $this->assertSame('OUI', Reservation::first()->status);
+        $this->assertSame('CONFIRMED', $client->fresh()->status);
+        $this->assertSame('YES', Reservation::first()->status);
+
+        // L'issue est journalisée dans `notes` (table unique de l'historique).
+        $this->assertDatabaseHas('notes', [
+            'client_id' => $client->id,
+            'sender_id' => $commercial->id,
+            'type' => 'YES',
+            'description' => 'très intéressé par le devis',
+        ]);
     }
 
     public function test_outcome_rejects_more_than_eight_words_in_note(): void
@@ -118,7 +144,7 @@ class ReservationWorkflowApiTest extends TestCase
             'note' => 'un deux trois quatre cinq six sept huit neuf',
         ])->assertStatus(422);
 
-        $this->assertSame(0, \App\Models\CallOutcome::count());
+        $this->assertSame(0, Note::count());
     }
 
     public function test_outcome_rejects_unknown_status_value(): void
@@ -140,7 +166,7 @@ class ReservationWorkflowApiTest extends TestCase
 
         Sanctum::actingAs($commercial);
 
-        $this->postJson("/api/v1/clients/{$client->id}/outcome", ['outcome' => 'NON'])
+        $this->postJson("/api/v1/clients/{$client->id}/outcome", ['outcome' => 'NO'])
             ->assertStatus(403);
 
         $this->assertSame('AVAILABLE', $client->fresh()->status);
@@ -200,9 +226,9 @@ class ReservationWorkflowApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.client.my_reservation', null);
 
-        // Cas 3 : réservation du connecté mais inactive (NON) -> null.
-        $nonClient = $this->makeClient(['status' => 'UNAVAILABLE_TEMP']);
-        $this->makeReservation($nonClient, $commercial, ['status' => 'NON']);
+        // Cas 3 : réservation du connecté mais inactive (NO) -> null.
+        $nonClient = $this->makeClient(['status' => 'UNAVAILABLE']);
+        $this->makeReservation($nonClient, $commercial, ['status' => Reservation::STATUS_NO]);
 
         $this->getJson("/api/v1/clients/{$nonClient->id}")
             ->assertOk()
@@ -288,7 +314,7 @@ class ReservationWorkflowApiTest extends TestCase
             'is_blacklisted' => true,
             'returned_at' => now()->addDays(15),
         ]);
-        $this->makeReservation($client, $commercial, ['status' => 'OUI']);
+        $this->makeReservation($client, $commercial, ['status' => Reservation::STATUS_YES]);
 
         Sanctum::actingAs($admin);
 
@@ -304,9 +330,10 @@ class ReservationWorkflowApiTest extends TestCase
         $this->assertNull($client->returned_at);
         $this->assertSame(0, Reservation::count(), "L'unblock admin vide les réservations.");
 
-        $this->assertDatabaseHas('call_outcomes', [
+        $this->assertDatabaseHas('notes', [
             'client_id' => $client->id,
-            'outcome' => 'UNBLACKLIST',
+            'type' => 'RETURNED_TO_AVAILABLE',
+            'description' => 'Client débloqué par un administrateur.',
         ]);
     }
 
@@ -330,38 +357,51 @@ class ReservationWorkflowApiTest extends TestCase
 
     // ----------------------------------------------------------- Reminders API
 
-    public function test_reminders_default_lists_only_injoinable_with_scheduled_recall(): void
+    public function test_reminders_default_lists_only_call_back_with_scheduled_recall(): void
     {
         $commercial = $this->makeCommercial();
 
-        $due = $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'INJOINABLE', 'recall_at' => now()->addDays(2)]
+        $due = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->addDays(2)
         );
-        $withRecall = $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'INJOINABLE', 'recall_at' => now()->addDays(1)]
+        $withRecall = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->addDays(1)
         );
         // Sans rappel planifié : hors page Rappels
         $noRecall = $this->makeReservation(
             $this->makeClient(['status' => 'RESERVED']),
             $commercial,
-            ['status' => 'INJOINABLE', 'recall_at' => null]
+            ['status' => Reservation::STATUS_CALL_BACK]
         );
+        $this->makeRappel($noRecall, null);
         // BV : géré par la page « Auto-rappels », pas par « Rappels »
-        $bv = $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'BV', 'recall_at' => now()->addDays(1)]
+        $bv = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_BV_VOICEMAIL]
+            ),
+            now()->addDays(1)
         );
         // Réservé d'un autre commercial
         $other = $this->makeCommercial();
-        $otherReservation = $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $other,
-            ['status' => 'INJOINABLE', 'recall_at' => now()->addDays(1)]
+        $otherRappel = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $other,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->addDays(1)
         );
 
         Sanctum::actingAs($commercial);
@@ -373,36 +413,55 @@ class ReservationWorkflowApiTest extends TestCase
         $this->assertCount(2, $ids);
         $this->assertTrue($ids->contains($due->id));
         $this->assertTrue($ids->contains($withRecall->id));
-        $this->assertFalse($ids->contains($noRecall->id));
+        $this->assertFalse(
+            Rappel::where('reservation_id', $noRecall->id)->exists(),
+            'Sans rappel planifié : hors page Rappels.'
+        );
         $this->assertFalse($ids->contains($bv->id), 'Les BV vont sur la page Auto-rappels.');
-        $this->assertFalse($ids->contains($otherReservation->id));
+        $this->assertFalse($ids->contains($otherRappel->id));
+
+        // Le délai affiché est recalculé depuis reminder_date.
+        $first = collect($response->json('data'))->firstWhere('id', $due->id);
+        $this->assertSame('CALL_BACK', $first['status']);
+        $this->assertSame(2, $first['recall_after']);
+        $this->assertSame('JOUR', $first['recall_unit']);
     }
 
     public function test_reminders_type_bv_lists_only_bv_with_scheduled_recall(): void
     {
         $commercial = $this->makeCommercial();
 
-        $bv = $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'BV', 'recall_at' => now()->addDays(1)]
+        $bv = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_BV_VOICEMAIL]
+            ),
+            now()->addDays(1)
         );
         $bvNoRecall = $this->makeReservation(
             $this->makeClient(['status' => 'RESERVED']),
             $commercial,
-            ['status' => 'BV', 'recall_at' => null]
+            ['status' => Reservation::STATUS_BV_VOICEMAIL]
         );
-        // INJOINABLE : appartient à la page « Rappels »
-        $injoinable = $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'INJOINABLE', 'recall_at' => now()->addDays(1)]
+        $this->makeRappel($bvNoRecall, null);
+        // CALL_BACK : appartient à la page « Rappels »
+        $callBack = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->addDays(1)
         );
         $other = $this->makeCommercial();
-        $otherBv = $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $other,
-            ['status' => 'BV', 'recall_at' => now()->addDays(1)]
+        $otherBv = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $other,
+                ['status' => Reservation::STATUS_BV_VOICEMAIL]
+            ),
+            now()->addDays(1)
         );
 
         Sanctum::actingAs($commercial);
@@ -411,9 +470,11 @@ class ReservationWorkflowApiTest extends TestCase
 
         $this->assertCount(1, $ids);
         $this->assertTrue($ids->contains($bv->id));
-        $this->assertFalse($ids->contains($bvNoRecall->id));
-        $this->assertFalse($ids->contains($injoinable->id));
+        $this->assertFalse($ids->contains($callBack->id));
         $this->assertFalse($ids->contains($otherBv->id));
+        $this->assertFalse(
+            Rappel::where('reservation_id', $bvNoRecall->id)->exists()
+        );
     }
 
     public function test_reminders_rejects_unknown_type(): void
@@ -429,25 +490,34 @@ class ReservationWorkflowApiTest extends TestCase
     {
         $commercial = $this->makeCommercial();
 
-        $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'INJOINABLE', 'recall_at' => now()->subMinute()]
+        $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->subMinute()
         );
-        $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'INJOINABLE', 'recall_at' => now()->addDay()]
+        $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->addDay()
         );
-        $this->makeReservation(
-            $this->makeClient(['status' => 'RESERVED']),
-            $commercial,
-            ['status' => 'BV', 'recall_at' => now()->subMinute()]
+        $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_BV_VOICEMAIL]
+            ),
+            now()->subMinute()
         );
 
         Sanctum::actingAs($commercial);
 
-        // Défaut (page Rappels) : uniquement l'INJOINABLE échu.
+        // Défaut (page Rappels) : uniquement le CALL_BACK échu.
         $this->getJson('/api/v1/reminders/count')
             ->assertOk()
             ->assertJsonPath('data.count', 1);
@@ -457,14 +527,14 @@ class ReservationWorkflowApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.count', 1);
 
-        $this->getJson('/api/v1/reminders/count?type=INJOINABLE')
+        $this->getJson('/api/v1/reminders/count?type=CALL_BACK')
             ->assertOk()
             ->assertJsonPath('data.count', 1);
     }
 
-    // ------------------------------------------ Recall custom (INJOINABLE)
+    // ------------------------------------------ Recall custom (CALL_BACK)
 
-    public function test_outcome_injoinable_requires_custom_recall_at(): void
+    public function test_outcome_call_back_requires_custom_recall_at(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
@@ -472,7 +542,7 @@ class ReservationWorkflowApiTest extends TestCase
 
         Sanctum::actingAs($commercial);
 
-        $this->postJson("/api/v1/clients/{$client->id}/outcome", ['outcome' => 'INJOINABLE'])
+        $this->postJson("/api/v1/clients/{$client->id}/outcome", ['outcome' => 'CALL_BACK'])
             ->assertStatus(422)
             ->assertJsonPath(
                 'message',
@@ -480,10 +550,10 @@ class ReservationWorkflowApiTest extends TestCase
             );
 
         $this->assertSame('RESERVED', $client->fresh()->status);
-        $this->assertSame(0, \App\Models\CallOutcome::count());
+        $this->assertSame(0, Note::count());
     }
 
-    public function test_outcome_injoinable_rejects_past_recall_at(): void
+    public function test_outcome_call_back_rejects_past_recall_at(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
@@ -492,38 +562,40 @@ class ReservationWorkflowApiTest extends TestCase
         Sanctum::actingAs($commercial);
 
         $this->postJson("/api/v1/clients/{$client->id}/outcome", [
-            'outcome' => 'INJOINABLE',
+            'outcome' => 'CALL_BACK',
             'recall_at' => now()->subDay()->toIso8601String(),
         ])->assertStatus(422)
             ->assertJsonPath('message', 'La date de rappel doit être dans le futur.');
 
-        $this->assertSame(0, \App\Models\CallOutcome::count());
+        $this->assertSame(0, Note::count());
     }
 
-    public function test_outcome_injoinable_schedules_custom_recall_datetime(): void
+    public function test_outcome_call_back_schedules_custom_recall_datetime(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
         $this->makeReservation($client, $commercial);
 
-        // +5h01 : le calcul « floor » des minutes reste à 5 heures même si la
-        // requête prend quelques secondes.
+        // +5h01 : l'arrondi du délai reste à 5 heures même si la requête
+        // prend quelques secondes.
         $recallAt = now()->addHours(5)->addMinute();
 
         Sanctum::actingAs($commercial);
 
         $this->postJson("/api/v1/clients/{$client->id}/outcome", [
-            'outcome' => 'INJOINABLE',
+            'outcome' => 'CALL_BACK',
             'recall_at' => $recallAt->toIso8601String(),
         ])->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.client_status', 'RESERVED');
 
         $reservation = Reservation::first();
-        $this->assertSame('INJOINABLE', $reservation->status);
-        $this->assertEqualsWithDelta($recallAt->timestamp, $reservation->recall_at->timestamp, 5);
-        $this->assertSame(5, $reservation->rappel_after);
-        $this->assertSame('HEURE', $reservation->rappel_type);
+        $this->assertSame('CALL_BACK', $reservation->status);
+
+        // Le rappel vit dans sa propre table ; le délai est recalculé.
+        $rappel = Rappel::where('reservation_id', $reservation->id)->firstOrFail();
+        $this->assertEqualsWithDelta($recallAt->timestamp, $rappel->reminder_date->timestamp, 5);
+        $this->assertSame([5, 'HEURE'], $rappel->delay());
         $this->assertSame(1, $reservation->injoinable_count);
         $this->assertSame(0, $reservation->bv_count);
     }
@@ -596,8 +668,15 @@ class ReservationWorkflowApiTest extends TestCase
             'total' => 200,
         ]);
 
-        // 6 clients : 2 en attente (restant), 4 traités (1 chacun OUI/NON/BV/INJOINABLE)
-        foreach (['EN_ATTENT', 'EN_ATTENT', 'OUI', 'NON', 'BV', 'INJOINABLE'] as $status) {
+        // 6 clients : 2 en attente (restant), 4 traités (1 chacun YES/NO/BV/CALL_BACK)
+        foreach ([
+            Reservation::STATUS_PENDING,
+            Reservation::STATUS_PENDING,
+            Reservation::STATUS_YES,
+            Reservation::STATUS_NO,
+            Reservation::STATUS_BV_VOICEMAIL,
+            Reservation::STATUS_CALL_BACK,
+        ] as $status) {
             $this->makeReservation($this->makeClient(['status' => 'RESERVED']), $commercial, [
                 'status' => $status,
                 'reservation_group_id' => $group->id,
@@ -605,11 +684,15 @@ class ReservationWorkflowApiTest extends TestCase
         }
 
         // Réservation du connecté mais hors groupe : non comptée.
-        $this->makeReservation($this->makeClient(['status' => 'RESERVED']), $commercial, ['status' => 'OUI']);
+        $this->makeReservation(
+            $this->makeClient(['status' => 'RESERVED']),
+            $commercial,
+            ['status' => Reservation::STATUS_YES]
+        );
 
         // Liste d'un autre employé : non listée pour le connecté.
         $this->makeReservation($this->makeClient(['status' => 'RESERVED']), $other, [
-            'status' => 'OUI',
+            'status' => Reservation::STATUS_YES,
             'reservation_group_id' => $otherGroup->id,
         ]);
 
@@ -627,12 +710,12 @@ class ReservationWorkflowApiTest extends TestCase
         $row = collect($groups)->firstWhere('id', $group->id);
 
         $this->assertSame(6, $row['clients_count'], 'Clients = réservations de la liste.');
-        $this->assertSame(4, $row['traites_count'], 'Traités = OUI + NON + BV + INJOINABLE.');
+        $this->assertSame(4, $row['traites_count'], 'Traités = YES + NO + BV + CALL_BACK.');
         $this->assertSame(1, $row['oui_count']);
         $this->assertSame(1, $row['non_count']);
         $this->assertSame(1, $row['bv_count']);
         $this->assertSame(1, $row['injoinable_count']);
-        $this->assertSame(2, $row['restant_count'], 'Restant = encore EN_ATTENT.');
+        $this->assertSame(2, $row['restant_count'], 'Restant = encore PENDING.');
         $this->assertSame(
             ($row['traites_count'] ?? 0) + ($row['restant_count'] ?? 0),
             $row['clients_count'],

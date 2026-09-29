@@ -1,36 +1,26 @@
-import { Phone, CheckSquare, FileText, PhoneIncoming, PhoneMissed, Voicemail, PhoneOff } from 'lucide-react'
+import { Bookmark, FileText, PhoneIncoming, PhoneMissed, PhoneOff, RotateCcw, ShieldAlert, Voicemail } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDeleteNote } from '../useNotes.js'
 
+/**
+ * Journal unique du client (table `notes`, docs/models.puml) : chaque entrée
+ * porte son `type`, sa description optionnelle, son émetteur (`sender`,
+ * utilisateur ; null = `SYSTEM` pour les événements des crons) et sa date.
+ */
 const NOTE_TYPE_CONFIG = {
-  CALL_LOG: {
-    icon: Phone,
-    label: 'Appel',
-    variant: 'info',
-    nodeClass: 'bg-blue-500',
+  RESERVED: {
+    icon: Bookmark,
+    label: 'Réservé',
+    variant: 'outline',
+    nodeClass: 'bg-slate-500',
   },
-  TASK: {
-    icon: CheckSquare,
-    label: 'Tâche',
-    variant: 'warning',
-    nodeClass: 'bg-amber-500',
-  },
-  GENERAL_NOTE: {
-    icon: FileText,
-    label: 'Note',
-    variant: 'secondary',
-    nodeClass: 'bg-gray-400 dark:bg-gray-500',
-  },
-}
-
-const OUTCOME_CONFIG = {
-  OUI: {
+  YES: {
     icon: PhoneIncoming,
     label: 'Oui',
     variant: 'success',
     nodeClass: 'bg-emerald-500',
   },
-  NON: {
+  NO: {
     icon: PhoneMissed,
     label: 'Non',
     variant: 'destructive',
@@ -42,28 +32,38 @@ const OUTCOME_CONFIG = {
     variant: 'warning',
     nodeClass: 'bg-amber-500',
   },
-  INJOINABLE: {
+  CALL_BACK: {
     icon: PhoneOff,
-    label: 'À RAPPELER',
+    label: 'À rappeler',
     variant: 'info',
     nodeClass: 'bg-blue-500',
   },
+  BLACKLISTED: {
+    icon: ShieldAlert,
+    label: 'Liste noire',
+    variant: 'default',
+    nodeClass: 'bg-zinc-800',
+  },
+  RETURNED_TO_AVAILABLE: {
+    icon: RotateCcw,
+    label: 'Retour disponible',
+    variant: 'success',
+    nodeClass: 'bg-teal-500',
+  },
+  NOTE: {
+    icon: FileText,
+    label: 'Note',
+    variant: 'secondary',
+    nodeClass: 'bg-gray-400 dark:bg-gray-500',
+  },
 }
 
-export function useNoteTimeline({ notes = [], outcomes = [] }) {
+export function useNoteTimeline({ notes = [] }) {
   const deleteMut = useDeleteNote()
 
-  const allItems = [
-    ...outcomes.map((o) => ({ ...o, _type: 'outcome' })),
-    ...notes.map((n) => ({ ...n, _type: 'note' })),
-  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-
-  const formatDuration = (seconds) => {
-    if (!seconds) return null
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return m > 0 ? `${m}min ${s}s` : `${s}s`
-  }
+  const allItems = [...notes].sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  )
 
   const formatRelativeDate = (dateStr) => {
     const date = new Date(dateStr)
@@ -80,42 +80,38 @@ export function useNoteTimeline({ notes = [], outcomes = [] }) {
     return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
-  const formatRecall = (outcome) => {
-    if (outcome.outcome !== 'BV' && outcome.outcome !== 'INJOINABLE') return null
-    if (!outcome.recall_amount) return null
-    const units = { MINUTE: 'min', HEURE: 'h', JOUR: 'j' }
-    return `Rappel dans ${outcome.recall_amount}${units[outcome.recall_unit] ?? ''}`
-  }
+  /** Config visuelle de l'événement (type inconnu -> repli « Note »). */
+  const getItemConfig = (item) =>
+    NOTE_TYPE_CONFIG[item.type] ?? NOTE_TYPE_CONFIG.NOTE
 
-  const formatDueDate = (dateStr) => (dateStr ? new Date(dateStr).toLocaleDateString('fr-FR') : null)
+  /** Émetteur affiché : nom de l'employé, « Système » pour les crons. */
+  const senderName = (item) => {
+    if (item.sender) {
+      return (
+        `${item.sender.first_name ?? ''} ${item.sender.last_name ?? ''}`.trim() ||
+        item.sender.email ||
+        null
+      )
+    }
 
-  const getOutcomeConfig = (item) => {
-    const config = OUTCOME_CONFIG[item.outcome] || OUTCOME_CONFIG.OUI
-    return { config, Icon: config.icon }
-  }
-
-  const getNoteConfig = (item) => {
-    const config = NOTE_TYPE_CONFIG[item.type] || NOTE_TYPE_CONFIG.GENERAL_NOTE
-    return { config, Icon: config.icon }
+    return item.type === 'NOTE' ? null : 'Système'
   }
 
   const handleDeleteNote = (itemId) => {
     if (confirm('Supprimer cette note ?')) {
       deleteMut.mutate(itemId, {
         onSuccess: () => toast.success('Note supprimée.'),
-        onError: () => toast.error('Erreur lors de la suppression.'),
+        onError: (err) =>
+          toast.error(err?.response?.data?.message || 'Erreur lors de la suppression.'),
       })
     }
   }
 
   return {
     allItems,
-    formatDuration,
     formatRelativeDate,
-    formatRecall,
-    formatDueDate,
-    getOutcomeConfig,
-    getNoteConfig,
+    getItemConfig,
+    senderName,
     handleDeleteNote,
   }
 }

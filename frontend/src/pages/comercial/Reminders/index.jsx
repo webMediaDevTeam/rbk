@@ -6,10 +6,10 @@ import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/Re
 /**
  * Liste des rappels du commercial connecté.
  *
- * type : 'INJOINABLE' (page « Rappels ») ou 'BV' (page « Auto-rappels »).
+ * type : 'CALL_BACK' (page « Rappels ») ou 'BV' (page « Auto-rappels »).
  */
 export default function RemindersPage({
-  type = 'INJOINABLE',
+  type = 'CALL_BACK',
   title = 'Rappels',
   subtitle = 'Clients injoignables en attente de rappel.',
   emptyText = 'Aucun rappel en attente.',

@@ -138,13 +138,194 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
 - [ ] **Webhook n8n** : endpoint, contrat payload, auth `X-N8N-Token`, validation
       NOT NULL côté webhook — **reporté** (décision projet).
 
+## Phase 7 — Écarts API (audit du 2026-09-29) ⏳
+
+Audit complet des routes (`routes/api/*.php`), de `CallWorkflowService`, des
+contrôleurs notes/issues et de l'appelant React. **Aujourd'hui un flux unique**
+depuis la fusion `call_outcomes` → `notes` (Phase 8) : le champ note du modal
+**Suite appel** et `POST /notes` écrivent la même table `notes`. Priorité :
+🔴 haute · 🟠 moyenne · 🟡 basse.
+
+### 🔴 Sécurité / autorisations
+
+- [x] **Notes sans contrôle de propriété** — `NoteController@destroy`
+      (`app/Http/Controllers/Api/V1/Commercial/NoteController.php`) : **corrigé**
+      → commentaire (`type = NOTE`) uniquement, auteur ou ADMIN/SUPER_ADMIN ;
+      les événements du workflow renvoient 422.
+- [ ] **`GET /clients/{clientId}/notes` sans filtre de rôle** (`NoteController@index`)
+      expose le journal de n'importe quel client à tout employé (les listes sont
+      globales : acceptable ?) → à trancher dans `docs/RULES.md` §6.
+- [ ] **Garde `OutcomeController` sur une réservation non active**
+      (`OutcomeController.php:37-41`) : elle lit la *dernière* réservation du
+      connecté **quel que soit son statut** → un employé dont la réservation est
+      déjà `NO` peut pousser `YES`/`BV`/`CALL_BACK` par l'API alors que le
+      bouton « Suite appel » est masqué dans l'UI (`ClientController`
+      utilise `ACTIVE_STATUSES` + client `RESERVED`/`CONFIRMED`).
+      → Aligner sur `Reservation::scopeActive()` + tests 422/403.
+
+### 🔴 Machine à états du workflow
+
+- [ ] **Aucune garde d'état dans `CallWorkflowService::apply`** — seules les
+      réservations sont vérifiées, jamais le statut du client :
+      * `YES` sur un client `BLACKLISTED` → `clients.status = CONFIRMED`
+        (le flag `is_blacklisted` reste vrai) ;
+      * `BV` / `CALL_BACK` forcent `clients.status = RESERVED` même si le
+        client était `CONFIRMED` ou `BLACKLISTED` ;
+      * un 2e `BV` après un `YES` rétrograde un client confirmé.
+      → Trancher les règles dans `docs/RULES.md` §3, les implémenter et couvrir
+      par tests (`tests/Feature/CallWorkflowServiceTest.php`).
+- [x] ~~**`OUI` ne nettoie ni `returned_at` ni `is_blacklisted`**~~ →
+      `handleYes` vide `returned_at`, remet `is_blacklisted` à faux et annule le
+      rappel (test `yes_moves_client_and_reservation_to_confirmed`).
+
+### 🟠 Incohérences de données / validation
+
+- [x] ~~**`call_outcomes.recall_amount` / `recall_unit` jamais renseignés**~~ →
+      table supprimée : le délai affiché vient de `Rappel::delay()` (colonne
+      `reminder_date`), recalculé à chaque affichage.
+- [ ] **`max:5000` mensonger** : déclaré dans `OutcomeController.php:22`,
+      `ClientController@blacklist` et `CommercialAdminController@blacklist`,
+      alors que la vraie limite est **8 mots** (trait `LimitsNoteWords`,
+      modèle) → 422 « La note ne peut pas dépasser 8 mots. » après coup.
+      → Validation alignée (message clair) sur les 3 endpoints.
+
+### 🟠 Notes — parcours incomplet
+
+- [ ] **Pas d'édition de note** : routes = `index` / `store` / `destroy` seul
+      (`routes/api/commercial.php:15-17`) alors que `docs/RULES.md` §6 parle de
+      la limite « à la création **et à l'édition** ».
+      → `PUT/PATCH notes/{id}` (propriétaire) + test, ou corriger RULES §6.
+- [ ] **`POST /notes` sans contexte métier** : accepté sur n'importe quel client
+      (blacklisté, réservé par un tiers, sans réservation) et sans impact sur
+      statut/KPI — à confirmer comme comportement voulu.
+- [ ] **UI de création de note inexistante** : `useCreateNote()`
+      (`useNotes.js:16`) et `createNoteApi` ne sont **jamais importés** ; le seul
+      bouton lié est la corbeille de `NoteTimeline.jsx:107`. → soit brancher un
+      formulaire (onglet Historique), soit supprimer le code mort + la route
+      `POST notes` si le flux est définitivement abandonné.
+
+### 🟡 Propreté / docs
+
+- [ ] `frontend/src/api/comercial.api.js` = stub vide (« TODO: implémenter les
+      contrôleurs `Api\V1\Comercial\` ») → supprimer.
+- [ ] `GET /commerciaux/statistiques` (`entreprise.api.js:25`) : **route backend
+      inexistante** ; appelée par `useComercialStats()` qui n'est nulle part
+      importé → supprimer les deux, ou implémenter l'endpoint.
+- [ ] Rôle **`ENTREPRISE`** documenté dans `docs/RULES.md` §1 mais absent du
+      backend (aucune occurrence dans `backend/app` ; les routes `enterprises`
+      sont ADMIN/SUPER_ADMIN) → corriger RULES §1 ou réellement ajouter le rôle.
+- [ ] Tests Feature à ajouter : ownership (lecture) des notes, garde d'état sur
+      `POST clients/{clientId}/outcome`, rappel `CALL_BACK`
+      (`ReservationWorkflowApiTest` — déjà couverts côté service, ne pas
+      dupliquer).
+
+## Phase 8 — Alignement modèle (diagramme PlantUML) 🔄
+
+Objectif : coller au diagramme fourni — statuts renommés en base, **vraie table
+`rappels`**, `call_outcomes` **fusionnée dans `notes`**. Aucune perte de
+données : migrations UPDATE/copy avec `down()` réversible.
+
+### Base de données — migrations **appliquées** à MySQL `rbqbot` (2026-09-29)
+
+Backup avant migration : `/tmp/opencode/rbqbot-before-2026_09_29.sql`.
+
+- [x] `2026_09_29_000001_rename_status_values_for_new_model` :
+      `EN_ATTENT→PENDING`, `OUI→YES`, `NON→NO`, `BV→BV_VOICEMAIL`,
+      `INJOINABLE→CALL_BACK` (réservations) ; `SUCCESS→CONFIRMED`,
+      `UNAVAILABLE_TEMP→UNAVAILABLE` (clients). `up()` = UPDATE en base,
+      `down()` = UPDATE inverse.
+- [x] `2026_09_29_000002_create_rappels_table` : table `rappels`
+      (`id`, `client_id`, `comercial_id`, `reservation_id`, `reminder_date`)
+      + reprise des rappels existants (`recall_at` → `reminder_date`) +
+      `dropColumn` de `recall_at` / `rappel_after` / `rappel_type`.
+- [x] `2026_09_29_000003_merge_call_outcomes_into_notes` : recréation de
+      `notes` au schéma final (`sender_id` texte nullable = UUID ou `SYSTEM`,
+      `description` ex-`content`, `type` à 8 valeurs), recopie des 13 issues
+      (`OUI→YES`, `NON→NO`, `BOITE_VOCALE→BV`, `INJOINABLE→CALL_BACK`,
+      `BLACKLIST→BLACKLISTED`, `UNBLACKLIST→RETURNED_TO_AVAILABLE`), drop de
+      `due_date` / `call_duration_seconds`, suppression de `call_outcomes`
+      (`down()` la recrée et y recopie les événements).
+      ⚠️ recréation de table plutôt que `dropColumn()` : SQLite refuse de
+      supprimer une colonne référencée par une clé étrangère.
+
+**Reprise vérifiée en lecture seule sur `rbqbot`** : `notes` = 13 lignes
+(`BV` 7, `CALL_BACK` 3, `YES` 1, `NO` 1, `BLACKLISTED` 1), `sender_id` jamais
+nul, `rappels` = 6 lignes, réservations `PENDING` 22 / `BV_VOICEMAIL` 6 /
+`CALL_BACK` 2 / `NO` 1 / `YES` 1, clients `RESERVED` 27 / `CONFIRMED` 1 /
+`UNAVAILABLE` 3 / `BLACKLISTED` 1, table `call_outcomes` supprimée.
+
+### Modèles
+
+- [x] `Client` : constantes `STATUS_*`, `STATUSES`, `displayStatus()`
+      (`IN_PROGRESS` dérivé, jamais stocké), `scopeAvailable`,
+      `loadLatestReservations`, relations `notes()` / `rappels()`.
+- [x] `Reservation` : statuts `PENDING / YES / NO / BV_VOICEMAIL / CALL_BACK`
+      (+ `REALIZED` réservé), `PROCESSED_STATUSES`, `scopeActive`,
+      relation `rappel()`, colonnes de rappel supprimées.
+- [x] `Rappel` **créé** : `delay()`, `delayPayload()`, `isDue()`.
+- [x] `Note` : 8 types (`RESERVED`, `YES`, `NO`, `BV`, `CALL_BACK`,
+      `BLACKLISTED`, `RETURNED_TO_AVAILABLE`, `NOTE`), `CALL_TYPES`,
+      `SENDER_SYSTEM`, scopes `calls()` / `comments()`, `description`,
+      immuabilité des événements, limite 8 mots.
+- [x] `CallOutcome` **supprimé** (fusionné, pas mort).
+- [x] `User` + `Employee` **conservés** (les 8 modèles sont utilisés).
+
+### Backend (services, contrôleurs, crons)
+
+- [x] `CallWorkflowService` : événements `Note::TYPE_*`, écriture dans `notes`,
+      rappels créés/supprimés via `Rappel`, refus de l'événement inconnu avant
+      toute écriture, `handleRecallExpired(Rappel)`, `handleYes` nettoie
+      `returned_at`.
+- [x] `OutcomeController` (validations `Note::TYPE_*`, alias `type=BV`),
+      `NoteController` (ownership + immuabilité), `ClientController`
+      (payload `notes`, `my_reservation` via rappel, blacklist
+      `TYPE_BLACKLISTED`), `ReservationGroupController` (compteurs par
+      nouveaux statuts), `ReminderController` (lit `rappels`,
+      `?type=BV|CALL_BACK`), `ReservationController` (évènement `RESERVED`),
+      `CommercialAdminController`, `DashboardController`, `AdminController`
+      (déblocage → `RETURNED_TO_AVAILABLE`), `ProspectOverviewController`.
+- [x] Cron : `clients:process-timeouts` boucle sur
+      `Rappel::where('reminder_date','<=',now())` ; `clients:reactivate`
+      journalise `RETURNED_TO_AVAILABLE` avec `sender_id = 'SYSTEM'`.
+
+### Tests
+
+- [x] `CallWorkflowServiceTest` réécrit (24 tests), `ReservationWorkflowApiTest`
+      et `ClientLicenceFieldsApiTest` alignés.
+- [x] Suite : **69 passed / 2 failed** — les 2 échecs sont **préexistants**
+      (recherche par catégorie JSON sur SQLite, baseline 68/2).
+
+### Frontend
+
+- [x] `api/outcomes.api.js` + `useReminders*` : `type` par défaut `CALL_BACK`.
+- [x] `useActionModal` : valeurs `YES` / `NO` / `BV` / `CALL_BACK`.
+- [x] `useNoteTimeline` + `NoteTimeline` : **flux unique** (`notes`), 8 types,
+      émetteur affiché, suppression réservée aux commentaires.
+- [x] `useClientDetail` : plus de `call_outcomes` (journal = `notes`).
+- [x] `ClientStatus`, `ReservationStatusBadge`, `ClientsHistoryToolbar`,
+      `GroupDetail`, `Sidebar`, `Reminders` / `AutoRappels` : nouveaux statuts
+      (anciennes clés gardées en repli de lecture).
+- [x] `npm run build` ✅ (`rbqbot-frontend`).
+
+### Docs
+
+- [x] `docs/RULES.md` §1–§6, §7, §9–§12 réalignés.
+- [x] `docs/models.puml` **créé** (diagramme du modèle + table de
+      correspondance ancien → nouveau).
+- [x] ~~Appliquer `php artisan migrate` sur MySQL `rbqbot`~~ → fait (aucun
+      `migrate:fresh`, backup avant + reprise vérifiée, cf. ci-dessus).
+
 ## Points ouverts
 
 - [ ] **Effet de bord** : un test de cron a traité la vraie réservation
       « Maçonnerie Girard & frères » (client `01a0c396-…`) : bv_count 2→3,
-      client `UNAVAILABLE_TEMP` jusqu'au 2026-10-15. **À confirmer : annuler ou
+      client `UNAVAILABLE` jusqu'au 2026-10-15. **À confirmer : annuler ou
       conserver.**
 - [ ] **F-20 à confirmer** : interprétation retenue — masquer les lignes avec
-      `recall_at` (gérées dans « Rappels » / « Auto-rappels ») et colorer en
-      *trail row* les lignes de suivi BV/INJOINABLE sans rappel planifié.
-- [ ] Rien n'est encore commité (tout est en working tree).
+      un rappel planifié (gérées dans « Rappels » / « Auto-rappels ») et colorer
+      en *trail row* les lignes de suivi `BV_VOICEMAIL` / `CALL_BACK` sans
+      rappel.
+- [x] ~~Rien n'est encore commité~~ → working tree **salie** par le chantier
+      Phase 7 + Phase 8 (migrations, modèles, contrôleurs, tests, frontend,
+      docs) : **commit à proposer** — dernier commit `dfcd019 docs: display
+      status rules…`.

@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
  * Fichier lu par défaut : `database/data/clients.json`.
  *
  * ⚠️ Destructif : les clients existants sont supprimés, donc aussi leurs lignes
- * enfants (`reservations`, `call_outcomes`, `notes`, en cascade) — les listes
+ * enfants (`reservations`, `rappels`, `notes`, en cascade) — les listes
  * repartent vierges. `DatabaseSeeder` ne l'appelle pas : il faut le lancer à
  * la main.
  */

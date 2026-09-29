@@ -4,11 +4,11 @@ export function storeOutcomeApi(clientId, payload) {
   return api.post(`/clients/${clientId}/outcome`, payload)
 }
 
-// type : 'INJOINABLE' (page « Rappels », défaut) ou 'BV' (page « Auto-rappels »).
-export function listRemindersApi(type = 'INJOINABLE') {
+// type : 'CALL_BACK' (page « Rappels », défaut) ou 'BV' (page « Auto-rappels »).
+export function listRemindersApi(type = 'CALL_BACK') {
   return api.get('/reminders', { params: { type } })
 }
 
-export function remindersCountApi(type = 'INJOINABLE') {
+export function remindersCountApi(type = 'CALL_BACK') {
   return api.get('/reminders/count', { params: { type } })
 }

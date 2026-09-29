@@ -26,7 +26,7 @@ export function formatRecallAt(dateStr) {
   return `dans ${diffD}j`
 }
 
-export function useRemindersPage(type = 'INJOINABLE') {
+export function useRemindersPage(type = 'CALL_BACK') {
   const navigate = useNavigate()
   const { data, isLoading } = useReminders(type)
 

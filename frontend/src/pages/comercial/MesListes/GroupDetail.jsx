@@ -80,8 +80,8 @@ export default function GroupDetailPage() {
     formatDate,
   } = useGroupDetail()
 
-  // Compteurs renvoyés par le serveur (avecCount) : traités = statut
-  // OUI / NON / BV / INJOINABLE, non traités = EN_ATTENT.
+  // Compteurs renvoyés par le serveur (withCount) : traités = statut
+  // YES / NO / BV_VOICEMAIL / CALL_BACK, non traités = PENDING.
   const listPills = [
     {
       primary: group?.traites_count ?? 0,
@@ -91,7 +91,7 @@ export default function GroupDetailPage() {
       suffixClass: 'text-muted-foreground',
       icon: PhoneCall,
       iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      title: 'Prospects déjà traités (OUI, NON, BV ou INJOINABLE)',
+      title: 'Prospects déjà traités (YES, NO, BV ou CALL_BACK)',
     },
     {
       primary: group?.restant_count ?? 0,
@@ -111,7 +111,7 @@ export default function GroupDetailPage() {
       value: formatCount(group?.oui_count),
       icon: ThumbsUp,
       iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      title: 'Réservations au statut OUI (confirmées)',
+      title: 'Réservations au statut YES (confirmées)',
     },
     {
       primary: group?.non_count ?? 0,
@@ -119,7 +119,7 @@ export default function GroupDetailPage() {
       value: formatCount(group?.non_count),
       icon: ThumbsDown,
       iconClass: 'bg-destructive/10 text-destructive',
-      title: 'Réservations au statut NON (refusées)',
+      title: 'Réservations au statut NO (refusées)',
     },
     {
       primary: group?.bv_count ?? 0,
@@ -127,7 +127,7 @@ export default function GroupDetailPage() {
       value: formatCount(group?.bv_count),
       icon: Voicemail,
       iconClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-      title: 'Réservations au statut BV (boîte vocale)',
+      title: 'Réservations au statut BV_VOICEMAIL (boîte vocale)',
     },
     {
       primary: group?.injoinable_count ?? 0,
@@ -135,7 +135,7 @@ export default function GroupDetailPage() {
       value: formatCount(group?.injoinable_count),
       icon: PhoneOff,
       iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-      title: 'Réservations au statut INJOINABLE (à rappeler)',
+      title: 'Réservations au statut CALL_BACK (à rappeler)',
     },
   ].filter((pill) => pill.primary > 0)
 
@@ -206,7 +206,7 @@ export default function GroupDetailPage() {
                     <TableRow
                       key={r.id}
                       className={`cursor-pointer transition-colors ${
-                        r.status === 'BV' || r.status === 'INJOINABLE'
+                        r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
                           ? 'bg-muted/40 hover:bg-muted/70'
                           : 'hover:bg-muted/50'
                       }`}
@@ -254,7 +254,7 @@ export default function GroupDetailPage() {
                 <div
                   key={r.id}
                   className={`relative flex flex-col rounded-xl border border-border text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer ${
-                    r.status === 'BV' || r.status === 'INJOINABLE'
+                    r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
                       ? 'bg-muted/40'
                       : 'bg-card'
                   }`}

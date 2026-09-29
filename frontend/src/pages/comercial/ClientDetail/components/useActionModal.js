@@ -3,10 +3,10 @@ import { toast } from 'sonner'
 import { useStoreOutcome } from '../useOutcomes.js'
 
 const OUTCOMES = [
-  { value: 'OUI', label: 'Oui — intéressé', recall: 'none' },
-  { value: 'NON', label: 'Non — refuse', recall: 'none' },
+  { value: 'YES', label: 'Oui — intéressé', recall: 'none' },
+  { value: 'NO', label: 'Non — refuse', recall: 'none' },
   { value: 'BV', label: 'Boîte vocale', recall: 'auto' },
-  { value: 'INJOINABLE', label: 'Injoignable (à rappeler)', recall: 'custom' },
+  { value: 'CALL_BACK', label: 'Injoignable (à rappeler)', recall: 'custom' },
 ]
 
 /** Valeur locale au format `datetime-local` (sans fuseau). */
@@ -15,13 +15,13 @@ const toLocalDateTimeValue = (date) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-/** Rappel INJOINABLE : datetime libre, valeur par défaut = now + 3 jours. */
+/** Rappel CALL_BACK : datetime libre, valeur par défaut = now + 3 jours. */
 const defaultRecallAt = () => toLocalDateTimeValue(new Date(Date.now() + 3 * 86400000))
 
 export function useActionModal({ open, onClose, onActionSuccess, clientId }) {
   const storeOutcome = useStoreOutcome()
 
-  const [outcome, setOutcome] = useState('OUI')
+  const [outcome, setOutcome] = useState('YES')
   const [note, setNote] = useState('')
   const [recallAt, setRecallAt] = useState(defaultRecallAt())
   const [error, setError] = useState(null)
@@ -29,12 +29,12 @@ export function useActionModal({ open, onClose, onActionSuccess, clientId }) {
   const selectedOutcome = OUTCOMES.find((o) => o.value === outcome)
   // BV : rappel automatique à 3 jours (encart informatif).
   const showsAutoRecallInfo = selectedOutcome?.recall === 'auto'
-  // INJOINABLE : l'employé choisit la date/heure du rappel (datetime, pas de selects).
+  // CALL_BACK : l'employé choisit la date/heure du rappel (datetime, pas de selects).
   const showsRecallInput = selectedOutcome?.recall === 'custom'
 
   useEffect(() => {
     if (open) {
-      setOutcome('OUI')
+      setOutcome('YES')
       setNote('')
       setRecallAt(defaultRecallAt())
       setError(null)

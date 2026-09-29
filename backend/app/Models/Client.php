@@ -20,6 +20,40 @@ class Client extends Model
 
     protected $table = 'clients';
 
+    // ------------------------------------------------------------------
+    // Statuts du client (docs/models.puml)
+    // ------------------------------------------------------------------
+
+    /** Disponible à la réservation (scopeAvailable). */
+    public const STATUS_AVAILABLE = 'AVAILABLE';
+
+    /** Réservé par un employé : appel en cours. */
+    public const STATUS_RESERVED = 'RESERVED';
+
+    /**
+     * DÉRIVÉ — affichage uniquement, **jamais stocké** : la dernière
+     * réservation est un BV_VOICEMAIL ou un CALL_BACK.
+     */
+    public const STATUS_IN_PROGRESS = 'IN_PROGRESS';
+
+    /** Indisponible temporairement pour tous (NON : 3 mois / 2 tentatives : 21 j). */
+    public const STATUS_UNAVAILABLE = 'UNAVAILABLE';
+
+    /** Liste noire (`is_blacklisted = true`). */
+    public const STATUS_BLACKLISTED = 'BLACKLISTED';
+
+    /** Confirmé (issue YES) — définitif jusqu'à clôture admin. */
+    public const STATUS_CONFIRMED = 'CONFIRMED';
+
+    /** Valeurs stockées dans `clients.status` (IN_PROGRESS en est exclu). */
+    public const STATUSES = [
+        self::STATUS_AVAILABLE,
+        self::STATUS_RESERVED,
+        self::STATUS_UNAVAILABLE,
+        self::STATUS_BLACKLISTED,
+        self::STATUS_CONFIRMED,
+    ];
+
     protected $fillable = [
         'name',
         'enterprise_name',
@@ -195,7 +229,7 @@ class Client extends Model
     public function scopeAvailable($query)
     {
         return $query
-            ->where('status', 'AVAILABLE')
+            ->where('status', self::STATUS_AVAILABLE)
             ->where(fn ($q) => $q->whereNull('returned_at')->orWhere('returned_at', '<=', now()));
     }
 
@@ -220,13 +254,11 @@ class Client extends Model
 
     // ------------------------------------------------------------------
     // Statut AFFICHÉ (jamais stocké, jamais utilisé pour filtrer).
+    //
+    // Un client réservé est qualifié par sa dernière réservation : le modèle
+    // ne connaît qu'une seule valeur dérivée, `STATUS_IN_PROGRESS`
+    // (BV_VOICEMAIL comme CALL_BACK affichent « En cours de traitement »).
     // ------------------------------------------------------------------
-
-    /** Réservation BV encore en cours de traitement (couleur warning). */
-    public const DISPLAY_IN_PROGRESS = 'IN_PROGRESS';
-
-    /** Réservation INJOINABLE encore en cours de traitement (couleur info). */
-    public const DISPLAY_IN_PROGRESS_RECALL = 'IN_PROGRESS_RECALL';
 
     /**
      * Statut « reformulé » d'un client, pour l'affichage dans les listes.
@@ -234,13 +266,12 @@ class Client extends Model
      * Règle métier (docs/RULES.md §2) — un client encore **RESERVED** est
      * qualifié par l'état de sa **dernière réservation** :
      *
-     *  - OUI         -> SUCCESS            « Succès »
-     *  - NON         -> UNAVAILABLE_TEMP   « Non disponible pour le moment »
-     *  - BV          -> IN_PROGRESS        « En cours de traitement »
-     *  - INJOINABLE  -> IN_PROGRESS_RECALL « En cours de traitement »
-     *  - sinon       -> son statut courant (« Réservé »)
+     *  - YES        -> CONFIRMED   « Confirmé »
+     *  - NO         -> UNAVAILABLE « Non disponible » (+ retour)
+     *  - BV_VOICEMAIL / CALL_BACK -> IN_PROGRESS « En cours de traitement »
+     *  - sinon (PENDING, aucune)  -> son statut courant (« Réservé »)
      *
-     * Tous les autres statuts (AVAILABLE, SUCCESS, UNAVAILABLE_TEMP,
+     * Tous les autres statuts (AVAILABLE, CONFIRMED, UNAVAILABLE,
      * BLACKLISTED…) sont retournés tels quels. `clients.status` brut n'est
      * **jamais modifié** : les filtres, les KPI et le workflow continuent de
      * le lire directement.
@@ -250,15 +281,15 @@ class Client extends Model
      */
     public function displayStatus(): string
     {
-        if ($this->status !== 'RESERVED') {
+        if ($this->status !== self::STATUS_RESERVED) {
             return $this->status;
         }
 
         return match ($this->latestReservationStatus()) {
-            'OUI' => 'SUCCESS',
-            'NON' => 'UNAVAILABLE_TEMP',
-            'BV' => self::DISPLAY_IN_PROGRESS,
-            'INJOINABLE' => self::DISPLAY_IN_PROGRESS_RECALL,
+            Reservation::STATUS_YES => self::STATUS_CONFIRMED,
+            Reservation::STATUS_NO => self::STATUS_UNAVAILABLE,
+            Reservation::STATUS_BV_VOICEMAIL,
+            Reservation::STATUS_CALL_BACK => self::STATUS_IN_PROGRESS,
             default => $this->status,
         };
     }
@@ -293,7 +324,7 @@ class Client extends Model
     {
         $pending = collect($clients)
             ->filter(fn ($client) => $client instanceof self
-                && $client->status === 'RESERVED'
+                && $client->status === self::STATUS_RESERVED
                 && ! $client->relationLoaded('latestReservation'));
 
         $ids = $pending->pluck('id');
@@ -318,14 +349,20 @@ class Client extends Model
         }
     }
 
-    public function callOutcomes(): HasMany
-    {
-        return $this->hasMany(CallOutcome::class);
-    }
-
+    /**
+     * Journal d'événements du client : issues d'appel (YES/NO/BV/CALL_BACK),
+     * réservation (RESERVED), listes noires (BLACKLISTED / RETURNED_TO_AVAILABLE)
+     * et commentaires libres (NOTE) — table unique `notes`.
+     */
     public function notes(): HasMany
     {
         return $this->hasMany(Note::class);
+    }
+
+    /** Rappels planifiés (table `rappels`, source de vérité des rappels). */
+    public function rappels(): HasMany
+    {
+        return $this->hasMany(Rappel::class);
     }
 
     /**

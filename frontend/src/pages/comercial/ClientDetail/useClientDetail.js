@@ -26,9 +26,9 @@ export function useClientDetail() {
   const [blacklistError, setBlacklistError] = useState(null)
 
   const client = data?.data?.client
+  // Journal unique : tout vit dans `notes` (issues d'appel + commentaires).
   const notes = isAdmin ? (client?.notes ?? []) : (notesData?.data ?? [])
-  const outcomes = client?.call_outcomes ?? []
-  const historyCount = notes.length + outcomes.length
+  const historyCount = notes.length
 
   const hasReservation = !!client?.my_reservation
   const reservedByName = client?.assigned_commercial
@@ -100,7 +100,7 @@ export function useClientDetail() {
     isLoading,
     client,
     notes,
-    outcomes,
+
     historyCount,
     hasReservation,
     reservedByName,

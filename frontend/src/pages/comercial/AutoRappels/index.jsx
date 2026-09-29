@@ -2,7 +2,7 @@ import RemindersPage from '@/pages/comercial/Reminders/index.jsx'
 
 /**
  * Page « Auto-rappels » : rappels automatiques de boîte vocale (BV, 3 jours).
- * Réutilise la liste générique de la page « Rappels » (INJOINABLE).
+ * Réutilise la liste générique de la page « Rappels » (CALL_BACK).
  */
 export default function AutoRappelsPage() {
   return (

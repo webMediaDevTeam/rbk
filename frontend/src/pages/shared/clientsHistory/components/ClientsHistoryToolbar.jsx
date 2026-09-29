@@ -25,8 +25,8 @@ export default function ClientsHistoryToolbar(props) {
         <option value="">Statut: Tous</option>
         <option value="AVAILABLE">Disponible</option>
         <option value="RESERVED">Réservé</option>
-        <option value="SUCCESS">Confirmé</option>
-        <option value="UNAVAILABLE_TEMP">Indisponible</option>
+        <option value="CONFIRMED">Confirmé</option>
+        <option value="UNAVAILABLE">Indisponible</option>
         <option value="BLACKLISTED">Liste noire</option>
       </Select>
       <Select

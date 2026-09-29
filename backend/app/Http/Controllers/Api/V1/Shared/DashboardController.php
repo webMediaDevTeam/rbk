@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
-use App\Models\CallOutcome;
 use App\Models\Client;
 use App\Models\Enterprise;
+use App\Models\Note;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
@@ -42,9 +42,9 @@ class DashboardController extends Controller
                     'prospects'      => Client::count(),
                     'groups'         => ReservationGroup::count(),
                     'reservations'   => Reservation::count(),
-                    'calls'          => CallOutcome::count(),
-                    'clients_called' => CallOutcome::distinct()->count('client_id'),
-                    'clients_oui'    => CallOutcome::where('outcome', 'OUI')->distinct()->count('client_id'),
+                    'calls'          => Note::calls()->count(),
+                    'clients_called' => Note::calls()->distinct()->count('client_id'),
+                    'clients_oui'    => Note::where('type', Note::TYPE_YES)->distinct()->count('client_id'),
                     'blacklisted'    => Client::where('is_blacklisted', true)->count(),
                 ],
                 'calls_by_day'    => $this->callsByDay(),
@@ -64,9 +64,9 @@ class DashboardController extends Controller
                 'stats' => [
                     'groups'         => ReservationGroup::where('comercial_id', $id)->count(),
                     'reservations'   => Reservation::where('comercial_id', $id)->count(),
-                    'calls'          => CallOutcome::where('comercial_id', $id)->count(),
-                    'clients_called' => CallOutcome::where('comercial_id', $id)->distinct()->count('client_id'),
-                    'clients_oui'    => CallOutcome::where('comercial_id', $id)->where('outcome', 'OUI')->distinct()->count('client_id'),
+                    'calls'          => Note::where('sender_id', $id)->calls()->count(),
+                    'clients_called' => Note::where('sender_id', $id)->calls()->distinct()->count('client_id'),
+                    'clients_oui'    => Note::where('sender_id', $id)->where('type', Note::TYPE_YES)->distinct()->count('client_id'),
                 ],
                 'calls_by_day'    => $this->callsByDay($id),
                 'top_commercials' => [],
@@ -81,16 +81,16 @@ class DashboardController extends Controller
     {
         $from = Carbon::today()->subDays(13)->startOfDay();
 
-        $query = CallOutcome::query()
+        $query = Note::calls()
             ->where('created_at', '>=', $from)
             ->selectRaw('DATE(created_at) as day')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN outcome = 'OUI' THEN 1 ELSE 0 END) as oui")
+            ->selectRaw("SUM(CASE WHEN type = 'YES' THEN 1 ELSE 0 END) as oui")
             ->groupBy('day')
             ->orderBy('day');
 
         if ($comercialId) {
-            $query->where('comercial_id', $comercialId);
+            $query->where('sender_id', $comercialId);
         }
 
         $rows = $query->get()->keyBy('day');
@@ -119,14 +119,14 @@ class DashboardController extends Controller
     {
         return User::where('role', 'COMERCIAL')->with('employee')->get()
             ->map(function (User $u) {
-                $clientsCalled = CallOutcome::where('comercial_id', $u->id)->distinct()->count('client_id');
-                $clientsOui    = CallOutcome::where('comercial_id', $u->id)->where('outcome', 'OUI')->distinct()->count('client_id');
+                $clientsCalled = Note::where('sender_id', $u->id)->calls()->distinct()->count('client_id');
+                $clientsOui    = Note::where('sender_id', $u->id)->where('type', Note::TYPE_YES)->distinct()->count('client_id');
 
                 return [
                     'id'             => $u->id,
                     'name'           => trim(($u->employee?->first_name ?? $u->first_name ?? '') . ' ' . ($u->employee?->last_name ?? $u->last_name ?? '')) ?: $u->email,
                     'email'          => $u->email,
-                    'calls'          => CallOutcome::where('comercial_id', $u->id)->count(),
+                    'calls'          => Note::where('sender_id', $u->id)->calls()->count(),
                     'reservations'   => Reservation::where('comercial_id', $u->id)->count(),
                     'clients_called' => $clientsCalled,
                     'clients_oui'    => $clientsOui,

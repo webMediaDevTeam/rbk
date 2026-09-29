@@ -9,7 +9,6 @@ use App\Models\Client;
 use App\Models\Note;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
-use App\Models\CallOutcome;
 
 class CommercialAdminController extends Controller
 {
@@ -22,8 +21,8 @@ class CommercialAdminController extends Controller
         $users = User::where('role', 'COMERCIAL')->with('employee')->get();
         $data = $users->map(function ($u) {
             $res = Reservation::where('comercial_id', $u->id)->count();
-            $calls = CallOutcome::where('comercial_id', $u->id)->count();
-            $callsOui = CallOutcome::where('comercial_id', $u->id)->where('outcome', 'OUI')->count();
+            $calls = Note::where('sender_id', $u->id)->calls()->count();
+            $callsOui = Note::where('sender_id', $u->id)->where('type', Note::TYPE_YES)->count();
             return [
                 'id' => $u->id,
                 'name' => trim(($u->employee?->first_name ?? $u->first_name ?? '') . ' ' . ($u->employee?->last_name ?? $u->last_name ?? '')) ?: $u->email,
@@ -44,17 +43,17 @@ class CommercialAdminController extends Controller
 
         $groups = ReservationGroup::where('comercial_id', $id)->count();
         $reservations = Reservation::where('comercial_id', $id)->count();
-        $calls = CallOutcome::where('comercial_id', $id)->count();
-        $callsOui = CallOutcome::where('comercial_id', $id)->where('outcome', 'OUI')->count();
-        $clientsCalled = CallOutcome::where('comercial_id', $id)->distinct()->count('client_id');
-        $clientsOui = CallOutcome::where('comercial_id', $id)->where('outcome', 'OUI')->distinct()->count('client_id');
+        $calls = Note::where('sender_id', $id)->calls()->count();
+        $callsOui = Note::where('sender_id', $id)->where('type', Note::TYPE_YES)->count();
+        $clientsCalled = Note::where('sender_id', $id)->calls()->distinct()->count('client_id');
+        $clientsOui = Note::where('sender_id', $id)->where('type', Note::TYPE_YES)->distinct()->count('client_id');
 
         $perPage = min((int) $request->input('per_page', 10), 300);
         $page = max((int) $request->input('page', 1), 1);
 
         $historyQuery = Client::query()
-            ->whereHas('callOutcomes', fn ($q) => $q->where('comercial_id', $id))
-            ->with(['callOutcomes' => fn ($q) => $q->where('comercial_id', $id)->orderByDesc('created_at')]);
+            ->whereHas('notes', fn ($q) => $q->where('sender_id', $id)->calls())
+            ->with(['notes' => fn ($q) => $q->where('sender_id', $id)->with('sender:id,first_name,last_name')->orderByDesc('created_at')]);
 
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
@@ -72,7 +71,7 @@ class CommercialAdminController extends Controller
         Client::loadLatestReservations($clientsPage->getCollection());
 
         $historique = $clientsPage->getCollection()->map(function ($c) {
-            $last = $c->callOutcomes->first();
+            $last = $c->notes->first();
             return [
                 'id' => $c->id,
                 'name' => $c->name ?? '—',
@@ -88,8 +87,8 @@ class CommercialAdminController extends Controller
                 'created_at' => $c->created_at,
                 'updated_at' => $c->updated_at,
                 'last_call' => $last ? [
-                    'outcome' => $last->outcome,
-                    'note' => $last->note,
+                    'type' => $last->type,
+                    'description' => $last->description,
                     'created_at' => $last->created_at,
                 ] : null,
             ];
@@ -147,8 +146,8 @@ class CommercialAdminController extends Controller
     public function clients(Request $request)
     {
         $query = Client::query()
-            ->whereHas('callOutcomes')
-            ->with(['callOutcomes' => fn ($q) => $q->orderByDesc('created_at')]);
+            ->whereHas('notes', fn ($q) => $q->calls())
+            ->with(['notes' => fn ($q) => $q->with('sender:id,first_name,last_name')->orderByDesc('created_at')]);
 
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
@@ -214,7 +213,7 @@ class CommercialAdminController extends Controller
         Client::loadLatestReservations($clientsPage->getCollection());
 
         $clients = $clientsPage->getCollection()->map(function ($c) {
-            $last = $c->callOutcomes->first();
+            $last = $c->notes->first();
             return [
                 'id' => $c->id,
                 'name' => $c->name ?? '—',
@@ -236,7 +235,7 @@ class CommercialAdminController extends Controller
                 'created_at' => $c->created_at,
                 'updated_at' => $c->updated_at,
                 'last_call' => $last ? [
-                    'outcome' => $last->outcome,
+                    'type' => $last->type,
                     'created_at' => $last->created_at,
                 ] : null,
             ];
@@ -262,7 +261,7 @@ class CommercialAdminController extends Controller
      */
     public function client(Request $request, $id)
     {
-        $client = Client::with(['reservations.comercial', 'notes.comercial', 'callOutcomes.comercial'])->find($id);
+        $client = Client::with(['reservations.comercial', 'notes.sender'])->find($id);
         if (!$client) {
             return response()->json(['message' => 'Client introuvable.'], 404);
         }
@@ -317,27 +316,12 @@ class CommercialAdminController extends Controller
                     'notes' => $client->notes->map(fn ($n) => [
                         'id' => $n->id,
                         'type' => $n->type,
-                        'content' => $n->content,
-                        'due_date' => $n->due_date,
-                        'call_duration_seconds' => $n->call_duration_seconds,
+                        'description' => $n->description,
                         'created_at' => $n->created_at,
-                        'comercial' => $n->comercial ? [
-                            'id' => $n->comercial->id,
-                            'first_name' => $n->comercial->first_name,
-                            'last_name' => $n->comercial->last_name,
-                        ] : null,
-                    ]),
-                    'call_outcomes' => $client->callOutcomes->map(fn ($o) => [
-                        'id' => $o->id,
-                        'outcome' => $o->outcome,
-                        'note' => $o->note,
-                        'recall_amount' => $o->recall_amount,
-                        'recall_unit' => $o->recall_unit,
-                        'created_at' => $o->created_at,
-                        'comercial' => $o->comercial ? [
-                            'id' => $o->comercial->id,
-                            'first_name' => $o->comercial->first_name,
-                            'last_name' => $o->comercial->last_name,
+                        'sender' => $n->sender ? [
+                            'id' => $n->sender->id,
+                            'first_name' => $n->sender->first_name,
+                            'last_name' => $n->sender->last_name,
                         ] : null,
                     ]),
                 ],
@@ -358,11 +342,11 @@ class CommercialAdminController extends Controller
         $client = Client::findOrFail($id);
 
         return DB::transaction(function () use ($client, $request, $validated) {
-            $this->workflow->apply($client, null, 'BLACKLIST', $validated, $request->user());
+            $this->workflow->apply($client, null, Note::TYPE_BLACKLISTED, $validated, $request->user());
 
             $client->update([
                 'is_blacklisted' => true,
-                'status' => 'BLACKLISTED',
+                'status' => Client::STATUS_BLACKLISTED,
                 'returned_at' => null,
             ]);
 

@@ -24,13 +24,13 @@ class ReservationGroupController extends Controller
             ->withCount([
                 'reservations as clients_count',
                 'reservations as traites_count' => fn ($q) => $q
-                    ->whereIn('status', ['OUI', 'NON', 'BV', 'INJOINABLE']),
-                'reservations as oui_count' => fn ($q) => $q->where('status', 'OUI'),
-                'reservations as non_count' => fn ($q) => $q->where('status', 'NON'),
-                'reservations as bv_count' => fn ($q) => $q->where('status', 'BV'),
-                'reservations as injoinable_count' => fn ($q) => $q->where('status', 'INJOINABLE'),
-                // Restant : pas encore appelés (EN_ATTENT).
-                'reservations as restant_count' => fn ($q) => $q->where('status', 'EN_ATTENT'),
+                    ->whereIn('status', Reservation::PROCESSED_STATUSES),
+                'reservations as oui_count' => fn ($q) => $q->where('status', Reservation::STATUS_YES),
+                'reservations as non_count' => fn ($q) => $q->where('status', Reservation::STATUS_NO),
+                'reservations as bv_count' => fn ($q) => $q->where('status', Reservation::STATUS_BV_VOICEMAIL),
+                'reservations as injoinable_count' => fn ($q) => $q->where('status', Reservation::STATUS_CALL_BACK),
+                // Restant : pas encore appelés (PENDING).
+                'reservations as restant_count' => fn ($q) => $q->where('status', Reservation::STATUS_PENDING),
             ])
             ->where('comercial_id', $user->id)
             ->orderByDesc('created_at')
@@ -66,19 +66,19 @@ class ReservationGroupController extends Controller
         $group = ReservationGroup::where('id', $id)
             ->where('comercial_id', $user->id)
             ->with(['reservations' => function ($q) {
-                $q->with('client')->latest('created_at');
+                $q->with(['client', 'rappel'])->latest('created_at');
             }])
             // Compteurs traités / restant calculés en SQL, comme pour le
             // tableau « Mes listes » (index) — jamais côté client.
             ->withCount([
                 'reservations as clients_count',
                 'reservations as traites_count' => fn ($q) => $q
-                    ->whereIn('status', ['OUI', 'NON', 'BV', 'INJOINABLE']),
-                'reservations as restant_count' => fn ($q) => $q->where('status', 'EN_ATTENT'),
-                'reservations as oui_count' => fn ($q) => $q->where('status', 'OUI'),
-                'reservations as non_count' => fn ($q) => $q->where('status', 'NON'),
-                'reservations as bv_count' => fn ($q) => $q->where('status', 'BV'),
-                'reservations as injoinable_count' => fn ($q) => $q->where('status', 'INJOINABLE'),
+                    ->whereIn('status', Reservation::PROCESSED_STATUSES),
+                'reservations as restant_count' => fn ($q) => $q->where('status', Reservation::STATUS_PENDING),
+                'reservations as oui_count' => fn ($q) => $q->where('status', Reservation::STATUS_YES),
+                'reservations as non_count' => fn ($q) => $q->where('status', Reservation::STATUS_NO),
+                'reservations as bv_count' => fn ($q) => $q->where('status', Reservation::STATUS_BV_VOICEMAIL),
+                'reservations as injoinable_count' => fn ($q) => $q->where('status', Reservation::STATUS_CALL_BACK),
             ])
             ->first();
 
@@ -95,7 +95,8 @@ class ReservationGroupController extends Controller
             'status' => $r->status,
             'bv_count' => $r->bv_count,
             'injoinable_count' => $r->injoinable_count,
-            'recall_at' => $r->recall_at,
+            // Rappel planifié : table `rappels` (aucune colonne sur la réservation).
+            'recall_at' => $r->rappel?->reminder_date,
             'created_at' => $r->created_at,
             'client' => $r->client ? [
                 'id' => $r->client->id,

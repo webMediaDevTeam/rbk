@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\Client;
+use App\Models\Note;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,9 +61,9 @@ class ReservationController extends Controller
         $candidates = Client::available()
             ->where('is_blacklisted', false)
             ->whereDoesntHave('reservations', fn ($q) => $q->active())
-            ->whereDoesntHave('callOutcomes', fn ($q) => $q
-                ->where('comercial_id', $user->id)
-                ->whereIn('outcome', ['NON', 'BV']))
+            ->whereDoesntHave('notes', fn ($q) => $q
+                ->where('sender_id', $user->id)
+                ->whereIn('type', [Note::TYPE_NO, Note::TYPE_BV]))
             ->orderBy('created_at')
             ->limit($count * 3)
             ->get();
@@ -94,10 +95,17 @@ class ReservationController extends Controller
                     'client_id' => $c->id,
                     'comercial_id' => $user->id,
                     'reservation_group_id' => $group->id,
-                    'status' => 'EN_ATTENT',
+                    'status' => Reservation::STATUS_PENDING,
                 ]);
 
-                $c->update(['status' => 'RESERVED']);
+                $c->update(['status' => Client::STATUS_RESERVED]);
+
+                // Evénement du journal : ce prospect est désormais réservé.
+                Note::create([
+                    'client_id' => $c->id,
+                    'sender_id' => $user->id,
+                    'type' => Note::TYPE_RESERVED,
+                ]);
 
                 $reserved++;
                 DB::commit();

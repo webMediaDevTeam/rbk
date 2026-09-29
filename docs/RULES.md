@@ -7,7 +7,7 @@
 ## 1. Rôles & permissions
 
 * **COMERCIAL** — réserve des lots de prospects, enregistre les issues d'appel
-  (OUI / NON / BV / INJOINABLE), consulte ses listes et ses rappels.
+  (YES / NO / BV / CALL_BACK), consulte ses listes et ses rappels.
 * **ENTREPRISE** — CRUD complet sur les employés, consultation des historiques
   de clients, statistiques de performance des employés.
 * **ADMIN** — toutes les permissions d'ENTREPRISE, plus : créer des entreprises,
@@ -30,14 +30,20 @@ groupe ou ADMIN / SUPER_ADMIN.
 
 ## 2. Statuts
 
+> **Vocabulaire aligné sur le modèle** (`docs/models.puml`) : les renommages de
+> `2026_09_29_000001`, la table `rappels` de `…_000002` et la fusion
+> `call_outcomes` → `notes` de `…_000003` ont posé ces valeurs en base.
+> Les anciennes valeurs (`EN_ATTENT`, `OUI`, `NON`, `INJOINABLE`, `SUCCESS`,
+> `UNAVAILABLE_TEMP`) n'existent plus.
+
 ### Clients (`clients.status`)
 
 | Statut | Signification |
 |---|---|
 | `AVAILABLE` | Disponible à la réservation (règle `scopeAvailable`) |
-| `RESERVED` | Réservé par un commercial (appel en cours : BV / Injoignable / en attente) |
-| `SUCCESS` | Confirmé (issue « OUI ») — définitif jusqu'à clôture admin |
-| `UNAVAILABLE_TEMP` | Indisponible temporairement pour **tous** les employés ; `returned_at` porte la date de retour |
+| `RESERVED` | Réservé par un employé (appel en cours : BV / À rappeler / en attente) |
+| `CONFIRMED` | Confirmé (issue `YES`) — définitif jusqu'à clôture admin |
+| `UNAVAILABLE` | Indisponible temporairement pour **tous** les employés ; `returned_at` porte la date de retour |
 | `BLACKLISTED` | Liste noire (`is_blacklisted = true`) |
 
 `scopeAvailable()` : `status = AVAILABLE` **et** (`returned_at` null ou passé).
@@ -60,96 +66,144 @@ pas une requête par ligne) :
 
 | Dernière réservation | `display_status` | Badge affiché |
 |---|---|---|
-| `OUI` | `SUCCESS` | **Confirmé** |
-| `NON` | `UNAVAILABLE_TEMP` | **Non disponible** + « Retour dans … » sous le badge (`returned_at`) |
-| `BV` | `IN_PROGRESS` | **En cours de traitement** |
-| `INJOINABLE` | `IN_PROGRESS_RECALL` | **En cours de traitement** |
-| `EN_ATTENT` ou aucune | `RESERVED` | **Réservé** |
+| `YES` | `CONFIRMED` | **Confirmé** |
+| `NO` | `UNAVAILABLE` | **Non disponible** + « Retour dans … » sous le badge (`returned_at`) |
+| `BV_VOICEMAIL` | `IN_PROGRESS` | **En cours de traitement** |
+| `CALL_BACK` | `IN_PROGRESS` | **En cours de traitement** |
+| `PENDING` ou aucune | `RESERVED` | **Réservé** |
 
-Tous les autres statuts sont renvoyés tels quels (`AVAILABLE`, `SUCCESS`,
-`UNAVAILABLE_TEMP`, `BLACKLISTED`…). Le composant écrase toujours par
+Tous les autres statuts sont renvoyés tels quels (`AVAILABLE`, `CONFIRMED`,
+`UNAVAILABLE`, `BLACKLISTED`…). Le composant écrase toujours par
 « Liste noire » si `is_blacklisted`.
+
+`IN_PROGRESS` n'est **jamais stocké** : c'est la valeur d'affichage d'un
+client `RESERVED` dont la dernière réservation est en cours (BV / À rappeler).
+Les clés `SUCCESS`, `UNAVAILABLE_TEMP`, `IN_PROGRESS_RECALL`, `VOICEMAIL` et
+`INJOINABLE` restent déclarées côté UI **uniquement** pour lire d'éventuelles
+données non migrées.
 
 ### Réservations (`reservations.status`)
 
-`EN_ATTENT`, `OUI`, `NON`, `BV`, `INJOINABLE`.
+`PENDING`, `YES`, `NO`, `BV_VOICEMAIL`, `CALL_BACK` (+ `REALIZED`, valeur
+réservée du modèle **jamais émise** par le workflow actuel).
 
-* **INJOINABLE s'affiche « À RAPPELER »** dans l'UI (badge dédié).
+* **CALL_BACK s'affiche « À rappeler »** dans l'UI ; `BV_VOICEMAIL` s'affiche
+  « Boîte vocale ».
 * Aucune expiration : la colonne `expires_at` a été supprimée. Les réservations
-  **actives** sont `EN_ATTENT / OUI / BV / INJOINABLE` **et** le client est
-  `RESERVED` ou `SUCCESS` (`Reservation::scopeActive()`).
+  **actives** sont `PENDING / YES / BV_VOICEMAIL / CALL_BACK` **et** le client
+  est `RESERVED` ou `CONFIRMED` (`Reservation::scopeActive()`).
 * Il n'existe **aucune libération manuelle** : plus d'endpoint « release ».
-  `SUCCESS` est définitif ; seul le déblocage admin supprime les réservations.
+  `CONFIRMED` est définitif ; seul le déblocage admin supprime les réservations.
+* « Traités » = `Reservation::PROCESSED_STATUSES` = `YES / NO / BV_VOICEMAIL /
+  CALL_BACK` ; « restant » = `PENDING`.
 
-### Issues d'appel (`call_outcomes.outcome`)
+### Événements du journal (`notes.type`)
 
-`OUI`, `NON`, `BV` (ex-`BOITE_VOCALE`, renommé partout), `INJOINABLE`,
-`BLACKLIST`, `UNBLACKLIST`.
+Le journal unique `notes` porte les issues d'appel **et** les événements du
+workflow (`Note::CALL_TYPES` = événements d'appel, les autres sont des
+événements ou un commentaire) :
+
+| `notes.type` | Sens | Émetteur |
+|---|---|---|
+| `RESERVED` | client réservé par un employé | l'employé |
+| `YES` / `NO` / `BV` / `CALL_BACK` | issue d'appel | l'employé |
+| `BLACKLISTED` | passage en liste noire | l'employé |
+| `RETURNED_TO_AVAILABLE` | retour en `AVAILABLE` (réactivation cron ou déblocage admin) | `SYSTEM` ou l'admin |
+| `NOTE` | commentaire libre (créable/supprimable via l'API) | l'auteur |
 
 ## 3. Workflow d'appel (`CallWorkflowService::apply`)
 
 Constantes : `RECALL_DAYS = 3`, `NON_BLOCK_MONTHS = 3`, `TEMP_BLOCK_DAYS = 21`,
 `ATTEMPTS_LIMIT = 2`.
 
-* **OUI** → client `SUCCESS`, réservation `OUI`, rappel annulé. La réservation est
-  maintenue jusqu'à clôture admin (pas de libération manuelle).
-* **NON** → client `UNAVAILABLE_TEMP`, `returned_at = now + 3 mois`, réservation
-  `NON`. Puis vérification d'**auto-blacklist** : si *tous les employés actifs*
-  ont répondu NON pour ce client, il passe en `BLACKLISTED` (un `CallOutcome`
-  `BLACKLIST` est journalisé : « Tous les employés actifs ont répondu NON. »).
-* **BV** → le client reste `RESERVED`, `bv_count++`, rappel automatique à
-  **3 jours** (`recall_at = now + 3d`, `rappel_after = 3`, `rappel_type = JOUR`).
-  Si `bv_count >= 2` → `UNAVAILABLE_TEMP`, `returned_at = now + 21 jours`,
+* **YES** → client `CONFIRMED`, réservation `YES`, `returned_at` vidé, rappel
+  annulé (`is_blacklisted` remis à faux). La réservation est maintenue jusqu'à
+  clôture admin (pas de libération manuelle).
+* **NO** → client `UNAVAILABLE`, `returned_at = now + 3 mois`, réservation
+  `NO`. Puis vérification d'**auto-blacklist** : si *tous les employés actifs*
+  ont répondu NO pour ce client, il passe en `BLACKLISTED` (un événement
+  `notes` `BLACKLISTED` est journalisé : « Tous les employés actifs ont répondu
+  NON. »).
+* **BV** → le client reste `RESERVED`, `bv_count++`, **rappel automatique à
+  3 jours** créé dans `rappels` (`reminder_date = now + 3d`, délai affiché
+  `3 JOUR`). Si `bv_count >= 2` → `UNAVAILABLE`, `returned_at = now + 21 jours`,
   rappel annulé.
-* **INJOINABLE** → identique à BV avec `injoinable_count` (affiché « À RAPPELER »),
-  **mais le rappel est fixé par l'employé** : `recall_at` est **obligatoire**
-  (`required_if:outcome,INJOINABLE`, doit être dans le futur) et saisi via un
-  champ `datetime-local` dans le modal (aucun select minute/mois). Le délai
-  affiché (`rappel_after` / `rappel_type`) est recalculé dans l'unité la plus
-  lisible (`MINUTE` / `HEURE` / `JOUR`). Sans saisie (appel direct du service),
-  repli sur le rappel automatique à 3 jours.
-* **BLACKLIST** → client `BLACKLISTED`, `is_blacklisted = true`, `returned_at = null`.
-  La liste noire **ne supprime pas** les réservations (elles deviennent inactives
-  via le statut client).
+* **CALL_BACK** (affiché « À rappeler ») → identique à BV avec
+  `injoinable_count`, **mais le rappel est fixé par l'employé** : `recall_at`
+  est **obligatoire** (`required_if:outcome,CALL_BACK`, doit être dans le futur)
+  et saisi via un champ `datetime-local` dans le modal (aucun select
+  minute/mois). Le délai affiché (`recall_after` / `recall_unit`) est
+  recalculé dans l'unité la plus lisible (`MINUTE` / `HEURE` / `JOUR`). Sans
+  saisie (appel direct du service), repli sur le rappel automatique à 3 jours.
+* **BLACKLISTED** → client `BLACKLISTED`, `is_blacklisted = true`,
+  `returned_at = null`. La liste noire **ne supprime pas** les réservations
+  (elles deviennent inactives via le statut client).
 
-La note est **optionnelle sur toutes les issues** (y compris BLACKLIST).
+À chaque écriture : création d'une ligne `notes` (événement, `sender_id` =
+l'employé, `description` = note saisie) **puis** mise à jour de la
+réservation/croisement des compteurs, le tout dans une transaction. Un
+événement inconnu est rejeté **avant** toute écriture (`InvalidArgumentException`).
+
+La note est **optionnelle sur toutes les issues** (y compris BLACKLISTED).
 
 ## 4. Rappels (« Suite appel »)
 
+> **Table `rappels` dédiée** (migration `2026_09_29_000002`) : les colonnes
+> `recall_at` / `rappel_after` / `rappel_type` ont disparu de `reservations`
+> (reprise des rappels existants en INSERT). Schéma : `id` UUID, `client_id`
+> (FK clients, cascade), `comercial_id` (FK users), `reservation_id` (FK
+> reservations, cascade), `reminder_date` ; `Rappel::delay()` calcule le délai
+> affiché dans l'unité la plus lisible, `isDue()` signale un rappel échu.
+
 * Le bouton **« Suite appel »** n'apparaît que si le client est **réservé par le
   commercial connecté** (`my_reservation` non nul, réservation active + client
-  `RESERVED`/`SUCCESS`) et que l'utilisateur n'est pas admin. Sinon il est
+  `RESERVED`/`CONFIRMED`) et que l'utilisateur n'est pas admin. Sinon il est
   **masqué** (l'admin n'a jamais ce bouton).
 
 * Rappel **BV : fixe et 100 % automatique — 3 jours**, aucune saisie utilisateur
   (les options SEMAINE / MOIS et la saisie de durée ont été supprimées).
-* Rappel **INJOINABLE : datetime libre** choisie dans le modal « Suite appel »
+* Rappel **CALL_BACK : datetime libre** choisie dans le modal « Suite appel »
   (champ `datetime-local`, obligatoire, dans le futur).
 * Rappel expiré **sans action** (`clients:process-timeouts`, toutes les 10 min) :
-  le compteur correspondant est incrémenté, `recall_at` est vidé, **la réservation
-  n'est jamais supprimée**. Si compteur >= 2 → client `UNAVAILABLE_TEMP`
-  21 jours ; sinon le client réapparaît dans les listes (à rappeler manuellement).
+  le compteur correspondant est incrémenté, **le rappel est supprimé** et **la
+  réservation n'est jamais supprimée**. Si compteur >= 2 → client `UNAVAILABLE`
+  21 jours ; sinon le client réapparaît dans les listes (à rappeler
+  manuellement). Un rappel portant sur un client `BLACKLISTED` est simplement
+  retiré (aucun compteur).
 * **Deux pages séparées** (`GET reminders?type=`) :
-  * **« Rappels »** (`/reminders`, défaut `type=INJOINABLE`) : les réservations
-    `INJOINABLE` avec `recall_at` non nul ;
-  * **« Auto-rappels »** (`/auto-rappels`, `type=BV`) : les réservations `BV`
-    avec `recall_at` non nul.
+  * **« Rappels »** (`/reminders`, défaut `type=CALL_BACK`) : les rappels de
+    réservations `CALL_BACK` ;
+  * **« Auto-rappels »** (`/auto-rappels`, `type=BV`) : les rappels de
+    réservations `BV_VOICEMAIL`.
+  La réponse livre `recall_at` (= `reminder_date`), `recall_after` /
+  `recall_unit` (= `delay()` recalculé) et le statut de la réservation.
 
 ## 5. Réactivation
 
 * `clients:reactivate` (horodaté **chaque heure**) : les clients
-  `UNAVAILABLE_TEMP` dont `returned_at <= now` repassent `AVAILABLE`
-  (`returned_at = null`) — **pour tous les employés**.
-* Après un NON, le retour à 3 mois remet donc le client disponible **pour tout le
+  `UNAVAILABLE` dont `returned_at <= now` repassent `AVAILABLE`
+  (`returned_at = null`) — **pour tous les employés** — et un événement
+  `notes` `RETURNED_TO_AVAILABLE` est journalisé avec `sender_id = 'SYSTEM'`.
+* Après un NO, le retour à 3 mois remet donc le client disponible **pour tout le
   monde** (l'ancienne règle « sauf ceux qui l'ont réservé » ne s'applique plus :
-  la réservation NON n'est pas active).
+  la réservation NO n'est pas active).
 
 ## 6. Notes
 
-* `Note.content` et `CallOutcome.note` : **8 mots maximum** à la création et à
+* **Journal unique `notes`** : issues d'appel, événements du workflow et
+  commentaires cohabitent dans la même table (fusion de `call_outcomes` dans
+  `notes`, migration `2026_09_29_000003`). Colonne `sender_id` = **identifiant
+  de l'expéditeur en texte** : UUID d'un utilisateur ou `'SYSTEM'`
+  (`Note::SENDER_SYSTEM`) pour les écrits de cron — nullable, **sans clé
+  étrangère** (l'historique ne disparaît pas avec un compte supprimé).
+* `Note.description` (ex-`content`) : **8 mots maximum** à la création et à
   l'édition (`LimitsNoteWords`, `ValidationException` en français).
   Les notes legacy plus longues restent affichables (limite appliquée au save).
 * Notes optionnelles sur **toutes** les issues d'appel.
+* **Immuabilité** : seuls les commentaires (`type = NOTE`) sont modifiables /
+  supprimables (`DELETE /notes/{id}` rejette les événements du workflow).
+* `due_date` et `call_duration_seconds` ont été supprimés : aucune écriture
+  possible depuis l'UI.
 
 ## 7. Groupes de réservation
 
@@ -165,15 +219,17 @@ La note est **optionnelle sur toutes les issues** (y compris BLACKLIST).
   * **masquage automatique** des lignes avec rappel planifié (`recall_at` non nul) —
     gérées depuis les pages « Rappels » / « Auto-rappels » (compteur
     « x rappel(s) masqué(s) ») ;
-  * couleur de fond (*trail row*) sur les lignes de suivi (`BV` / `INJOINABLE`
-    sans rappel planifié).
+  * couleur de fond (*trail row*) sur les lignes de suivi (`BV_VOICEMAIL` /
+    `CALL_BACK` sans rappel planifié).
 * **Page « Mes listes » (tableau)** — compteurs et employé calculés par le
   serveur (`GET reservation-groups`), affichés automatiquement :
   * `Clients` = `reservations as clients_count` (réservations de la liste),
     `Demandé` = `total` ;
-  * `Traités` = statuts `OUI + NON + BV + INJOINABLE`, `Restant` = `EN_ATTENT`
-    (les deux retombent sur `Clients`) ;
-  * colonnes `OUI` / `NON` / `BV` / `Injoinable` (compte par statut) ;
+  * `Traités` = statuts `YES + NO + BV_VOICEMAIL + CALL_BACK`, `Restant` =
+    `PENDING` (les deux retombent sur `Clients`) ;
+  * colonnes `OUI` / `NON` / `BV` / `Injoinable` (clés JSON historiques
+    `oui_count` / `non_count` / `bv_count` / `injoinable_count`, alimentées
+    par les nouveaux statuts) ;
   * `Employé` = **jointure** sur `users` (`first_name + last_name`, repli sur
     `email`) et `Créé le` = `created_at` du groupe.
 
@@ -212,10 +268,10 @@ Sur **Prospects (commercial)** et **Prospect list (admin)** :
 
 * **Sidebar** : badge sur « Mes listes » = nombre de **réservations actives** du
   commercial connecté (`GET reservations/active-count`, actualisé chaque minute) ;
-  badge sur « Rappels » = rappels `INJOINABLE` échus ; badge sur
+  badge sur « Rappels » = rappels `CALL_BACK` échus ; badge sur
   « Auto-rappels » = rappels `BV` échus (`GET reminders/count?type=`).
 * **Prospect list (admin)** : colonne « Retour » avec compte à rebours concis pour
-  `UNAVAILABLE_TEMP` (`returned_at`) : « 2 mois 3j », « 18j 04h », « 5h 30m ».
+  `UNAVAILABLE` (`returned_at`) : « 2 mois 3j », « 18j 04h », « 5h 30m ».
 * Badges statut client : Disponible / Réservé / Confirmé / Indisponible / Liste noire.
 * Badge réservation : En attente / Confirmé / Refusé / Boîte vocale / **À RAPPELER**.
 * **Listes (prospects, historique, listes, employés…)** : colonnes `N°`
@@ -228,7 +284,7 @@ Sur **Prospects (commercial)** et **Prospect list (admin)** :
   mode clair, gris en mode sombre) —, écrase
   toujours en « Liste noire » si `is_blacklisted`, et fait apparaître sous le
   badge le compte à rebours « Retour dans … » quand
-  `returned_at` est renseigné (NON : 3 mois, 2 BV/INJOINABLE : 21 j).
+  `returned_at` est renseigné (NO : 3 mois, 2 BV/CALL_BACK : 21 j).
   Nouvelle colonne **« Statut »** (170 px) ajoutée à `ProspectTable`
   (Prospects + Prospect list) ; le composant est aussi utilisé par les cartes
   mobiles, le détail d'une liste, l'historique employé et la fiche client.
@@ -243,9 +299,9 @@ Sur **Prospects (commercial)** et **Prospect list (admin)** :
   5. *Succès / traités* et 6. *En cours / traités* = `x / total traités` + % ;
   le survol d'un badge rappelle sa définition (`title`).
 
-  **Traité** = au moins une issue d'appel (`call_outcomes`) ; **en cours** =
-  traité mais encore `RESERVED` (BV / à rappeler) ; **succès** = traité et
-  `SUCCESS` (issue « OUI »).
+  **Traité** = au moins une issue d'appel (note `YES` / `NO` / `BV` /
+  `CALL_BACK`) ; **en cours** = traité mais encore `RESERVED` (BV / à
+  rappeler) ; **succès** = traité et `CONFIRMED` (issue `YES`).
 
   **Badges à 0 masqués** : un badge dont le compte principal vaut `0` n'est
   pas rendu (sur une base sans réservation, la barre ne montre que
@@ -259,7 +315,9 @@ Sur **Prospects (commercial)** et **Prospect list (admin)** :
     (`traites_count`) et *Non traités* (`restant_count`), suffixe
     « sur N prospect(s) », masqués à 0 ;
   * même en-tête → badges d'issue **OUI**, **NON**, **BV**, **Injoinable**
-    (`oui_count` / `non_count` / `bv_count` / `injoinable_count`), masqués à
+    (clés `oui_count` / `non_count` / `bv_count` / `injoinable_count`,
+    alimentées par les statuts `YES` / `NO` / `BV_VOICEMAIL` / `CALL_BACK`),
+    masqués à
     0, dans les couleurs des badges de statut (success / destructive /
     warning / info).
   Ces deux compteurs sont produits par `GET reservation-groups/{id}`
@@ -280,8 +338,8 @@ Sur **Prospects (commercial)** et **Prospect list (admin)** :
 | PATCH | `reservation-groups/{id}` | propriétaire ou ADMIN/SUPER_ADMIN |
 | GET | `reservation-groups` (compteurs par statut + `employe`) | COMERCIAL |
 | GET | `reservation-groups/{id}` (détail + `clients_count` / `traites_count` / `restant_count` / `oui_count` / `non_count` / `bv_count` / `injoinable_count`) | COMERCIAL |
-| GET | `reminders?type=INJOINABLE\|BV`, `reminders/count?type=…` | COMERCIAL |
-| POST | `clients/{clientId}/outcome` (`recall_at` requis si `INJOINABLE`) | COMERCIAL |
+| GET | `reminders?type=CALL_BACK\|BV`, `reminders/count?type=…` | COMERCIAL |
+| POST | `clients/{clientId}/outcome` (`recall_at` requis si `CALL_BACK`) | COMERCIAL |
 | POST | `clients/{id}/blacklist` | COMERCIAL |
 | POST | `commercials/clients/{id}/blacklist` | ADMIN/SUPER_ADMIN |
 | POST | `liste-noire/{id}/debloquer` | ADMIN/SUPER_ADMIN |
@@ -309,8 +367,8 @@ Routes supprimées : `release`, `release-pending` (×2), `pending-count`,
 
 | Commande | Fréquence | Effet |
 |---|---|---|
-| `clients:process-timeouts` | 10 min | rappels expirés → compteur++ / blocage 21 j, réservation conservée |
-| `clients:reactivate` | horaire | `UNAVAILABLE_TEMP` + `returned_at` passé → `AVAILABLE` |
+| `clients:process-timeouts` | 10 min | `rappels` échus → compteur++ / blocage 21 j, **rappel supprimé**, réservation conservée |
+| `clients:reactivate` | horaire | `UNAVAILABLE` + `returned_at` passé → `AVAILABLE` (+ événement `RETURNED_TO_AVAILABLE`, `sender_id = SYSTEM`) |
 
 ## 12. Données de licence (payload n8n)
 
@@ -382,12 +440,12 @@ valeur de `sort_by`. Aucun des deux horodatages ne vient du payload.
 JSON (`database/data/clients.json`, surchargeable avec `CLIENTS_JSON=…`) ;
 `categories` reprend les libellés de `authorized_categories` et
 `licence_propre` passe à vrai dès qu'un numéro propre est fourni. Les lignes
-enfantsées (`reservations`, `call_outcomes`, `notes`) partent en cascade. Ce
+enfantsées (`reservations`, `rappels`, `notes`) partent en cascade. Ce
 seeder n'est **pas** appelé par `DatabaseSeeder` : il se lance à la main.
 
 **Conservés inchangés** (existaient avant l'alignement) :
 
-* `id` UUID reste la clé primaire (FK `reservations`, `call_outcomes`, `notes`) ;
+* `id` UUID reste la clé primaire (FK `reservations`, `rappels`, `notes`) ;
   `licence_propre` reste un **booléen** (« Licence propre : Oui / Non ») ;
 * `surety_company` (string unique) reste affiché ; `cautionnement_compagnie`
   (tableau) est ajouté à côté.

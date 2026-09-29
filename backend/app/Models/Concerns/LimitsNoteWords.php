@@ -14,7 +14,7 @@ trait LimitsNoteWords
     public const MAX_NOTE_WORDS = 8;
 
     /**
-     * Nom du champ portant la note ("content" pour Note, "note" pour CallOutcome).
+     * Nom du champ portant la note ("description" sur Note).
      */
     abstract protected function noteWordField(): string;
 

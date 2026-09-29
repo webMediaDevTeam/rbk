@@ -1,0 +1,145 @@
+@startuml rbk-models
+' Référence : docs/RULES.md (fait foi) + migrations 2026_09_29_00000{1,2,3}
+title RBQBot — modèle de la réservation / de l'appel
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam wrapWidth 260
+
+package "Comptes" {
+  class Enterprise {
+    id UUID
+    name
+    tax_number
+    --
+    employees 1 -- *
+    clients 1 -- *
+  }
+
+  class User {
+    id UUID
+    email
+    role COMERCIAL | ADMIN | SUPER_ADMIN
+    status ACTIVE | ...
+    --
+    reservations 0..* -- 1
+    reservationGroups 0..* -- 1
+    rappels 0..* -- 1
+  }
+
+  class Employee {
+    id UUID
+    user_id 1 -- 1 User
+    enterprise_id
+    first_name / last_name
+    +
+    + profil (séparé du compte)
+  }
+
+  note right of Employee
+    User = compte (auth, rôle, statuts de réservation)
+    Employee = profil étendu (lié à une entreprise)
+    Les deux sont conservés : aucun des deux n'est mort.
+  end note
+
+  Enterprise "1" -- "0..*" Employee
+  User "1" -- "0..1" Employee
+}
+
+package "Prospects & réservation" {
+  class Client {
+    id UUID
+    name
+    status AVAILABLE | RESERVED | CONFIRMED | UNAVAILABLE | BLACKLISTED
+    is_blacklisted BOOL
+    returned_at DATETIME
+    licence_* / neq / categories / respondents ...
+    --
+    display_status  (dérivé, jamais stocké)
+    scopeAvailable() = AVAILABLE et returned_at null ou passé
+  }
+
+  class ReservationGroup {
+    id UUID
+    comercial_id --> User
+    name
+    total
+    reserved_count
+  }
+
+  class Reservation {
+    id UUID
+    client_id --> Client (cascade)
+    comercial_id --> User
+    reservation_group_id --> ReservationGroup
+    status PENDING | YES | NO | BV_VOICEMAIL | CALL_BACK
+         (+ REALIZED : réservé, non émis)
+    bv_count INT
+    injoinable_count INT
+    --
+    scopeActive() : statut actif et client RESERVED/CONFIRMED
+    PROCESSED = YES | NO | BV_VOICEMAIL | CALL_BACK
+    + aucune expiration (expires_at supprimé)
+    + plus de colonnes de rappel
+  }
+
+  class Rappel {
+    id UUID
+    client_id --> Client (cascade)
+    comercial_id --> User
+    reservation_id --> Reservation (cascade)
+    reminder_date DATETIME
+    --
+    delay() -> [3, JOUR] | [5, HEURE] | ...
+    isDue()
+    + remplace recall_at / rappel_after / rappel_type
+  }
+}
+
+package "Journal unique" {
+  class Note {
+    id UUID
+    client_id --> Client (cascade)
+    sender_id STRING nullable
+    type RESERVED | YES | NO | BV | CALL_BACK
+       | BLACKLISTED | RETURNED_TO_AVAILABLE | NOTE
+    description TEXT nullable (8 mots max)
+    created_at
+    --
+    sender_id = UUID utilisateur ou SYSTEM (crons)
+    calls()    : événements d'appel
+    comments() : type = NOTE
+    + immuable : seul un commentaire est supprimable
+    + remplace la table call_outcomes (fusionnée ici)
+  }
+}
+
+Enterprise "1" o-- "0..*" Client : clients
+User "1" -- "0..*" Reservation : reservations
+User "1" -- "0..*" Rappel : rappels
+ReservationGroup "1" -- "0..*" Reservation : reservations
+Client "1" -- "0..*" Reservation : reservations
+Client "1" -- "0..*" Rappel : rappels
+Client "1" -- "0..*" Note : notes
+Reservation "1" -- "0..1" Rappel : rappels
+
+legend right
+  = Vocabulaire posé en base (migration 2026_09_29_000001)
+  | ancien | nouveau |
+  | EN_ATTENT | PENDING |
+  | OUI | YES |
+  | NON | NO |
+  | BV | BV_VOICEMAIL |
+  | INJOINABLE | CALL_BACK |
+  | SUCCESS (client) | CONFIRMED |
+  | UNAVAILABLE_TEMP (client) | UNAVAILABLE |
+  | BOITE_VOCALE | BV |
+  | BLACKLIST / UNBLACKLIST (call_outcomes) | BLACKLISTED / RETURNED_TO_AVAILABLE (notes) |
+  =
+  Il n'y a **pas** de table `commercial` : un commercial est un `User`
+  dont `role = COMERCIAL` (le diagramme source séparait `User` et
+  `Commercial` : `Employee` porte les données de profil 1-1 avec `User`).
+  `Reminder` / `rappels` est une **vraie table** : les colonnes de rappel de
+  `reservations` ont été supprimées.
+end legend
+
+@enduml
