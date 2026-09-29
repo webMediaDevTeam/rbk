@@ -16,8 +16,8 @@ export default function ReservationStatusBadge({ status }) {
 
   const labels = {
     PENDING: 'En attente',
-    YES: 'Confirmé',
-    NO: 'Refusé',
+    YES: 'Oui',
+    NO: 'Non',
     BV_VOICEMAIL: 'Boîte vocale',
     CALL_BACK: 'À rappeler',
     REALIZED: 'Réalisé',

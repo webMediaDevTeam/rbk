@@ -8,6 +8,10 @@ use Illuminate\Validation\ValidationException;
  * Limite la note à 8 mots maximum à la création et à l'édition.
  * Les notes existantes (legacy) restent lisibles : la limite n'est appliquée
  * qu'au moment du save (création ou re-édition).
+ *
+ * La limite porte sur la **saisie humaine** : une description générée par le
+ * système (`sender_id = SYSTEM`) peut l'outrepasser en redéfinissant
+ * `noteWordsAreLimited()`.
  */
 trait LimitsNoteWords
 {
@@ -18,6 +22,12 @@ trait LimitsNoteWords
      */
     abstract protected function noteWordField(): string;
 
+    /** Descriptions générées (non saisies) : non limitées. */
+    protected function noteWordsAreLimited(): bool
+    {
+        return true;
+    }
+
     public static function bootLimitsNoteWords(): void
     {
         static::saving(function ($model) {
@@ -25,6 +35,10 @@ trait LimitsNoteWords
             $value = $model->{$field};
 
             if ($value === null || trim((string) $value) === '') {
+                return;
+            }
+
+            if (! $model->noteWordsAreLimited()) {
                 return;
             }
 

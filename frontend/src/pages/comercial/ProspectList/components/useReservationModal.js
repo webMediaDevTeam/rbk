@@ -6,7 +6,7 @@ import { reserveCommercialProspectsApi } from '@/api/commercial.api.js'
 // Nombre de prospects : 200 / 250 / 300 uniquement (pas de nombre libre).
 export const COUNT_OPTIONS = [200, 250, 300]
 
-export function useReservationModal({ open, onClose }) {
+export function useReservationModal({ open, onClose, filters = {} }) {
   const qc = useQueryClient()
   const [count, setCount] = useState(COUNT_OPTIONS[0])
   const [result, setResult] = useState(null)
@@ -38,7 +38,10 @@ export function useReservationModal({ open, onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     setResult(null)
-    mutation.mutate({ count })
+    // `filters` = filtres + tri de la page Prospects : le serveur réutilise
+    // exactement la même requête que l'écran pour préparer le lot
+    // (Client::scopeProspectList). `page` / `per_page` sont ignorés.
+    mutation.mutate({ count, ...filters })
   }
 
   return {

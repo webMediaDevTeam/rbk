@@ -2,6 +2,7 @@ import { ChevronRight, Copy, Home, ArrowLeft, Phone, Ban, Loader2, AlertCircle, 
 import Button from '@/components/ui/button.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs.jsx'
 import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
+import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
 import ClientDetailsTab from './components/ClientDetailsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
@@ -67,11 +68,22 @@ export default function ClientDetailPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{client.name ?? '—'}</h1>
-                  <ClientStatus
-                    status={client.display_status ?? client.status}
-                    isBlacklisted={client.is_blacklisted}
-                    returnedAt={client.returned_at}
-                  />
+                  {/* Badge du bandeau, selon le rôle :
+                      - ADMIN / SUPER_ADMIN → statut **client** (`ClientStatus`,
+                        liste noire et compte à rebours compris) ;
+                      - COMERCIAL → statut de sa **réservation en cours**
+                        (`my_reservation.status`) ; **aucun badge** si le client
+                        est en liste noire, et aucun s'il n'a pas de réservation
+                        active à lui (ReservationStatusBadge rend `null`). */}
+                  {isAdmin ? (
+                    <ClientStatus
+                      status={client.display_status ?? client.status}
+                      isBlacklisted={client.is_blacklisted}
+                      returnedAt={client.returned_at}
+                    />
+                  ) : client.is_blacklisted ? null : (
+                    <ReservationStatusBadge status={client.my_reservation?.status} />
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">{client.enterprise_name ?? '—'}</p>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
@@ -140,24 +152,16 @@ export default function ClientDetailPage() {
                   Débloquer
                 </Button>
               ) : (
-                <Button
-                  variant="outline"
-                  className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                  onClick={openBlacklist}
-                >
+                <Button variant="blacklist" onClick={openBlacklist}>
                   <Ban className="h-4 w-4 mr-1.5" />
-                  Mettre en liste noire
+                  BlackList
                 </Button>
               )
             ) : (
               !client.is_blacklisted && (
-                <Button
-                  variant="outline"
-                  className="border-destructive/30 text-destructive hover:bg-destructive/10"
-                  onClick={openBlacklist}
-                >
+                <Button variant="blacklist" onClick={openBlacklist}>
                   <Ban className="h-4 w-4 mr-1.5" />
-                  Mettre en liste noire
+                  BlackList
                 </Button>
               )
             )}
@@ -216,7 +220,7 @@ export default function ClientDetailPage() {
                   Annuler
                 </Button>
                 <Button
-                  variant="destructive"
+                  variant="blacklist"
                   disabled={blacklistConfirmDisabled}
                   onClick={blacklistMutation.mutate}
                 >

@@ -35,14 +35,19 @@ export default function ClientDetailsTab({ client }) {
     respondentsCount,
     hasCategories,
     hasRespondents,
+    hasRepresentative,
     hasActivity,
+    hasPhone,
+    representativeName,
   } = useClientDetailsTab({ client })
 
   return (
     <div className="space-y-6">
       <DetailSection title="Identification">
         <DetailRow label="E-mail" value={client.email} />
-        <DetailRow label="Téléphone" value={client.phone} />
+        {/* Numéro masqué (absent de la réponse) sauf pour un admin ou le
+            commercial qui détient la réservation en cours du client. */}
+        {hasPhone && <DetailRow label="Téléphone" value={client.phone} />}
         <DetailRow label="NEQ" value={client.neq} />
         <DetailRow label="Municipalité" value={client.municipality} />
         <DetailRow label="Région administrative" value={client.administrative_region} />
@@ -90,6 +95,16 @@ export default function ClientDetailsTab({ client }) {
         </div>
       )}
 
+      {/* Le représentant est aussi un répondant : il est affiché ici, sous son
+          propre libellé, et retiré de la liste « Répondants » (pas de doublon,
+          pas de « Répondants (0) »). Le bloc « Répondants » ne reste que s'il
+          reste des répondants autres que le représentant. */}
+      {hasRepresentative && (
+        <DetailSection title="Représentant">
+          <p className="text-sm text-foreground">{representativeName}</p>
+        </DetailSection>
+      )}
+
       {hasRespondents && (
         <div className="space-y-3">
           <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">
@@ -105,10 +120,6 @@ export default function ClientDetailsTab({ client }) {
           </div>
         </div>
       )}
-
-      <DetailSection title="Représentant">
-        <DetailRow label="Représentant" value={client.representative_name} />
-      </DetailSection>
 
       {hasActivity && (
         <DetailSection title="Activité">

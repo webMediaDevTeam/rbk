@@ -4,7 +4,11 @@ import { useClientsHistoryToolbar } from './useClientsHistoryToolbar.js'
 import { useFilterOptions } from '@/hooks/use-filter-options.js'
 
 export default function ClientsHistoryToolbar(props) {
-  const { searchInputProps, statusProps } = useClientsHistoryToolbar(props)
+  // Le filtre « Statut » (menu déroulant) a été supprimé : ce sont les
+  // badges de statut de l'overview, au-dessus, qui filtrent — en
+  // sélection multiple. Le composant ne pilote donc plus que la recherche
+  // et les filtres géographiques / catégorie.
+  const { searchInputProps } = useClientsHistoryToolbar(props)
   const { municipalitiesList, categoriesList, regionsList } = useFilterOptions()
   const {
     municipality, setMunicipality,
@@ -18,17 +22,6 @@ export default function ClientsHistoryToolbar(props) {
         className="flex-1 min-w-0"
         inputProps={searchInputProps}
       />
-      <Select
-        {...statusProps}
-        className="w-56 cursor-pointer shrink-0"
-      >
-        <option value="">Statut: Tous</option>
-        <option value="AVAILABLE">Disponible</option>
-        <option value="RESERVED">Réservé</option>
-        <option value="CONFIRMED">Confirmé</option>
-        <option value="UNAVAILABLE">Indisponible</option>
-        <option value="BLACKLISTED">Liste noire</option>
-      </Select>
       <Select
         value={municipality ?? ''}
         onChange={(e) => setMunicipality?.(e.target.value)}

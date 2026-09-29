@@ -54,12 +54,18 @@
   --sidebar-border: var(--color-border);
   --sidebar-ring: var(--color-ring);
 
-  /* Badge « Liste noire » (ClientStatus) : neutre — NOIR en mode clair. */
+  /* Badge « Liste noire » (ClientStatus) et bouton `blacklist` : neutre —
+     NOIR en mode clair. */
   --status-badge: var(--foreground);
   --status-badge-foreground: var(--background);
 
   /* Variant « warning » des badges : ambre un cran plus sombre en clair. */
-  --warning-fg: #b45309; /* amber-700 (au lieu d'amber-600) */
+  --warning-fg: #b45309; /* amber-700 (au lieu de amber-600) */
+
+  /* Surlignage « liste courante » (Mes listes) et lignes « En attente »
+     (détail d'une liste) — GRIS CLAIR en mode clair. */
+  --row-highlight: #c5c5c5;
+  --row-highlight-hover: #bcbcbc;
 }
 
 .dark {
@@ -96,10 +102,56 @@
   --sidebar-border: oklch(0.25 0.02 260);
   --sidebar-ring: var(--color-ring);
 
-  /* Badge « Liste noire » (ClientStatus) : neutre — GRIS en mode sombre. */
+  /* Badge « Liste noire » (ClientStatus) et bouton `blacklist` : neutre —
+     GRIS en mode sombre. */
   --status-badge: var(--color-muted-foreground);
   --status-badge-foreground: var(--color-background);
 
   /* Variant « warning » des badges : ambre clair, inchangé en sombre. */
   --warning-fg: #fbbf24; /* amber-400 */
+
+  /* Surlignage « liste courante » (Mes listes) et lignes « En attente »
+     (détail d'une liste) en mode sombre — teinte sombre, lisible avec le
+     texte clair (≈ 7:1 sur #3f3f46). */
+  --row-highlight: #3f3f46;
+  --row-highlight-hover: #4a4a53;
+}
+
+/* --- Surlignage (fond gris) --------------------------------------------
+   `row-current` : la liste la plus récente de « Mes listes » ;
+   `row-pending` : lignes / cartes au statut de réservation `PENDING`
+   (« En attente ») dans le détail d'une liste.
+   Même traitement dans les deux cas : fond distinct, survol légèrement
+   plus clair, et texte « muted » ramené au texte par défaut — il serait
+   illisible sur le gris clair du mode clair. On ne touche qu'aux éléments
+   portant `text-muted-foreground` : les badges restent colorés. Les
+   sélecteurs combinent élément + classe pour gagner en spécificité sur
+   les utilitaires Tailwind. */
+tbody tr.row-current,
+tbody tr.row-pending {
+  background-color: var(--row-highlight);
+}
+
+tbody tr.row-current:hover,
+tbody tr.row-pending:hover {
+  background-color: var(--row-highlight-hover);
+}
+
+div.row-current,
+div.row-pending {
+  background-color: var(--row-highlight);
+}
+
+div.row-current:hover,
+div.row-pending:hover {
+  background-color: var(--row-highlight-hover);
+}
+
+tbody tr.row-current td.text-muted-foreground,
+tbody tr.row-pending td.text-muted-foreground,
+tbody tr.row-current td .text-muted-foreground,
+tbody tr.row-pending td .text-muted-foreground,
+div.row-current .text-muted-foreground,
+div.row-pending .text-muted-foreground {
+  color: var(--foreground);
 }

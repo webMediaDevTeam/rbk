@@ -7,6 +7,10 @@ const variants = {
   outline: 'border border-border bg-transparent text-foreground shadow-sm hover:bg-muted',
   ghost: 'bg-transparent text-foreground hover:bg-muted',
   destructive: 'bg-destructive text-white shadow-sm hover:bg-destructive/90',
+  // Liste noire : noir plein en mode clair, gris en mode sombre — les mêmes
+  // variables que la pastille « Liste noire » (`ClientStatus`), pour que le
+  // bouton et le badge parlent de la même couleur.
+  blacklist: 'bg-[var(--status-badge)] text-[var(--status-badge-foreground)] shadow-sm hover:opacity-90',
   link: 'text-foreground underline-offset-4 hover:underline',
 }
 

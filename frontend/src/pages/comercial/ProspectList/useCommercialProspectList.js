@@ -8,6 +8,7 @@ import {
   getCommercialProspectApi,
   getAdminClientApi,
 } from '@/api/commercial.api.js'
+import { useActiveReservationsCount } from '@/pages/comercial/ClientDetail/useOutcomes.js'
 
 export function useCommercialProspectList() {
   const navigate = useNavigate()
@@ -72,10 +73,20 @@ export function useCommercialProspectList() {
     setRowsPerPage(value)
     setCurrentPage(1)
   }
-  const openReserve = () => setShowReserve(true)
   const closeReserve = () => setShowReserve(false)
 
+  // Garde « traitement en cours » : tant que l'employé a des réservations
+  // encore `PENDING` (prospects non traités), le serveur refuse un nouveau
+  // lot (409) — le bouton « Réserver » suit la même règle (`can_reserve`).
+  const { data: reservationCounts } = useActiveReservationsCount()
+  const pendingReservations = reservationCounts?.data?.pending ?? 0
+  const canReserve = reservationCounts?.data?.can_reserve ?? true
+  const openReserve = () => {
+    if (canReserve) setShowReserve(true)
+  }
+
   return {
+    pendingReservations, canReserve,
     isDesktop,
     search, setSearch,
     municipality, setMunicipality,
@@ -92,6 +103,9 @@ export function useCommercialProspectList() {
     total, totalPages,
     showReserve, openReserve, closeReserve,
     handleViewDetail,
+    // Filtres + tri de la page, transmis au modal « Réserver des prospects » :
+    // le lot réservé est celui que l'employé voit à l'écran.
+    filters: params,
   }
 }
 

@@ -9,6 +9,7 @@ use Illuminate\Console\Command;
 class ProcessTimeouts extends Command
 {
     protected $signature = 'clients:process-timeouts';
+
     protected $description = 'Process expired recalls (BV / CALL_BACK) without deleting reservations';
 
     public function __construct(private CallWorkflowService $workflow)
@@ -26,9 +27,11 @@ class ProcessTimeouts extends Command
     }
 
     /**
-     * Rappel échu sans action -> échec automatique (compteur++,
-     * >= 2 -> UNAVAILABLE 21 jours). La réservation est conservée, le
-     * rappel est retiré : le client réapparaît dans les listes.
+     * Rappel échu sans action -> échec automatique (compteur++ ; 3e BV ->
+     * UNAVAILABLE 21 jours + note automatique de l'employé). La réservation
+     * est conservée, le rappel est retiré : le client réapparaît dans les
+     * listes. Un rappel « à rappeler » n'a aucun seuil : il est seulement
+     * retiré.
      *
      * Source : table `rappels` (les colonnes de rappel de `reservations`
      * ont été supprimées).

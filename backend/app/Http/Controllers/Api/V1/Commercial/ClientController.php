@@ -13,73 +13,14 @@ use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
-    public function __construct(private CallWorkflowService $workflow)
-    {
-    }
+    public function __construct(private CallWorkflowService $workflow) {}
 
     public function index(Request $request): JsonResponse
     {
-        $query = Client::query();
-
-        // Filtres = scopes Eloquent, sur les valeurs distinctes de la table
-        // clients (plus de table categories).
-        if ($municipality = $request->input('municipality')) {
-            $query->filterByMunicipalities($municipality);
-        }
-
-        if ($category = $request->input('category')) {
-            $query->filterByCategories($category);
-        }
-
-        if ($region = $request->input('administrative_region')) {
-            $query->filterByAdministrativeRegions($region);
-        }
-
-        if ($search = $request->input('search')) {
-            $like = "%{$search}%";
-            $query->where(function ($q) use ($like) {
-                $q->where('name', 'LIKE', $like)
-                  ->orWhere('enterprise_name', 'LIKE', $like)
-                  ->orWhere('email', 'LIKE', $like)
-                  ->orWhere('phone', 'LIKE', $like)
-                  ->orWhere('neq', 'LIKE', $like)
-                  ->orWhere('municipality', 'LIKE', $like)
-                  ->orWhere('licence_number', 'LIKE', $like)
-                  ->orWhere('licence_propre_numero', 'LIKE', $like)
-                  // Colonnes JSON : sous-chaîne via le scope dédié
-                  // (voir Client::scopeOrWhereJsonTextLike).
-                  ->orWhereJsonTextLike('respondents', $like)
-                  ->orWhereJsonTextLike('categories', $like)
-                  ->orWhereJsonTextLike('authorized_categories', $like);
-            });
-        }
-
-        // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
-
-        $query->where('is_blacklisted', false)
-              ->available()
-              ->whereDoesntHave('reservations', fn ($q) => $q->active());
-
-        $sortable = [
-            'name'        => 'name',
-            'enterprise_name' => 'enterprise_name',
-            'email'       => 'email',
-            'phone'       => 'phone',
-            'status'      => 'status',
-            'municipality' => 'municipality',
-            'created_at'  => 'created_at',
-            'updated_at'  => 'updated_at',
-            'licence_end_date' => 'licence_end_date',
-        ];
-
-        $sortBy    = $request->input('sort_by', 'created_at');
-        $sortOrder = strtolower($request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
-
-        if (array_key_exists($sortBy, $sortable)) {
-            $query->orderBy($sortable[$sortBy], $sortOrder);
-        } else {
-            $query->orderByDesc('created_at');
-        }
+        // Filtres + exclusions + tri **partagés** avec la réservation d'un
+        // lot (`Client::scopeProspectList`) : la page et le lot réservé
+        // décrivent exactement les mêmes clients, dans le même ordre.
+        $query = Client::query()->prospectList($request->all());
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
@@ -96,9 +37,9 @@ class ClientController extends Controller
                 'clients' => $formatted,
                 'pagination' => [
                     'current_page' => $clients->currentPage(),
-                    'last_page'    => $clients->lastPage(),
-                    'per_page'     => $clients->perPage(),
-                    'total'        => $clients->total(),
+                    'last_page' => $clients->lastPage(),
+                    'per_page' => $clients->perPage(),
+                    'total' => $clients->total(),
                 ],
             ],
         ]);
@@ -120,7 +61,14 @@ class ClientController extends Controller
         // (sinon une requête par ligne à formatter).
         Client::loadLatestReservations($clients->getCollection());
 
-        $formatted = $clients->getCollection()->map(fn ($client) => $this->formatClient($client));
+        // Numéro de téléphone : même règle que le détail — visible seulement
+        // si le connecté détient la réservation en cours du client. La
+        // relation `latestReservation` est déjà préchargée ci-dessus.
+        $formatted = $clients->getCollection()->map(fn ($client) => $this->formatClient(
+            $client,
+            false,
+            $this->canSeePhone($client, $this->latestReservationOf($client))
+        ));
 
         return response()->json([
             'success' => true,
@@ -128,9 +76,9 @@ class ClientController extends Controller
                 'clients' => $formatted,
                 'pagination' => [
                     'current_page' => $clients->currentPage(),
-                    'last_page'    => $clients->lastPage(),
-                    'per_page'     => $clients->perPage(),
-                    'total'        => $clients->total(),
+                    'last_page' => $clients->lastPage(),
+                    'per_page' => $clients->perPage(),
+                    'total' => $clients->total(),
                 ],
             ],
         ]);
@@ -141,17 +89,19 @@ class ClientController extends Controller
         $client = Client::with(['reservations.comercial', 'reservations.rappel', 'notes.sender'])
             ->find($id);
 
-        if (!$client) {
+        if (! $client) {
             return response()->json([
                 'success' => false,
                 'message' => 'Client introuvable.',
             ], 404);
         }
 
+        $canSeePhone = $this->canSeePhone($client, $this->latestReservationOf($client));
+
         return response()->json([
             'success' => true,
             'data' => [
-                'client' => $this->formatClient($client, true),
+                'client' => $this->formatClient($client, true, $canSeePhone),
             ],
         ]);
     }
@@ -166,13 +116,10 @@ class ClientController extends Controller
         $client = Client::findOrFail($id);
 
         return DB::transaction(function () use ($client, $user, $validated) {
+            // `handleBlacklist()` fait tout : statut `BLACKLISTED`,
+            // `is_blacklisted = true`, `returned_at` vidé, rappels annulés,
+            // note `BLACKLISTED` (motif optionnel, émetteur = l'employé).
             $this->workflow->apply($client, null, Note::TYPE_BLACKLISTED, $validated, $user);
-
-            $client->update([
-                'status' => Client::STATUS_BLACKLISTED,
-                'is_blacklisted' => true,
-                'returned_at' => null,
-            ]);
 
             return response()->json([
                 'success' => true,
@@ -181,7 +128,49 @@ class ClientController extends Controller
         });
     }
 
-    protected function formatClient(Client $client, bool $detailed = false): array
+    /**
+     * Dernière réservation du client — celle qui fait foi pour « qui détient
+     * le client en ce moment ». Utilise la relation préchargée quand elle
+     * l'est (listes), sinon la collection `reservations` du détail. Même
+     * départage que `Client::latestReservation()` (`created_at`, puis `id`).
+     */
+    private function latestReservationOf(Client $client): ?Reservation
+    {
+        if ($client->relationLoaded('latestReservation')) {
+            return $client->latestReservation;
+        }
+
+        return $client->reservations
+            ->sortByDesc(fn (Reservation $r) => [$r->created_at, $r->id])
+            ->first();
+    }
+
+    /**
+     * Numéro de téléphone : réservé à l'admin / super admin, et au commercial
+     * qui détient **la réservation en cours** du client (client `RESERVED` /
+     * `CONFIRMED` ET dernière réservation à son nom).
+     *
+     * Un client `AVAILABLE`, revenu `AVAILABLE` après un blocage temporaire,
+     * ou `RESERVED` par un autre commercial : le numéro n'est tout simplement
+     * pas envoyé (la clé est absente de la réponse, pas `null`).
+     */
+    private function canSeePhone(Client $client, ?Reservation $activeReservation): bool
+    {
+        $user = auth()->user();
+
+        if ($user && in_array($user->role, ['ADMIN', 'SUPER_ADMIN'], true)) {
+            return true;
+        }
+
+        if (! in_array($client->status, [Client::STATUS_RESERVED, Client::STATUS_CONFIRMED], true)) {
+            return false;
+        }
+
+        return $activeReservation !== null
+            && $activeReservation->comercial_id === $user?->id;
+    }
+
+    protected function formatClient(Client $client, bool $detailed = false, bool $canSeePhone = false): array
     {
         $name = $client->name ?? '—';
         $enterpriseName = $client->enterprise_name ?? '—';
@@ -190,7 +179,9 @@ class ClientController extends Controller
             'id' => $client->id,
             'name' => $name,
             'email' => $client->email,
-            'phone' => $client->phone,
+            // Clé absente si le connecté n'a pas le droit de voir le numéro
+            // (cf. `canSeePhone()`) : le frontend n'affiche alors rien.
+            ...($canSeePhone ? ['phone' => $client->phone] : []),
             'status' => $client->status,
             // Statut affiché (règle §2 : RESERVED qualifié par sa dernière
             // réservation) + retour éventuel du blocage temporaire.
@@ -214,15 +205,13 @@ class ClientController extends Controller
         ];
 
         if ($detailed) {
-            $activeReservation = $client->reservations
-                ->sortByDesc('created_at')
-                ->first();
+            $activeReservation = $this->latestReservationOf($client);
 
             // Réservation du connecté, seulement si elle est encore active :
             // c'est elle qui conditionne l'affichage du bouton « Suite appel ».
             $myReservation = $client->reservations
                 ->where('comercial_id', auth()->id())
-                ->sortByDesc('created_at')
+                ->sortByDesc(fn (Reservation $r) => [$r->created_at, $r->id])
                 ->first();
 
             if ($myReservation

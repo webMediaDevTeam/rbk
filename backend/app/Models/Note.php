@@ -3,17 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\LimitsNoteWords;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Journal d'interactions d'un client — classe Note du modèle :
  *
- *   id, client_id, sender_id (utilisateur ou 'SYSTEM'), type, description,
- *   created_at
+ *   id, client_id, reservation_id?, sender_id (utilisateur ou 'SYSTEM'),
+ *   type, description, created_at
  *
  * `type` reprend l'énumération du modèle et remplace l'ancienne table
  * `call_outcomes` (fusionnée ici) :
@@ -47,12 +47,19 @@ class Note extends Model
     // ------------------------------------------------------------------
 
     public const TYPE_RESERVED = 'RESERVED';
+
     public const TYPE_YES = 'YES';
+
     public const TYPE_NO = 'NO';
+
     public const TYPE_BV = 'BV';
+
     public const TYPE_CALL_BACK = 'CALL_BACK';
+
     public const TYPE_BLACKLISTED = 'BLACKLISTED';
+
     public const TYPE_RETURNED_TO_AVAILABLE = 'RETURNED_TO_AVAILABLE';
+
     public const TYPE_NOTE = 'NOTE';
 
     /** Énumération du modèle. */
@@ -81,6 +88,7 @@ class Note extends Model
 
     protected $fillable = [
         'client_id',
+        'reservation_id',
         'sender_id',
         'type',
         'description',
@@ -96,6 +104,16 @@ class Note extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * Réservation qui a produit l'événement (note `RESERVED` créée par la
+     * réservation d'un lot). Nullable : les commentaires et la plupart des
+     * événements ne la connaissent pas.
+     */
+    public function reservation(): BelongsTo
+    {
+        return $this->belongsTo(Reservation::class);
     }
 
     /**
@@ -122,5 +140,15 @@ class Note extends Model
     protected function noteWordField(): string
     {
         return 'description';
+    }
+
+    /**
+     * La limite de 8 mots porte sur la **saisie humaine** : les descriptions
+     * générées (`sender_id = SYSTEM`, ex. « Réservé par … le … »)
+     * ne sont pas de la saisie et ne sont donc pas comptées.
+     */
+    protected function noteWordsAreLimited(): bool
+    {
+        return $this->sender_id !== self::SENDER_SYSTEM;
     }
 }

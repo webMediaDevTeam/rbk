@@ -28,6 +28,29 @@ ont été renommés.
 Renommage de groupe : `PATCH api/v1/reservation-groups/{id}` — propriétaire du
 groupe ou ADMIN / SUPER_ADMIN.
 
+### 1.1 Visibilité du numéro de téléphone
+
+Le `phone` d'un client est une **donnée sensible** : il n'est envoyé par l'API
+que si le connecté a le droit de le voir.
+
+| Qui | Condition | `phone` |
+|---|---|---|
+| ADMIN / SUPER_ADMIN | toujours | envoyé |
+| COMMERCIAL | client `RESERVED` / `CONFIRMED` **et** la dernière réservation est à son nom | envoyé |
+| COMMERCIAL | client `AVAILABLE` (y compris revenu disponible après un NO / une 3e BV) | **absent** |
+| COMMERCIAL | client `RESERVED` par **un autre** commercial | **absent** |
+| COMMERCIAL | client `UNAVAILABLE` / `BLACKLISTED` | **absent** |
+
+* La clé est **omise** de la réponse (pas `null`) : impossible de la lire dans
+  le payload ni dans les outils de développement.
+* Implémentation : `ClientController::canSeePhone()` (détail) et
+  `ClientController::mine()` (« mes clients ») ; `Client::loadLatestReservations()`
+  précharge désormais `comercial_id` pour éviter une requête par ligne.
+* Côté UI, l'absence de `phone` masque la ligne « Téléphone » de l'onglet
+  Détails **et** le numéro + bouton « copier » de l'en-tête.
+* La liste des prospects (`GET clients`) ne contient **jamais** de numéro : ces
+  clients sont `AVAILABLE`, donc sans réservation courante.
+
 ## 2. Statuts
 
 > **Vocabulaire aligné sur le modèle** (`docs/models.puml`) : les renommages de
@@ -47,6 +70,20 @@ groupe ou ADMIN / SUPER_ADMIN.
 | `BLACKLISTED` | Liste noire (`is_blacklisted = true`) |
 
 `scopeAvailable()` : `status = AVAILABLE` **et** (`returned_at` null ou passé).
+
+**Invariant badge ⇄ lignes** : un client **ne peut pas** être `AVAILABLE` avec
+un `returned_at` **futur**. Le badge « Disponible » (`by_status`, statut brut,
+`ProspectOverviewController`) compterait alors un prospect que la page n'affiche
+**pas** (ex. badge 4 / liste 1). L'état incohérent (reliquat de test) se
+normalise en **`UNAVAILABLE`**, compte à rebours conservé :
+
+```sql
+UPDATE clients SET status='UNAVAILABLE' WHERE status='AVAILABLE' AND returned_at > NOW();
+```
+
+Un blocage (NO : 3 mois, 2e BV : 21 j) écrit toujours `UNAVAILABLE` +
+`returned_at`, et la réactivation (`clients:reactivate`, `debloquer`) vide
+`toujours` `returned_at` en repassant en `AVAILABLE`.
 
 ### Statut affiché (`display_status`)
 
@@ -114,7 +151,8 @@ workflow (`Note::CALL_TYPES` = événements d'appel, les autres sont des
 ## 3. Workflow d'appel (`CallWorkflowService::apply`)
 
 Constantes : `RECALL_DAYS = 3`, `NON_BLOCK_MONTHS = 3`, `TEMP_BLOCK_DAYS = 21`,
-`ATTEMPTS_LIMIT = 2`.
+`BV_ATTEMPTS_LIMIT = 3`, `CALL_BACK_ATTEMPTS_LIMIT = null` (pas de limite),
+`AUTO_BLOCK_DESCRIPTION = 'Auto indisponible après 3 BV, retour 21 j'`.
 
 * **YES** → client `CONFIRMED`, réservation `YES`, `returned_at` vidé, rappel
   annulé (`is_blacklisted` remis à faux). La réservation est maintenue jusqu'à
@@ -126,10 +164,15 @@ Constantes : `RECALL_DAYS = 3`, `NON_BLOCK_MONTHS = 3`, `TEMP_BLOCK_DAYS = 21`,
   NON. »).
 * **BV** → le client reste `RESERVED`, `bv_count++`, **rappel automatique à
   3 jours** créé dans `rappels` (`reminder_date = now + 3d`, délai affiché
-  `3 JOUR`). Si `bv_count >= 2` → `UNAVAILABLE`, `returned_at = now + 21 jours`,
-  rappel annulé.
-* **CALL_BACK** (affiché « À rappeler ») → identique à BV avec
-  `injoinable_count`, **mais le rappel est fixé par l'employé** : `recall_at`
+  `3 JOUR`). Si `bv_count >= 3` (3e voicemail) → `UNAVAILABLE`,
+  `returned_at = now + 21 jours`, rappel annulé, **réservation conservée**, et
+  une **note automatique** `type = BV` est journalisée (émetteur = l'employé
+  qui a fait passer la réservation en `BV`, pas `SYSTEM`).
+* **CALL_BACK** (affiché « À rappeler ») → `injoinable_count++` et rappel
+  planifié, **mais sans limite** : le commercial peut enchaîner autant de
+  rappels qu'il veut, le client n'est **jamais** bloqué
+  (`CALL_BACK_ATTEMPTS_LIMIT = null`, y compris à l'expiration d'un rappel).
+  Le rappel est **fixé par l'employé** : `recall_at`
   est **obligatoire** (`required_if:outcome,CALL_BACK`, doit être dans le futur)
   et saisi via un champ `datetime-local` dans le modal (aucun select
   minute/mois). Le délai affiché (`recall_after` / `recall_unit`) est
@@ -140,11 +183,107 @@ Constantes : `RECALL_DAYS = 3`, `NON_BLOCK_MONTHS = 3`, `TEMP_BLOCK_DAYS = 21`,
   (elles deviennent inactives via le statut client).
 
 À chaque écriture : création d'une ligne `notes` (événement, `sender_id` =
-l'employé, `description` = note saisie) **puis** mise à jour de la
-réservation/croisement des compteurs, le tout dans une transaction. Un
-événement inconnu est rejeté **avant** toute écriture (`InvalidArgumentException`).
+l'employé, `description` = note saisie, `reservation_id` = réservation
+concernée) **puis** mise à jour de la réservation/croisement des compteurs,
+le tout dans une transaction. Un événement inconnu est rejeté **avant** toute
+écriture (`InvalidArgumentException`).
 
-La note est **optionnelle sur toutes les issues** (y compris BLACKLISTED).
+La note est **optionnelle sur toutes les issues** (y compris BLACKLISTED) :
+laissée vide, elle est stockée à **`null`** (jamais un texte par défaut).
+
+### 3.1 Cas 2 — « OUI » (réservation → `YES`)
+
+`POST clients/{clientId}/outcomes` avec `{outcome: "YES", note?}`
+(`Note::TYPE_YES`, `OutcomeController` → `CallWorkflowService::handleYes`) :
+
+1. **Déclencheur** : l'employé passe la réservation de ce client en `YES` ;
+   une réservation de cet employé est **obligatoire** (sinon `422` : « Vous
+   devez réserver ce client avant de changer son statut. »).
+2. **Réservation** : `status = YES`, rappel planifié annulé.
+3. **Client** : `status = CONFIRMED`, `returned_at` vidé.
+4. **Note** : `type = YES`, `description` = saisie de l'employé (`null` si
+   vide), `sender_id` = **identifiant de l'employé** (`SYSTEM` n'est jamais
+   utilisé ici), `reservation_id` = la réservation passée en `YES`.
+
+### 3.2 Cas 3 — « NON » (réservation → `NO`)
+
+`POST clients/{clientId}/outcomes` avec `{outcome: "NO", note?}`
+(`Note::TYPE_NO`, `CallWorkflowService::handleNo`) :
+
+1. **Déclencheur** : l'employé passe la réservation de ce client en `NO`.
+   Contrairement à `YES`, `NO` est accepté **sans** réservation si cet
+   employé a déjà un historique d'appel sur le client (sinon `403` : « Vous
+   devez avoir une réservation ou un historique d'appel pour ce client. ») :
+   dans ce cas, le statut de réservation n'a rien à changer.
+2. **Réservation** : `status = NO`, rappel planifié annulé.
+3. **Client** : `status = UNAVAILABLE`, `returned_at = now + 3 mois`
+   (`CallWorkflowService::NON_BLOCK_MONTHS = 3`).
+4. **Note** : `type = NO`, `description` = saisie de l'employé (`null` si
+   vide), `sender_id` = **identifiant de l'employé**, `reservation_id` = la
+   réservation passée en `NO`.
+5. **Après coup** : auto-blacklist (§1) — si *tous* les employés actifs ont
+   répondu NO pour ce client, un événement `BLACKLISTED` est journalisé et le
+   client passe `BLACKLISTED` (`returned_at` remis à `null`, ce qui annule
+   l'expiration de 3 mois).
+
+### 3.3 Cas 4 — « BV » (réservation → `BV_VOICEMAIL`)
+
+`POST clients/{clientId}/outcomes` avec `{outcome: "BV", note?}`
+(`Note::TYPE_BV`, `CallWorkflowService::handleRecall`) :
+
+1. **Déclencheur** : l'employé passe la réservation de ce client en `BV` ; une
+   **réservation de cet employé est obligatoire** (sinon `422`).
+2. **Réservation** : `status = BV_VOICEMAIL`, compteur `bv_count++`.
+3. **Client** : `status = RESERVED` (valeur stockée) → **`display_status =
+   IN_PROGRESS` (« En cours de traitement »)**, valeur **dérivée** et jamais
+   stockée (§2) : `IN_PROGRESS` ne figure pas dans l'énumération
+   `clients.status` du modèle (docs/models.puml), c'est la qualification d'un
+   client `RESERVED` dont la dernière réservation est `BV_VOICEMAIL` ou
+   `CALL_BACK`.
+4. **Rappel automatique** : une ligne `rappels` est créée (`client_id`,
+   `comercial_id`, `reservation_id`, `reminder_date = now + 3 jours`,
+   `CallWorkflowService::RECALL_DAYS = 3`), après annulation d'un éventuel
+   rappel précédent de la même réservation (un seul à la fois).
+5. **Note** : `type = BV`, `description` = saisie de l'employé (`null` si
+   vide), `sender_id` = **identifiant de l'employé**, `reservation_id` = la
+   réservation passée en `BV_VOICEMAIL`.
+6. **3e tentative** (condition imbriquée) : si `bv_count >= 3`
+   (`BV_ATTEMPTS_LIMIT`), le client passe `UNAVAILABLE` avec
+   `returned_at = now + 21 jours` (`TEMP_BLOCK_DAYS`), la réservation reste
+   `BV_VOICEMAIL` (**jamais supprimée**), le rappel est **annulé** (traitement
+   manuel depuis « Rappels » / « Auto-rappels ») et une **seconde note
+   automatique** est journalisée : `type = BV`,
+   `sender_id` = l'employé qui a fait passer la réservation en `BV`,
+   `reservation_id` = cette réservation,
+   `description` = « Auto indisponible après 3 BV, retour 21 j ». Même
+   traitement lorsqu'un **rappel expiré** (cron `clients:process-timeouts`)
+   porte le compteur au 3e essai : `handleRecallExpired()` appelle le même
+   `blockTemporarily()`, la note reste émise par l'employé concerné.
+
+### 3.4 Cas 6 — mise en liste noire manuelle
+
+Deux déclencheurs, **le même chemin** (`CallWorkflowService::apply` avec
+`Note::TYPE_BLACKLISTED`, dans une transaction, sans réservation requise) :
+
+* `POST clients/{clientId}/blacklist` `{note?}` (commercial connecté) ;
+* `POST commercials/clients/{id}/blacklist` `{note?}` (admin / super admin).
+
+1. **Déclencheur** : l'utilisateur blacklist le client à la main depuis la
+   fiche (bouton « Liste noire »), motif **optionnel**.
+2. **Client** : `status = BLACKLISTED`, `is_blacklisted = true`,
+   `returned_at = null` — restriction **permanente** : le cron
+   `clients:reactivate` ne réactive que les `UNAVAILABLE`, seul l'**unblock
+   admin** peut lever la liste noire.
+3. **Effets** : rappels du client annulés ; les **réservations sont
+   conservées** (elles deviennent inactives via le statut client).
+4. **Note** : `type = BLACKLISTED`, `description` = motif de l'utilisateur
+   (`null` si vide, 8 mots max), `sender_id` = **l'utilisateur qui a blacklisté**
+   (l'admin compris, jamais `SYSTEM`).
+
+⚠️ À ne pas confondre avec l'**auto-blacklist** du cas 3 (§3.2 point 5) :
+là, la note `BLACKLISTED` est **système** (« Tous les employés actifs ont
+répondu NON. ») et porte sur le client ; ici elle est **humaine** et porte le
+motif.
 
 ## 4. Rappels (« Suite appel »)
 
@@ -166,10 +305,12 @@ La note est **optionnelle sur toutes les issues** (y compris BLACKLISTED).
   (champ `datetime-local`, obligatoire, dans le futur).
 * Rappel expiré **sans action** (`clients:process-timeouts`, toutes les 10 min) :
   le compteur correspondant est incrémenté, **le rappel est supprimé** et **la
-  réservation n'est jamais supprimée**. Si compteur >= 2 → client `UNAVAILABLE`
-  21 jours ; sinon le client réapparaît dans les listes (à rappeler
-  manuellement). Un rappel portant sur un client `BLACKLISTED` est simplement
-  retiré (aucun compteur).
+  réservation n'est jamais supprimée**. Compteur **BV** >= 3 → client
+  `UNAVAILABLE` 21 jours + note automatique `type = BV` de l'employé concerné
+  (§3.3) ; sinon le client réapparaît dans les listes (à rappeler
+  manuellement). Un compteur **CALL_BACK** n'a **aucun seuil** : le rappel
+  expiré est retiré sans bloquer le client. Un rappel portant sur un client
+  `BLACKLISTED` est simplement retiré (aucun compteur).
 * **Deux pages séparées** (`GET reminders?type=`) :
   * **« Rappels »** (`/reminders`, défaut `type=CALL_BACK`) : les rappels de
     réservations `CALL_BACK` ;
@@ -180,13 +321,40 @@ La note est **optionnelle sur toutes les issues** (y compris BLACKLISTED).
 
 ## 5. Réactivation
 
+### 5.1 Cas 7 — retour automatique (`returned_at` expiré)
+
 * `clients:reactivate` (horodaté **chaque heure**) : les clients
   `UNAVAILABLE` dont `returned_at <= now` repassent `AVAILABLE`
-  (`returned_at = null`) — **pour tous les employés** — et un événement
-  `notes` `RETURNED_TO_AVAILABLE` est journalisé avec `sender_id = 'SYSTEM'`.
-* Après un NO, le retour à 3 mois remet donc le client disponible **pour tout le
-  monde** (l'ancienne règle « sauf ceux qui l'ont réservé » ne s'applique plus :
-  la réservation NO n'est pas active).
+  (`returned_at = null`) — **pour tous les employés**. Couvre les 3 mois après
+  un NO comme les 21 jours après la 3e BV.
+* Statut et note sont écrits dans **une seule transaction** (jamais de client
+  réactivé sans trace).
+* **Note** : `type = RETURNED_TO_AVAILABLE`, `sender_id = 'SYSTEM'`,
+  `description` = « Client automatically returned to Available status on
+  {YYYY-MM-DD HH:MM:SS} after temporary restriction period. » (texte généré :
+  il n'est **pas** soumis à la limite des 8 mots, cf. §6).
+* **Réservations : aucune écriture.** Il n'existe pas de statut `REALIZED` dans
+  le modèle (`docs/models.puml` : `PENDING | YES | NO | BV_VOICEMAIL |
+  CALL_BACK`) ; un client `AVAILABLE` rend déjà toutes ses réservations
+  inactives, `Reservation::scopeActive()` exigeant un client `RESERVED` /
+  `CONFIRMED`. Le client peut donc être réservé à nouveau, et l'historique des
+  listes reste consultable.
+* Après un NO, le retour à 3 mois remet donc le client disponible **pour tout
+  le monde** (l'ancienne règle « sauf ceux qui l'ont réservé » ne s'applique
+  plus : la réservation NO n'est pas active).
+
+### 5.2 Cas 8 — déblocage manuel d'une liste noire
+
+* `POST liste-noire/{id}/debloquer` (admin / super admin uniquement — un
+  commercial reçoit `403`) : le client passe `BLACKLISTED` → `AVAILABLE`,
+  `is_blacklisted = false`, `returned_at = null`.
+* **Rappels supprimés et réservations vidées** (choix documenté : l'unblock est
+  la seule opération qui purge l'historique de réservation ; le simple
+  blacklisting, lui, ne supprime rien — §3.4).
+* **Note** : `type = RETURNED_TO_AVAILABLE`, `sender_id` = l'**admin** qui a
+  déblocké, `description` = « Client restauré AVAILABLE par {nom} » (repli sur
+  l'email puis l'id si le nom est absent ou trop composé, pour rester sous les
+  8 mots de toute saisie humaine).
 
 ## 6. Notes
 
@@ -199,13 +367,72 @@ La note est **optionnelle sur toutes les issues** (y compris BLACKLISTED).
 * `Note.description` (ex-`content`) : **8 mots maximum** à la création et à
   l'édition (`LimitsNoteWords`, `ValidationException` en français).
   Les notes legacy plus longues restent affichables (limite appliquée au save).
-* Notes optionnelles sur **toutes** les issues d'appel.
+  **Exception** : les descriptions **générées** (`sender_id = SYSTEM`, ex.
+  « Réservé par {prénom nom} le {YYYY-MM-DD HH:MM:SS} ») ne sont pas de la saisie humaine et ne
+  sont pas comptées (`Note::noteWordsAreLimited()`).
+* `Note.reservation_id` (nullable, `2026_09_29_000004`) : rattache une note à
+  la réservation qui l'a produite — l'événement `RESERVED` (cas 1) et les
+  issues d'appel (`YES` / `NO` / `BV` / `CALL_BACK`, cas 2 et suivants).
+* Notes optionnelles sur **toutes** les issues d'appel (`null` si laissé vide).
 * **Immuabilité** : seuls les commentaires (`type = NOTE`) sont modifiables /
   supprimables (`DELETE /notes/{id}` rejette les événements du workflow).
 * `due_date` et `call_duration_seconds` ont été supprimés : aucune écriture
   possible depuis l'UI.
 
 ## 7. Groupes de réservation
+
+### 7.1 Cas 1 — création initiale d'une réservation
+
+`POST clients/reserver` (contrôleur + `ReservationService::reserveClient`) —
+pour **chaque** client du lot, dans **une transaction unique** :
+
+1. **Validation** : le client doit **exister** et être `AVAILABLE`
+   (re-vérifié **sous verrou** `lockForUpdate` — la sélection du lot n'est
+   qu'une pré-sélection). Sinon : **aucune écriture**, conflit renvoyé
+   (`code` = `client_not_available` / `client_not_found` / `already_reserved`)
+   avec les **compteurs** `data.counts` (`requested` / `candidates` /
+   `reserved` / `conflicts`).
+2. **Réservation** : `Reservation` liée `client_id` + `comercial_id` +
+   `reservation_group_id`, `status = PENDING`.
+3. **Client** : `status = RESERVED`, `returned_at` vidé (`null`).
+4. **Note système** : `type = RESERVED`, `sender_id = SYSTEM`,
+   `reservation_id` = réservation créée,
+   `description` = « Réservé par {prénom nom de l'employé} le
+   {YYYY-MM-DD HH:MM:SS} » (le nom de l'employé, et **jamais** son `id` ; à
+   défaut de nom, son `email`).
+
+**Réponse `201`** : `group`, `requested`, `reserved`, `counts`, `conflicts`,
+`reservations`, `clients` (état mis à jour : `id`, `name`, `status`,
+`returned_at`, `display_status`) et `notes`.
+
+**Même requête que la page Prospects** : les entrées optionnelles `search`,
+`municipality`, `category`, `administrative_region`, `sort_by`, `sort_order`
+(identiques à `GET /clients`) passent par `Client::scopeProspectList()`,
+scope **partagé** par la page et la réservation — le lot réservé est
+exactement ce que l'employé voit à l'écran, dans le même ordre (défaut :
+`created_at desc`). Le modal frontend envoie les filtres/tris courants de la
+page. S'y ajoutent les règles métier : pas de liste noire, client réellement
+disponible, aucune réservation active, et pas de prospect déjà traité en
+`NO` / `BV` par cet employé.
+
+**Garde de traitement** (« finir ses listes avant d'en ouvrir une autre ») :
+tant que l'employé a au moins **une réservation `PENDING`** (prospects non
+traités), `POST clients/reserver` répond **`409`** :
+
+```json
+{ "success": false, "error": "unfinished_treatment", "pending": 3, "message": "…" }
+```
+
+* ne comptent que les réservations **actives** (`Reservation::scopeActive()` :
+  statut `PENDING` / `YES` / `BV_VOICEMAIL` / `CALL_BACK` **et** client encore
+  `RESERVED` / `CONFIRMED`) : un client noirci ou libéré par l'admin n'est plus
+  traitable et ne bloque donc pas l'employé à vie ;
+* `GET reservations/active-count` renvoie en plus `pending` (réservations
+  encore `PENDING`) et `can_reserve` (`pending === 0`) ; la page Prospects
+  désactive le bouton « Réserver » tant que `can_reserve` est `false` et
+  affiche « N prospect(s) à traiter dans vos listes » à côté.
+
+### 7.2 Groupes
 
 * Création : `POST clients/reserver` avec `{count}` — **sans nom** : le champ
   « Nom de la liste » a été retiré du modal ; `group_name` reste accepté en
@@ -216,22 +443,51 @@ La note est **optionnelle sur toutes les issues** (y compris BLACKLISTED).
 * Renommage : `PATCH reservation-groups/{id}` `{name}` — propriétaire ou admin.
 * **Page liste de réservation (détail)** :
   * édition inline du nom de la liste ;
-  * **masquage automatique** des lignes avec rappel planifié (`recall_at` non nul) —
-    gérées depuis les pages « Rappels » / « Auto-rappels » (compteur
-    « x rappel(s) masqué(s) ») ;
-  * couleur de fond (*trail row*) sur les lignes de suivi (`BV_VOICEMAIL` /
-    `CALL_BACK` sans rappel planifié).
+  * **aucun masquage** : toutes les réservations de la liste sont affichées,
+    y compris celles avec rappel planifié (BV / À rappeler) — la date de
+    retour est montrée dans la colonne `Rappel` (`Retour le jj/mm/aaaa`),
+    l'en-tête rappelle « N rappel(s) planifié(s) » (pages « Rappels » /
+    « Auto-rappels »). Les lignes **n'apparaissent plus jamais** « en moins »
+    qu'à la colonne `Clients` de « Mes listes » ;
+  * **barre de badges de statut de réservation**, de **même structure** que
+    `ProspectKpis` (page « Tous les prospects ») : `Tous` → `En attente` →
+    `Confirmé` → `Refusé` → `Boîte vocale` → `À rappeler` ; sélection
+    **multiple** (`Tous` retire tout), couleur pleine à la sélection,
+    **tous les compteurs affichés même à 0** (calculés sur **toutes** les
+    lignes de la liste : `Tous` = `clients_count`, `Boîte vocale` = `bv_count`) ;
+    **`En attente` est sélectionnée par
+    défaut à l'ouverture** et le tableau n'affiche que ces lignes ;
+  * **tri** : les lignes **« En attente » (`PENDING`) passent toujours en
+    tête**, les autres statuts gardent l'ordre du serveur (`created_at` desc)
+    — donc `Confirmé` → `Refusé` → `Boîte vocale` → `À rappeler` ;
+  * colonnes `Prospect` / `Téléphone` / `Municipalité` / **`État` = statut de
+    réservation** (`ReservationStatusBadge`) et non plus le statut client /
+    **`Rappel`** — la colonne `Traitement` a été **supprimée** ;
+    **`État` affiche `—` (pas de badge) quand la réservation est `PENDING`**,
+    dans le tableau comme dans la carte mobile : la ligne est déjà en gris
+    `row-pending` et le badge « En attente » de la barre porte l'info ;
+  * lignes **« En attente »** (`PENDING`) : fond gris `row-pending`
+    (`--row-highlight` : `#c5c5c5` en clair, `#3f3f46` en sombre) — même
+    traitement que la liste courante de « Mes listes ». Le *trail row* gris
+    des lignes de suivi (`BV_VOICEMAIL` / `CALL_BACK`)
+    reste tel quel.
 * **Page « Mes listes » (tableau)** — compteurs et employé calculés par le
-  serveur (`GET reservation-groups`), affichés automatiquement :
-  * `Clients` = `reservations as clients_count` (réservations de la liste),
-    `Demandé` = `total` ;
-  * `Traités` = statuts `YES + NO + BV_VOICEMAIL + CALL_BACK`, `Restant` =
-    `PENDING` (les deux retombent sur `Clients`) ;
-  * colonnes `OUI` / `NON` / `BV` / `Injoinable` (clés JSON historiques
-    `oui_count` / `non_count` / `bv_count` / `injoinable_count`, alimentées
-    par les nouveaux statuts) ;
-  * `Employé` = **jointure** sur `users` (`first_name + last_name`, repli sur
-    `email`) et `Créé le` = `created_at` du groupe.
+  serveur (`GET reservation-groups`), affichés automatiquement. Colonnes
+  épurées (badge de statistiques « Listes » et colonnes `Demandé`,
+  `Restant`, `Injoinable`, `Employé`, `Créé le` **supprimés**) :
+  * `Liste` (ancien `Nom`) = **employé + date de création**, affichés
+    dynamiquement depuis la jointure `comercial` + `created_at` — le champ
+    `name` sauvegardé n'est plus affiché (il reste modifiable via
+    `PATCH reservation-groups/{id}`) ;
+  * `Clients` = `reservations as clients_count` ; `État` (ancien `Traités`)
+    = `traites_count / clients_count` ;
+  * colonnes `OUI` / `NON` / `BV` / `À rappeler` (statut `CALL_BACK`, clé
+    JSON historique `injoinable_count`) / `Blacklist` =
+    `reservations as blacklist_count` (réservations dont le client a
+    `is_blacklisted = true`) ;
+  * **liste courante** = la plus récente (1re ligne de la 1re page) : classe
+    `row-current` → fond `--row-highlight` (`#c5c5c5` en clair, `#3f3f46` en
+    sombre, `styles/theme.css`), texte par défaut pour rester lisible.
 
 ## 8. Recherche multi-critères (F-22)
 
@@ -270,6 +526,12 @@ Sur **Prospects (commercial)** et **Prospect list (admin)** :
   commercial connecté (`GET reservations/active-count`, actualisé chaque minute) ;
   badge sur « Rappels » = rappels `CALL_BACK` échus ; badge sur
   « Auto-rappels » = rappels `BV` échus (`GET reminders/count?type=`).
+* **Bouton « Réserver » (page Prospects, commercial)** : désactivé tant que
+  l'employé a des réservations encore `PENDING` (prospects non traités), avec
+  « N prospect(s) à traiter dans vos listes » à côté du bouton — même règle
+  que le serveur (`409 unfinished_treatment`, §7.1) ; le compteur vient de
+  `GET reservations/active-count` (`pending` / `can_reserve`) et se rafraîchit
+  à chaque changement de réservation.
 * **Prospect list (admin)** : colonne « Retour » avec compte à rebours concis pour
   `UNAVAILABLE` (`returned_at`) : « 2 mois 3j », « 18j 04h », « 5h 30m ».
 * Badges statut client : Disponible / Réservé / Confirmé / Indisponible / Liste noire.
@@ -287,26 +549,68 @@ Sur **Prospects (commercial)** et **Prospect list (admin)** :
   `returned_at` est renseigné (NO : 3 mois, 2 BV/CALL_BACK : 21 j).
   Nouvelle colonne **« Statut »** (170 px) ajoutée à `ProspectTable`
   (Prospects + Prospect list) ; le composant est aussi utilisé par les cartes
-  mobiles, le détail d'une liste, l'historique employé et la fiche client.
-* **Overview KPI** — barre de **badges compacts** (une ligne, `flex-wrap`,
-  hauteur ~32 px) juste au-dessus des filtres, sur **Prospects (commercial)**
-  et **Prospect list (admin)**, alimentée par `GET clients/overview` (tous
-  rôles, chiffres **globaux**, recalculés à chaque appel). Pastille couleur +
-  libellé + valeur (chiffres tabulaires) :
-  1. *Prospects* = hors liste noire · suffixe « X dispo · Y noirs » ;
-  2. *Réservés* = total ;
-  3. *Réservés traités* et 4. *Réservés non traités* = `x / total réservés` ;
-  5. *Succès / traités* et 6. *En cours / traités* = `x / total traités` + % ;
-  le survol d'un badge rappelle sa définition (`title`).
+  mobiles, le détail d'une liste et l'historique employé (la fiche client le
+  réserve aux **admins**, voir ci-dessous).
+* **Fiche client (`/prospects/{id}`) — badge du bandeau, selon le rôle** :
+  * `ADMIN` / `SUPER_ADMIN` → `ClientStatus` = **statut client** affiché
+    (couleur par statut, « Liste noire » neutre, compte à rebours) ;
+  * `COMERCIAL` → `ReservationStatusBadge` = **statut de sa réservation en
+    cours** (`client.my_reservation.status` — `En attente` / `Oui` / `Non` /
+    `Boîte vocale` / `À rappeler`) ;
+  * **client en liste noire → aucun badge** pour le commercial (le bloc est
+    retiré complètement, `ClientDetail/index.jsx`) ;
+  * pas de réservation active du connecté → `my_reservation = null` → aucun
+    badge (`ReservationStatusBadge` rend `null` sans `status`).
+* **Filtres par statut** (ancienne « barre Overview KPI ») — barre de
+  **badges compacts** (une ligne, `flex-wrap`, hauteur ~32 px) juste au-dessus
+  des filtres, sur **Prospects (commercial)** et **Prospect list (admin)**,
+  alimentée par `GET clients/overview` (tous rôles, chiffres **globaux**,
+  recalculés à chaque appel). Elle contient **exactement 5 badges**, dans
+  **cet ordre, identique sur les deux pages** :
+  1. *Tous* = `prospects.system` (total des clients) ;
+  2. *Disponible*, 3. *Réservé*, 4. *Non disponible*, 5. *Blacklisté* = compteurs
+     `by_status`, **toujours affichés, même avec un compte à 0**.
+  Le survol d'un badge rappelle sa définition (`title`).
 
-  **Traité** = au moins une issue d'appel (note `YES` / `NO` / `BV` /
-  `CALL_BACK`) ; **en cours** = traité mais encore `RESERVED` (BV / à
-  rappeler) ; **succès** = traité et `CONFIRMED` (issue `YES`).
+  Ce sont ces badges qui sont **LE filtre de statut** de « Prospect list
+  (admin) » (le menu déroulant « Statut » de la barre de filtres a été
+  supprimé, ainsi que les anciens badges KPI) :
 
-  **Badges à 0 masqués** : un badge dont le compte principal vaut `0` n'est
-  pas rendu (sur une base sans réservation, la barre ne montre que
-  *Prospects*), et les segments de suffixe à 0 (« 0 noir », « 0 % ») sont
-  retirés ; si aucun badge ne reste, la barre disparaît.
+  * **sélection multiple** — un clic ajoute le statut, un second clic le
+    retire ; plusieurs statuts peuvent être actifs à la fois (`aria-pressed`),
+    la requête envoie `status=A,B` (un tableau `status[]` est aussi accepté,
+    valeurs validées contre `Client::STATUSES`) ;
+  * **couleur pleine à la sélection, sans bordure violette** : chaque badge
+    garde **sa** couleur de fond — *Tous* `blue-600`, *Disponible*
+    `emerald-700`, *Réservé* `amber-700`, *Non disponible* `destructive`,
+    *Blacklisté* `--status-badge` (noir en clair / gris en sombre) — texte et
+    icône passés en contraste (`activeFg`) ; à l'inactif, pastille neutre
+    `bg-card` avec pastille d'icône teintée ;
+  * *Tous* retire **toutes** les sélections en un clic (état actif = aucun
+    filtre de statut actif) ;
+  * `Blacklisté` filtre sur `is_blacklisted` (même source que le compteur
+    `by_status`), les autres sur `status` **et** `is_blacklisted = false` :
+    une ligne blacklistée reste dans le seau *Blacklisté* même si son `status`
+    vaut encore `AVAILABLE` ;
+  * chaque compteur a **exactement la même définition** que le filtre serveur
+    (`by_status` ↔ `GET commercials/clients?status=`) : le chiffre affiché vaut
+    le nombre de lignes renvoyées après clic ;
+  * sur **Prospects (commercial)**, le filtre est **figé sur *Disponible*** :
+    les 5 badges s'affichent dans le même ordre, *Disponible* est sélectionné
+    et **aucun n'est cliquable** (`locked`, curseur interdit, infobulle
+    « filtre figé ») — cette liste ne contient que des prospects disponibles
+    et n'accepte pas le paramètre `status`.
+
+  Les compteurs sont **globaux** : ils ne suivent pas les filtres recherche /
+  municipalité / catégorie / région de la liste.
+
+  Anciens badges KPI **retirés** de l'affichage (les compteurs restent
+  produits par `clients/overview`, inutilisés côté UI) : *Prospects*
+  (dispo / total), *Réservés*, *Réservés traités*, *Réservés non traités*,
+  *Succès / traités*, *En cours / traités*. Rappel des définitions : **traité**
+  = au moins une issue d'appel (note `YES` / `NO` / `BV` / `CALL_BACK`) ;
+  **succès** = traité et `CONFIRMED` (issue « YES ») ; **en cours** = traité
+  mais encore `RESERVED`.
 * **Mes listes** — mêmes badges compacts (composant partagé
   `pages/shared/components/KpiPill`, celui de l'overview) :
   * en-tête de `/mes-listes` → badge *Listes* = `pagination.total` (total
@@ -354,8 +658,17 @@ Les quatre filtres ci-dessus répondent `{success, data: [...]}` : valeurs
 par `Client::distinctValues()` (liste blanche `Client::DISTINCT_COLUMNS`),
 **mises en cache une semaine** et invalidées dès qu'un client change.
 `clients/overview` répond
-`{success, data: {prospects, reserved, processed}}` et n'est **pas** caché :
-les compteurs doivent bouger à chaque réservation et issue d'appel.
+`{success, data: {prospects, reserved, processed, by_status}}` et n'est **pas**
+caché : les compteurs doivent bouger à chaque réservation et issue d'appel.
+`by_status` contient une entrée par statut **courant** (`AVAILABLE` /
+`RESERVED` / `CONFIRMED` / `UNAVAILABLE` = clients portant ce `status` et **non**
+blacklistés ; `BLACKLISTED` = drapeau `is_blacklisted`, quel que soit le `status`) :
+c'est **exactement la définition du filtre `status`** de
+`GET commercials/clients` (qui accepte `status=A,B` ou `status[]`, valeurs
+validées contre `Client::STATUSES`) — le chiffre affiché sur un badge vaut
+donc le nombre de lignes renvoyées après clic. Les statuts historiques hors
+`Client::STATUSES` sortent des badges : la somme des 4 badges peut donc
+rester inférieure à `prospects.system` (total affiché par le badge *Tous*).
 
 Toutes ces routes sont derrière `auth:sanctum` (**tous les rôles**, sans
 `CheckRole`).

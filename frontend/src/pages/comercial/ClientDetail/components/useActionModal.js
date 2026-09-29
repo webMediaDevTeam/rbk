@@ -3,10 +3,10 @@ import { toast } from 'sonner'
 import { useStoreOutcome } from '../useOutcomes.js'
 
 const OUTCOMES = [
-  { value: 'YES', label: 'Oui — intéressé', recall: 'none' },
-  { value: 'NO', label: 'Non — refuse', recall: 'none' },
+  { value: 'YES', label: 'Oui', recall: 'none' },
+  { value: 'NO', label: 'Non', recall: 'none' },
   { value: 'BV', label: 'Boîte vocale', recall: 'auto' },
-  { value: 'CALL_BACK', label: 'Injoignable (à rappeler)', recall: 'custom' },
+  { value: 'CALL_BACK', label: 'à rappeler', recall: 'custom' },
 ]
 
 /** Valeur locale au format `datetime-local` (sans fuseau). */

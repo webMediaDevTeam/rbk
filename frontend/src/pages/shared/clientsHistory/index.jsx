@@ -12,8 +12,8 @@ export default function ClientsHistoryPage() {
     isLoading,
     search,
     handleSearchChange,
-    status,
-    handleStatusChange,
+    statuses,
+    handleStatusToggle,
     municipality,
     handleMunicipalityChange,
     categories,
@@ -50,11 +50,12 @@ export default function ClientsHistoryPage() {
         </div>
       </div>
 
-      <ProspectKpis />
+      {/* Badges de statut = filtre (sélection multiple, couleur pleine pour
+          l'état sélectionné) : ils remplacent l'ancien menu « Statut ». */}
+      <ProspectKpis statusFilters={statuses} onStatusFilterChange={handleStatusToggle} />
 
       <ClientsHistoryToolbar
         search={search} setSearch={handleSearchChange}
-        status={status} setStatus={handleStatusChange}
         municipality={municipality} setMunicipality={handleMunicipalityChange}
         categories={categories} setCategories={handleCategoryChange}
         region={region} setRegion={handleRegionChange}

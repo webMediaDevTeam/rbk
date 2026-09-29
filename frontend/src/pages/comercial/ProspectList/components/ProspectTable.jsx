@@ -3,39 +3,38 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
-import { respondentsText, categoriesText } from './prospectFormat'
+import { respondentsText } from './prospectFormat'
 
+/**
+ * Tableau de la liste de prospects — **sans défilement horizontal**.
+ *
+ * Le tableau occupe 100 % de la largeur disponible et les largeurs de colonnes
+ * sont exprimées en % (`table-fixed`) : toutes les colonnes restent donc
+ * visibles, quelle que soit la taille de l'écran. Les textes plus longs que
+ * leur cellule sont tronqués (`truncate`) et restent accessibles au survol via
+ * l'attribut `title` — c'est ce qui évite de réintroduire un `overflow-x`.
+ */
 export default function ProspectTable({ clients, startIndex = 0, sortBy, sortOrder, onSort, onViewDetail, showViewButton = true }) {
-  // Largeurs fixes par colonne (table-fixed) : le tableau garde sa largeur réelle
-  // et le conteneur défile horizontalement (overflow-x) au lieu de couper les colonnes.
-  const minWidth =
-    60 + 240 + 200 + 150 + 150 + 180 + 220 + 140 + 170 +
-    (showViewButton ? 60 : 0)
+  // La colonne « Statut » récupère la place du bouton « Voir » quand il est
+  // masqué, pour que la somme des largeurs reste à 100 %.
+  const statusWidth = showViewButton ? 'w-[17%]' : 'w-[22%]'
 
   return (
     <div className="rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
-      <div className="w-full overflow-x-auto" data-slot="prospect-scroll">
-        <Table className="table-fixed" style={{ minWidth }}>
+      <div className="w-full" data-slot="prospect-table">
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow className="bg-background hover:bg-background">
-              <TableHead className="w-[60px] text-center">N°</TableHead>
-              <TableHead className="w-[240px]">
+              <TableHead className="w-[5%] text-center">N°</TableHead>
+              <TableHead className="w-[30%]">
                 <SortHeader column="name" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
-Prospect
+                Prospect
                 </SortHeader>
               </TableHead>
-              <TableHead className="w-[200px]">Répondants</TableHead>
-              <TableHead className="w-[150px]">N° de licence</TableHead>
-              <TableHead className="w-[150px]">NEQ</TableHead>
-              <TableHead className="w-[180px]">Catégorie</TableHead>
-              <TableHead className="w-[220px]">
-                <SortHeader column="email" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>
-                  Contact
-                </SortHeader>
-              </TableHead>
-              <TableHead className="w-[140px]">Municipalité</TableHead>
-              <TableHead className="w-[170px]">Statut</TableHead>
-              {showViewButton && <TableHead className="w-[60px]" />}
+              <TableHead className="w-[25%]">Répondants</TableHead>
+              <TableHead className="w-[18%]">N° de licence</TableHead>
+              <TableHead className={statusWidth}>Statut</TableHead>
+              {showViewButton && <TableHead className="w-[5%]" />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -50,13 +49,15 @@ Prospect
                 </TableCell>
                 <TableCell>
                   <div
-                    className="flex items-center gap-2.5"
+                    className="flex w-full min-w-0 items-center gap-2.5"
                     title={[c.enterprise_name, c.name].filter(Boolean).join(' — ')}
                   >
                     <UserAvatar user={c} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate">{c.enterprise_name ?? '—'}</p>
-                      <p className="truncate font-light text-small">{c.name}</p>
+                      <p className="truncate">{c.enterprise_name || c.name || '—'}</p>
+                      <small className="text-muted-foreground">
+                        {c.email  || '—'}
+                      </small>
                     </div>
                   </div>
                 </TableCell>
@@ -70,34 +71,14 @@ Prospect
                     {c.licence_number ?? '—'}
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground tabular-nums">
-                  <div className="truncate" title={c.neq ?? undefined}>
-                    {c.neq ?? '—'}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  <div className="truncate" title={categoriesText(c) ?? undefined}>
-                    {categoriesText(c) ?? '—'}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  <div className="truncate" title={c.phone ?? undefined}>
-                    {c.phone ?? '—'}
-                  </div>
-                  <div className="truncate" title={c.email ?? undefined}>
-                    {c.email ?? '—'}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  <div className="truncate" title={c.municipality ?? undefined}>
-                    {c.municipality ?? '—'}
-                  </div>
-                </TableCell>
-                <TableCell>
+                {/* `whitespace-normal` : le badge peut passer sur deux lignes
+                    plutôt que de déborder de sa cellule. */}
+                <TableCell className="whitespace-normal overflow-hidden">
                   <ClientStatus
                     status={c.display_status ?? c.status}
                     isBlacklisted={c.is_blacklisted}
                     returnedAt={c.returned_at}
+                    className="w-full max-w-full"
                   />
                 </TableCell>
                 {showViewButton && (

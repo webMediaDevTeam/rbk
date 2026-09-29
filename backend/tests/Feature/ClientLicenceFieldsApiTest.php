@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Note;
+use App\Models\Reservation;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -72,7 +75,7 @@ class ClientLicenceFieldsApiTest extends TestCase
     {
         $this->makeN8nClient();
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         Client::create([
             'name' => 'Doublon',
@@ -95,7 +98,6 @@ class ClientLicenceFieldsApiTest extends TestCase
             ->assertJsonPath('data.client.intervenant_name', 'Entreprise Exemple Inc.')
             ->assertJsonPath('data.client.licence_status', 'valide')
             ->assertJsonPath('data.client.neq', '1178901234')
-            ->assertJsonPath('data.client.phone', '514-555-0199')
             ->assertJsonPath('data.client.full_address', '123 Rue Principal')
             ->assertJsonPath('data.client.municipality', 'Montréal')
             ->assertJsonPath('data.client.administrative_region', 'Montérégie')
@@ -109,6 +111,53 @@ class ClientLicenceFieldsApiTest extends TestCase
 
         $this->assertStringStartsWith('2026-01-01', (string) $json['licence_start_date']);
         $this->assertStringStartsWith('2027-01-01', (string) $json['licence_end_date']);
+
+        // Règle de visibilité : le numéro n'est pas envoyé quand le connecté
+        // n'a pas le droit de le voir (client `AVAILABLE`, donc sans
+        // réservation courante). La clé est absente, pas `null`.
+        $this->assertArrayNotHasKey('phone', $json);
+    }
+
+    public function test_phone_is_masked_unless_the_viewer_holds_the_current_reservation(): void
+    {
+        $commercial = $this->makeUser('COMERCIAL');
+        $colleague = $this->makeUser('COMERCIAL');
+        $client = $this->makeN8nClient();
+
+        Sanctum::actingAs($commercial);
+
+        // 1. Client `AVAILABLE` : masqué.
+        $this->getJson("/api/v1/clients/{$client->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.client.phone');
+
+        // 2. Client `RESERVED` par un autre commercial : masqué.
+        $client->update(['status' => Client::STATUS_RESERVED]);
+        $client->reservations()->create([
+            'comercial_id' => $colleague->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        $this->getJson("/api/v1/clients/{$client->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.client.phone');
+
+        // 3. Le connecté détient la dernière réservation : visible.
+        $client->reservations()->create([
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        $this->getJson("/api/v1/clients/{$client->id}")
+            ->assertOk()
+            ->assertJsonPath('data.client.phone', '514-555-0199');
+
+        // 4. Retour `AVAILABLE` (fin de restriction) : masqué à nouveau.
+        $client->update(['status' => Client::STATUS_AVAILABLE]);
+
+        $this->getJson("/api/v1/clients/{$client->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.client.phone');
     }
 
     public function test_admin_client_detail_returns_the_same_licence_block(): void
@@ -171,12 +220,12 @@ class ClientLicenceFieldsApiTest extends TestCase
 
         // Recherche par chacune des colonnes affichées (tableau + cartes).
         $terms = [
-            'Bâtiments'    => 'nom d\'entreprise',
-            '9876543210'   => 'NEQ',
-            'LIC-777'      => 'numéro de licence',
-            'Suzanne'      => 'répondants',
-            'Résidentiel'  => 'catégorie',
-            'cat42'        => 'catégories autorisées',
+            'Bâtiments' => 'nom d\'entreprise',
+            '9876543210' => 'NEQ',
+            'LIC-777' => 'numéro de licence',
+            'Suzanne' => 'répondants',
+            'Résidentiel' => 'catégorie',
+            'cat42' => 'catégories autorisées',
         ];
 
         foreach ($terms as $term => $label) {
@@ -221,10 +270,10 @@ class ClientLicenceFieldsApiTest extends TestCase
         $client = $this->makeN8nClient();
 
         // La liste admin ne montre que les clients avec historique d'appel.
-        \App\Models\Note::create([
+        Note::create([
             'client_id' => $client->id,
             'sender_id' => $commercial->id,
-            'type' => \App\Models\Note::TYPE_YES,
+            'type' => Note::TYPE_YES,
         ]);
 
         Sanctum::actingAs($admin);

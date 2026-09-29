@@ -76,8 +76,8 @@ const ROLE_NAV = {
       items: [
         { title: 'Tous les prospects', path: '/prospects', icon: UserSearch },
         { title: 'Mes listes', path: '/mes-listes', icon: ListChecks },
-        { title: 'Rappels', path: '/reminders', icon: Bell },
-        { title: 'Auto-rappels', path: '/auto-rappels', icon: Voicemail },
+        { title: 'à Rappels', path: '/reminders', icon: Bell },
+        { title: 'Boite vocale', path: '/auto-rappels', icon: Voicemail },
       ],
     },
     {

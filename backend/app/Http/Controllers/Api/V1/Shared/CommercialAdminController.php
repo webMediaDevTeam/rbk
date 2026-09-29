@@ -1,20 +1,20 @@
 <?php
+
 namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use App\Models\User;
 use App\Models\Client;
 use App\Models\Note;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
+use App\Models\User;
+use App\Services\CallWorkflowService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CommercialAdminController extends Controller
 {
-    public function __construct(private \App\Services\CallWorkflowService $workflow)
-    {
-    }
+    public function __construct(private CallWorkflowService $workflow) {}
 
     public function index()
     {
@@ -23,15 +23,17 @@ class CommercialAdminController extends Controller
             $res = Reservation::where('comercial_id', $u->id)->count();
             $calls = Note::where('sender_id', $u->id)->calls()->count();
             $callsOui = Note::where('sender_id', $u->id)->where('type', Note::TYPE_YES)->count();
+
             return [
                 'id' => $u->id,
-                'name' => trim(($u->employee?->first_name ?? $u->first_name ?? '') . ' ' . ($u->employee?->last_name ?? $u->last_name ?? '')) ?: $u->email,
+                'name' => trim(($u->employee?->first_name ?? $u->first_name ?? '').' '.($u->employee?->last_name ?? $u->last_name ?? '')) ?: $u->email,
                 'email' => $u->email,
                 'reservations' => $res,
                 'calls' => $calls,
                 'calls_oui' => $callsOui,
             ];
         });
+
         return response()->json(['data' => $data]);
     }
 
@@ -59,9 +61,9 @@ class CommercialAdminController extends Controller
             $like = "%{$search}%";
             $historyQuery->where(function ($q) use ($like) {
                 $q->where('name', 'LIKE', $like)
-                  ->orWhere('email', 'LIKE', $like)
-                  ->orWhere('phone', 'LIKE', $like)
-                  ->orWhere('municipality', 'LIKE', $like);
+                    ->orWhere('email', 'LIKE', $like)
+                    ->orWhere('phone', 'LIKE', $like)
+                    ->orWhere('municipality', 'LIKE', $like);
             });
         }
 
@@ -72,6 +74,7 @@ class CommercialAdminController extends Controller
 
         $historique = $clientsPage->getCollection()->map(function ($c) {
             $last = $c->notes->first();
+
             return [
                 'id' => $c->id,
                 'name' => $c->name ?? '—',
@@ -106,9 +109,9 @@ class CommercialAdminController extends Controller
             ],
             'employee' => [
                 'prenom' => $user->employee?->first_name ?? $user->first_name,
-                'nom'    => $user->employee?->last_name ?? $user->last_name,
+                'nom' => $user->employee?->last_name ?? $user->last_name,
                 'telephone' => $user->employee?->phone ?? $user->phone,
-                'image_dp'  => $user->employee?->image_dp,
+                'image_dp' => $user->employee?->image_dp,
                 'image_dp_url' => $user->employee?->image_dp
                     ? "{$base}/storage/avatars/{$user->employee->image_dp}" : null,
                 'email' => $user->email,
@@ -131,9 +134,9 @@ class CommercialAdminController extends Controller
                 'clients' => $historique,
                 'pagination' => [
                     'current_page' => $clientsPage->currentPage(),
-                    'last_page'    => $clientsPage->lastPage(),
-                    'per_page'     => $clientsPage->perPage(),
-                    'total'        => $clientsPage->total(),
+                    'last_page' => $clientsPage->lastPage(),
+                    'per_page' => $clientsPage->perPage(),
+                    'total' => $clientsPage->total(),
                 ],
             ],
         ]);
@@ -153,25 +156,27 @@ class CommercialAdminController extends Controller
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
                 $q->where('name', 'LIKE', $like)
-                  ->orWhere('enterprise_name', 'LIKE', $like)
-                  ->orWhere('email', 'LIKE', $like)
-                  ->orWhere('phone', 'LIKE', $like)
-                  ->orWhere('municipality', 'LIKE', $like)
-                  ->orWhere('neq', 'LIKE', $like)
-                  ->orWhere('licence_number', 'LIKE', $like)
+                    ->orWhere('enterprise_name', 'LIKE', $like)
+                    ->orWhere('email', 'LIKE', $like)
+                    ->orWhere('phone', 'LIKE', $like)
+                    ->orWhere('municipality', 'LIKE', $like)
+                    ->orWhere('neq', 'LIKE', $like)
+                    ->orWhere('licence_number', 'LIKE', $like)
                   // Colonnes JSON : sous-chaîne via le scope dédié
                   // (voir Client::scopeOrWhereJsonTextLike).
-                  ->orWhereJsonTextLike('respondents', $like)
-                  ->orWhereJsonTextLike('categories', $like)
-                  ->orWhereJsonTextLike('authorized_categories', $like);
+                    ->orWhereJsonTextLike('respondents', $like)
+                    ->orWhereJsonTextLike('categories', $like)
+                    ->orWhereJsonTextLike('authorized_categories', $like);
             });
         }
 
         // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
 
-        if ($status = $request->input('status')) {
-            $query->where('status', $status);
-        }
+        // Filtre de statut : un **ou plusieurs** statuts à la fois, choisis
+        // par les badges « Tous + 4 statuts » de l'overview (le menu
+        // déroulant « Statut » a été supprimé). Même définition que les
+        // compteurs `by_status` → voir `Client::scopeFilterByStatuses()`.
+        $query->filterByStatuses($request->input('status'));
 
         // Filtres de listes (scopes Eloquent) : mêmes paramètres que la liste
         // commerciale — municipalité, catégorie et région administrative.
@@ -188,16 +193,16 @@ class CommercialAdminController extends Controller
         }
 
         $sortable = [
-            'name'             => 'name',
-            'email'            => 'email',
-            'phone'            => 'phone',
-            'status'           => 'status',
-            'municipality'     => 'municipality',
-            'created_at'       => 'created_at',
-            'updated_at'       => 'updated_at',
+            'name' => 'name',
+            'email' => 'email',
+            'phone' => 'phone',
+            'status' => 'status',
+            'municipality' => 'municipality',
+            'created_at' => 'created_at',
+            'updated_at' => 'updated_at',
             'licence_end_date' => 'licence_end_date',
         ];
-        $sortBy    = $request->input('sort_by', 'created_at');
+        $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = strtolower($request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
         if (array_key_exists($sortBy, $sortable)) {
             $query->orderBy($sortable[$sortBy], $sortOrder);
@@ -214,6 +219,7 @@ class CommercialAdminController extends Controller
 
         $clients = $clientsPage->getCollection()->map(function ($c) {
             $last = $c->notes->first();
+
             return [
                 'id' => $c->id,
                 'name' => $c->name ?? '—',
@@ -247,9 +253,9 @@ class CommercialAdminController extends Controller
                 'clients' => $clients,
                 'pagination' => [
                     'current_page' => $clientsPage->currentPage(),
-                    'last_page'    => $clientsPage->lastPage(),
-                    'per_page'     => $clientsPage->perPage(),
-                    'total'        => $clientsPage->total(),
+                    'last_page' => $clientsPage->lastPage(),
+                    'per_page' => $clientsPage->perPage(),
+                    'total' => $clientsPage->total(),
                 ],
             ],
         ]);
@@ -262,7 +268,7 @@ class CommercialAdminController extends Controller
     public function client(Request $request, $id)
     {
         $client = Client::with(['reservations.comercial', 'notes.sender'])->find($id);
-        if (!$client) {
+        if (! $client) {
             return response()->json(['message' => 'Client introuvable.'], 404);
         }
 
@@ -342,13 +348,10 @@ class CommercialAdminController extends Controller
         $client = Client::findOrFail($id);
 
         return DB::transaction(function () use ($client, $request, $validated) {
+            // Même chemin que le commercial : le service applique le statut
+            // `BLACKLISTED`, `is_blacklisted`, `returned_at = null`, annule
+            // les rappels et journalise la note (émetteur = l'admin).
             $this->workflow->apply($client, null, Note::TYPE_BLACKLISTED, $validated, $request->user());
-
-            $client->update([
-                'is_blacklisted' => true,
-                'status' => Client::STATUS_BLACKLISTED,
-                'returned_at' => null,
-            ]);
 
             return response()->json([
                 'success' => true,

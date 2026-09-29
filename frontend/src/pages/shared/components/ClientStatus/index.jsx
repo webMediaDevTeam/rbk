@@ -40,11 +40,11 @@ export function formatReturnCountdown(returnedAt) {
 const STYLES = {
   AVAILABLE: { label: 'Disponible', variant: 'success' },
   RESERVED: { label: 'Réservé', variant: 'warning' },
-  CONFIRMED: { label: 'Confirmé', variant: 'success' },
-  UNAVAILABLE: { label: 'Non disponible', variant: 'destructive' },
-  BLACKLISTED: { label: 'Liste noire', variant: 'neutral' },
+  CONFIRMED: { label: 'Oui', variant: 'success' },
+  UNAVAILABLE: { label: 'Non', variant: 'destructive' },
+  BLACKLISTED: { label: 'BlackList', variant: 'neutral' },
   // Statut affiché dérivé de la réservation en cours (jamais stocké) :
-  IN_PROGRESS: { label: 'En cours de traitement', variant: 'warning' },
+  IN_PROGRESS: { label: 'En traitement', variant: 'warning' },
   // Anciennes valeurs conservées pour données historiques non migrées :
   SUCCESS: { label: 'Confirmé', variant: 'success' },
   UNAVAILABLE_TEMP: { label: 'Non disponible', variant: 'destructive' },

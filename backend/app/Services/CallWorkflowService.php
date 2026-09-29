@@ -19,9 +19,11 @@ use Illuminate\Support\Facades\DB;
  *  - NO          -> client UNAVAILABLE, returned_at = now + 3 mois,
  *                   réservation NO + vérification d'auto-blacklist.
  *  - BV          -> le client reste RESERVED, bv_count++, rappel automatique
- *                   à 3 jours ; si bv_count >= 2 -> UNAVAILABLE 21 jours.
- *  - CALL_BACK   -> idem avec injoinable_count, mais le rappel est planifié à
- *                   la date/heure choisie par l'employé (recall_at).
+ *                   à 3 jours ; 3e tentative (BV_ATTEMPTS_LIMIT) ->
+ *                   UNAVAILABLE 21 jours + note automatique de l'employé.
+ *  - CALL_BACK   -> injoinable_count++ et rappel planifié par l'employé, mais
+ *                   **sans limite** : il peut enchaîner autant de rappels
+ *                   qu'il veut (CALL_BACK_ATTEMPTS_LIMIT = null).
  *  - BLACKLISTED -> client BLACKLISTED.
  *
  * Chaque issue est journalisée dans `notes` (type = événement, description =
@@ -39,18 +41,32 @@ class CallWorkflowService
     /** Indisponibilité après NO. */
     public const NON_BLOCK_MONTHS = 3;
 
-    /** Indisponibilité après 2 BV / 2 CALL_BACK. */
+    /** Indisponibilité après NO (3 mois) ou après épuisement des BV (21 jours). */
     public const TEMP_BLOCK_DAYS = 21;
 
-    /** Seuil de tentatives avant UNAVAILABLE. */
-    public const ATTEMPTS_LIMIT = 2;
+    /**
+     * BV : seuil de tentatives avant `UNAVAILABLE` 21 jours — le 3e voicemail.
+     */
+    public const BV_ATTEMPTS_LIMIT = 3;
+
+    /**
+     * « À rappeler » : **aucune limite** — le commercial peut toujours
+     * re-rappeler, le compteur `injoinable_count` est informatif seul.
+     */
+    public const CALL_BACK_ATTEMPTS_LIMIT = null;
+
+    /**
+     * Note d'épuisement des BV (8 mots max : l'émetteur est un employé, la
+     * limite de saisie s'applique comme pour toute note d'issue).
+     */
+    public const AUTO_BLOCK_DESCRIPTION = 'Auto indisponible après 3 BV, retour 21 j';
 
     /**
      * Applique une issue d'appel sur un client et retourne le message métier.
      *
-     * @param  array{note?: ?string, recall_at?: ?string} $validated `recall_at` :
-     *        date/heure du rappel pour CALL_BACK (ignoré pour les autres).
-     * @param  string $event un des `Note::TYPE_*` d'appel (YES/NO/BV/CALL_BACK/BLACKLISTED)
+     * @param  array{note?: ?string, recall_at?: ?string}  $validated  `recall_at` :
+     *                                                                 date/heure du rappel pour CALL_BACK (ignoré pour les autres).
+     * @param  string  $event  un des `Note::TYPE_*` d'appel (YES/NO/BV/CALL_BACK/BLACKLISTED)
      * @return array{message: string, client_status: string, blacklisted: bool}
      */
     public function apply(Client $client, ?Reservation $reservation, string $event, array $validated, User $actor): array
@@ -76,6 +92,9 @@ class CallWorkflowService
             // levée par le modèle, la transaction annule tout (422, rien écrit).
             Note::create([
                 'client_id' => $client->id,
+                // Rattachée à la réservation que l'événement fait bouger
+                // (YES, NO, BV, CALL_BACK) — colonne nullable.
+                'reservation_id' => $reservation?->id,
                 'sender_id' => $actor->id,
                 'type' => $event,
                 'description' => $note === '' ? null : $note,
@@ -106,8 +125,9 @@ class CallWorkflowService
 
     /**
      * Rappel échu sans action : échec automatique. Incrémente le compteur
-     * correspondant ; si >= 2 -> UNAVAILABLE 21 jours. Le rappel est retiré,
-     * la réservation n'est jamais supprimée.
+     * correspondant ; 3e BV -> UNAVAILABLE 21 jours + note automatique de
+     * l'employé. Un « à rappeler » n'a pas de seuil : le rappel est retiré,
+     * le client reste `RESERVED`. La réservation n'est jamais supprimée.
      *
      * @return bool true si le client a basculé en UNAVAILABLE
      */
@@ -128,14 +148,11 @@ class CallWorkflowService
                 : [Reservation::STATUS_BV_VOICEMAIL, 'bv_count'];
 
             $attempts = $this->bumpCounter($reservation, $counter);
+            $limit = $this->attemptsLimit($counter);
 
-            if ($attempts >= self::ATTEMPTS_LIMIT) {
-                $client->update([
-                    'status' => Client::STATUS_UNAVAILABLE,
-                    'returned_at' => Carbon::now()->addDays(self::TEMP_BLOCK_DAYS),
-                ]);
-                $reservation->update(['status' => $status]);
-                $rappel->delete();
+            if ($limit !== null && $attempts >= $limit) {
+                // 3e tentative : indisponible 21 jours pour tous.
+                $this->blockTemporarily($client, $reservation, $status, $counter);
 
                 return true;
             }
@@ -181,6 +198,7 @@ class CallWorkflowService
         if ($this->shouldAutoBlacklist($client)) {
             Note::create([
                 'client_id' => $client->id,
+                'reservation_id' => $reservation?->id,
                 'sender_id' => $reservation?->comercial_id ?? $actor->id,
                 'type' => Note::TYPE_BLACKLISTED,
                 'description' => 'Tous les employés actifs ont répondu NON.',
@@ -193,9 +211,9 @@ class CallWorkflowService
     }
 
     /**
-     * @param  string $reservationStatus Reservation::STATUS_BV_VOICEMAIL|STATUS_CALL_BACK
-     * @param  string $counter colonne compteur (`bv_count` / `injoinable_count`)
-     * @param  ?string $recallAtInput date choisie par l'employé (CALL_BACK) ; null = 3 jours
+     * @param  string  $reservationStatus  Reservation::STATUS_BV_VOICEMAIL|STATUS_CALL_BACK
+     * @param  string  $counter  colonne compteur (`bv_count` / `injoinable_count`)
+     * @param  ?string  $recallAtInput  date choisie par l'employé (CALL_BACK) ; null = 3 jours
      */
     private function handleRecall(
         Client $client,
@@ -211,15 +229,12 @@ class CallWorkflowService
         }
 
         $attempts = $this->bumpCounter($reservation, $counter);
+        $limit = $this->attemptsLimit($counter);
 
-        if ($attempts >= self::ATTEMPTS_LIMIT) {
-            // 2e tentative : indisponible 21 jours pour tous.
-            $client->update([
-                'status' => Client::STATUS_UNAVAILABLE,
-                'returned_at' => Carbon::now()->addDays(self::TEMP_BLOCK_DAYS),
-            ]);
-            $reservation->update(['status' => $reservationStatus]);
-            $this->cancelRappel($reservation);
+        if ($limit !== null && $attempts >= $limit) {
+            // 3e BV : indisponible 21 jours, rappel annulé, réservation
+            // conservée + note automatique de l'employé.
+            $this->blockTemporarily($client, $reservation, $reservationStatus, $counter);
 
             return $this->result('Tentatives épuisées. Client indisponible pour 21 jours.', $client, false);
         }
@@ -295,6 +310,46 @@ class CallWorkflowService
             ->count('sender_id');
 
         return $nonCount >= $activeCommercials;
+    }
+
+    /**
+     * Seuil d'épuisement d'un compteur, `null` = jamais épuisé.
+     * Seul `bv_count` est borné (3) : un « à rappeler » ne se bloque jamais.
+     */
+    private function attemptsLimit(string $counter): ?int
+    {
+        return $counter === 'bv_count'
+            ? self::BV_ATTEMPTS_LIMIT
+            : self::CALL_BACK_ATTEMPTS_LIMIT;
+    }
+
+    /**
+     * Épuisement des tentatives : client `UNAVAILABLE` 21 jours, rappel
+     * annulé, **réservation conservée**, et journalisation automatique d'une
+     * note de type `BV` (ou `CALL_BACK`) émise par l'employé qui a changé le
+     * statut — l'appel (cas 4) et le rappel expiré (§4, cron) passent par ici.
+     */
+    private function blockTemporarily(
+        Client $client,
+        Reservation $reservation,
+        string $reservationStatus,
+        string $counter
+    ): void {
+        $client->update([
+            'status' => Client::STATUS_UNAVAILABLE,
+            'returned_at' => Carbon::now()->addDays(self::TEMP_BLOCK_DAYS),
+        ]);
+
+        $reservation->update(['status' => $reservationStatus]);
+        $this->cancelRappel($reservation);
+
+        Note::create([
+            'client_id' => $client->id,
+            'reservation_id' => $reservation->id,
+            'sender_id' => $reservation->comercial_id,
+            'type' => $counter === 'bv_count' ? Note::TYPE_BV : Note::TYPE_CALL_BACK,
+            'description' => self::AUTO_BLOCK_DESCRIPTION,
+        ]);
     }
 
     private function bumpCounter(Reservation $reservation, string $counter): int

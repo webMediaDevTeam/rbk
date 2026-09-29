@@ -191,13 +191,40 @@ class CallWorkflowServiceTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_second_bv_blocks_client_21_days(): void
+    public function test_second_bv_keeps_client_reserved_and_reschedules_recall(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
         $reservation = $this->makeReservation($client, $commercial, [
             'status' => Reservation::STATUS_BV_VOICEMAIL,
             'bv_count' => 1,
+        ]);
+
+        $result = $this->workflow->apply($client, $reservation, Note::TYPE_BV, [], $commercial);
+
+        $client->refresh();
+        $reservation->refresh();
+
+        // 2e BV : sous le seuil de 3, le client reste réservé et un nouveau
+        // rappel automatique est planifié.
+        $this->assertSame('RESERVED', $client->status);
+        $this->assertNull($client->returned_at);
+        $this->assertSame(2, $reservation->bv_count);
+        $this->assertEqualsWithDelta(
+            now()->addDays(3)->timestamp,
+            Rappel::where('reservation_id', $reservation->id)->firstOrFail()->reminder_date->timestamp,
+            5
+        );
+        $this->assertSame('Rappel configuré sous 3 jours.', $result['message']);
+    }
+
+    public function test_third_bv_blocks_client_21_days_and_logs_automatic_note(): void
+    {
+        $commercial = $this->makeCommercial();
+        $client = $this->makeClient(['status' => 'RESERVED']);
+        $reservation = $this->makeReservation($client, $commercial, [
+            'status' => Reservation::STATUS_BV_VOICEMAIL,
+            'bv_count' => 2,
         ]);
         $this->makeRappel($reservation, now()->addDays(3));
 
@@ -207,7 +234,7 @@ class CallWorkflowServiceTest extends TestCase
         $reservation->refresh();
 
         $this->assertSame('UNAVAILABLE', $client->status);
-        $this->assertSame(2, $reservation->bv_count);
+        $this->assertSame(3, $reservation->bv_count);
         $this->assertSame('BV_VOICEMAIL', $reservation->status);
         $this->assertTrue($this->rappelCancelled($reservation), 'Pas de rappel après épuisement des tentatives.');
         $this->assertEqualsWithDelta(
@@ -216,6 +243,14 @@ class CallWorkflowServiceTest extends TestCase
             5
         );
         $this->assertSame('Tentatives épuisées. Client indisponible pour 21 jours.', $result['message']);
+
+        // Note automatique de l'épuisement : type BV, émetteur = l'employé.
+        $auto = Note::where('client_id', $client->id)
+            ->where('description', CallWorkflowService::AUTO_BLOCK_DESCRIPTION)
+            ->firstOrFail();
+        $this->assertSame(Note::TYPE_BV, $auto->type);
+        $this->assertSame($commercial->id, $auto->sender_id);
+        $this->assertSame($reservation->id, $auto->reservation_id);
     }
 
     public function test_call_back_counts_separately_and_schedules_recall(): void
@@ -291,28 +326,29 @@ class CallWorkflowServiceTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_second_call_back_blocks_client_21_days(): void
+    public function test_call_back_is_never_limited_and_keeps_scheduling_recalls(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
         $reservation = $this->makeReservation($client, $commercial, [
             'status' => Reservation::STATUS_CALL_BACK,
-            'injoinable_count' => 1,
+            // Déjà 3 rappels : « à rappeler » n'est jamais bloqué.
+            'injoinable_count' => 3,
         ]);
-        $this->makeRappel($reservation, now()->addDays(3));
 
-        $this->workflow->apply($client, $reservation, Note::TYPE_CALL_BACK, [], $commercial);
+        $result = $this->workflow->apply($client, $reservation, Note::TYPE_CALL_BACK, [
+            'recall_at' => now()->addDay()->format('Y-m-d H:i:s'),
+        ], $commercial);
 
         $client->refresh();
         $reservation->refresh();
 
-        $this->assertSame('UNAVAILABLE', $client->status);
-        $this->assertSame(2, $reservation->injoinable_count);
-        $this->assertEqualsWithDelta(
-            now()->addDays(21)->timestamp,
-            $client->returned_at->timestamp,
-            5
-        );
+        $this->assertSame('RESERVED', $client->status);
+        $this->assertSame('CALL_BACK', $reservation->status);
+        $this->assertSame(4, $reservation->injoinable_count);
+        $this->assertNull($client->returned_at, 'Un « à rappeler » ne devient jamais indisponible.');
+        $this->assertSame('Rappel planifié.', $result['message']);
+        $this->assertSame(1, Rappel::where('reservation_id', $reservation->id)->count(), 'Un rappel reste planifié.');
     }
 
     // ------------------------------------------------------- Rappel expiré (cron)
@@ -346,7 +382,7 @@ class CallWorkflowServiceTest extends TestCase
         $client = $this->makeClient(['status' => 'RESERVED']);
         $reservation = $this->makeReservation($client, $commercial, [
             'status' => Reservation::STATUS_BV_VOICEMAIL,
-            'bv_count' => 1,
+            'bv_count' => 2,
         ]);
         $rappel = $this->makeRappel($reservation, now()->subMinute());
 
@@ -356,7 +392,7 @@ class CallWorkflowServiceTest extends TestCase
         $reservation->refresh();
 
         $this->assertTrue($blocked);
-        $this->assertSame(2, $reservation->bv_count);
+        $this->assertSame(3, $reservation->bv_count);
         $this->assertSame('UNAVAILABLE', $client->status);
         $this->assertEqualsWithDelta(
             now()->addDays(21)->timestamp,
@@ -365,6 +401,14 @@ class CallWorkflowServiceTest extends TestCase
         );
         $this->assertTrue($this->rappelCancelled($reservation));
         $this->assertSame(1, Reservation::count(), 'La réservation ne doit jamais être supprimée.');
+
+        // Même note automatique que lors d'un 3e appel (émetteur = l'employé
+        // qui a posé la BV, pas SYSTEM).
+        $auto = Note::where('client_id', $client->id)
+            ->where('description', CallWorkflowService::AUTO_BLOCK_DESCRIPTION)
+            ->firstOrFail();
+        $this->assertSame(Note::TYPE_BV, $auto->type);
+        $this->assertSame($commercial->id, $auto->sender_id);
     }
 
     public function test_expired_recall_for_call_back_uses_injoinable_counter(): void
@@ -373,7 +417,8 @@ class CallWorkflowServiceTest extends TestCase
         $client = $this->makeClient(['status' => 'RESERVED']);
         $reservation = $this->makeReservation($client, $commercial, [
             'status' => Reservation::STATUS_CALL_BACK,
-            'injoinable_count' => 0,
+            // « À rappeler » n'a pas de seuil : 6 rappels ne bloquent rien.
+            'injoinable_count' => 5,
             'bv_count' => 1, // ne doit pas être touché
         ]);
         $rappel = $this->makeRappel($reservation, now()->subMinute());
@@ -382,10 +427,12 @@ class CallWorkflowServiceTest extends TestCase
 
         $reservation->refresh();
 
-        $this->assertFalse($blocked);
-        $this->assertSame(1, $reservation->injoinable_count);
+        $this->assertFalse($blocked, 'Un rappel « à rappeler » expiré ne bloque jamais le client.');
+        $this->assertSame(6, $reservation->injoinable_count);
         $this->assertSame(1, $reservation->bv_count, 'Le compteur BV ne doit pas bouger.');
         $this->assertSame('CALL_BACK', $reservation->status);
+        $this->assertSame('RESERVED', $client->fresh()->status);
+        $this->assertNull($client->fresh()->returned_at);
     }
 
     public function test_expired_recall_on_blacklisted_client_only_clears_rappel(): void

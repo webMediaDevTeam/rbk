@@ -30,7 +30,14 @@ export function useMesListes() {
     setRowsPerPage(n)
     setCurrentPage(1)
   }
-  const formatDate = (dateStr) => (dateStr ? new Date(dateStr).toLocaleDateString('fr-FR') : '—')
+  // Liste courante = la plus récente (première ligne de la première page,
+  // tri `created_at desc`) : c'est elle qui reçoit le fond distinct
+  // (`row-current`, styles/theme.css).
+  const currentGroupId = currentPage === 1 && groups.length > 0 ? groups[0].id : null
+  // Colonne « Liste » : nom de l'employé + date de création (affichés à
+  // partir des données, pas le texte `name` sauvegardé du groupe).
+  const formatDateTime = (dateStr) =>
+    (dateStr ? new Date(dateStr).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—')
 
   return {
     isLoading,
@@ -40,11 +47,12 @@ export function useMesListes() {
     currentPage,
     totalPages,
     rowsPerPage,
+    currentGroupId,
     handleAccueilClick,
     openGroupClick,
     openGroupStopClick,
     handlePageChange,
     handleRowsPerPageChange,
-    formatDate,
+    formatDateTime,
   }
 }

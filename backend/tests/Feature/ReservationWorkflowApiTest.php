@@ -187,12 +187,12 @@ class ReservationWorkflowApiTest extends TestCase
         $this->assertDatabaseCount('reservation_groups', 0);
 
         $this->postJson('/api/v1/clients/reserver', ['count' => 300, 'group_name' => 'Liste'])
-            ->assertOk()
+            ->assertCreated()
             ->assertJsonPath('data.requested', 300);
 
         // Sans nom : le serveur génère un nom de groupe par défaut.
         $response = $this->postJson('/api/v1/clients/reserver', ['count' => 250])
-            ->assertOk()
+            ->assertCreated()
             ->assertJsonPath('data.requested', 250);
 
         $groupId = $response->json('data.group.id');
@@ -330,11 +330,17 @@ class ReservationWorkflowApiTest extends TestCase
         $this->assertNull($client->returned_at);
         $this->assertSame(0, Reservation::count(), "L'unblock admin vide les réservations.");
 
-        $this->assertDatabaseHas('notes', [
-            'client_id' => $client->id,
-            'type' => 'RETURNED_TO_AVAILABLE',
-            'description' => 'Client débloqué par un administrateur.',
-        ]);
+        // La note de déblocage est émise par l'admin et le nomme.
+        $note = Note::where('client_id', $client->id)
+            ->where('type', Note::TYPE_RETURNED_TO_AVAILABLE)
+            ->firstOrFail();
+        $this->assertSame($admin->id, $note->sender_id);
+        $this->assertStringContainsString('restauré AVAILABLE par', $note->description);
+        $this->assertLessThanOrEqual(
+            Note::MAX_NOTE_WORDS,
+            count(preg_split('/\s+/u', trim($note->description), -1, PREG_SPLIT_NO_EMPTY)),
+            'La description est une saisie humaine : 8 mots maximum.'
+        );
     }
 
     public function test_commercial_cannot_unblock_client(): void

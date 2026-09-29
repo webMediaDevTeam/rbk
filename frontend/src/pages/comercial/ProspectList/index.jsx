@@ -24,7 +24,9 @@ export default function ProspectListPage() {
     clients, isLoading,
     total, totalPages,
     showReserve, openReserve, closeReserve,
+    pendingReservations, canReserve,
     handleViewDetail,
+    filters,
   } = useCommercialProspectList()
 
   return (
@@ -42,12 +44,30 @@ export default function ProspectListPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Liste de tous les prospects</h1>
           <p className="text-sm text-muted-foreground mt-1">Visualisez et gérez tous les prospects disponibles.</p>
         </div>
-        <div>
-          <Button variant="default" onClick={openReserve}>Réserver</Button>
+        <div className="flex items-center gap-3">
+          {/* Garde de traitement : tant qu'il reste des réservations
+              `PENDING` (prospects non traités), le serveur refuse un nouveau
+              lot — le bouton est désactivé et la raison est affichée. */}
+          {!canReserve && (
+            <p className="text-xs text-muted-foreground text-right max-w-[17rem] leading-snug">
+              {pendingReservations} prospect(s) à traiter dans vos listes : terminez-les avant de réserver.
+            </p>
+          )}
+          <Button
+            variant="default"
+            onClick={openReserve}
+            disabled={!canReserve}
+            title={canReserve ? undefined : 'Terminez les prospects non traités de vos listes pour réserver.'}
+          >
+            Réserver
+          </Button>
         </div>
       </div>
 
-      <ProspectKpis />
+      {/* Filtre de statut **figé** sur le panel commercial : la liste ne
+          contient que des prospects disponibles, l'employé ne peut pas
+          changer la sélection (badges non cliquables, Disponible actif). */}
+      <ProspectKpis statusFilters={['AVAILABLE']} />
 
       <ProspectToolbar
         search={search} setSearch={setSearch}
@@ -85,7 +105,7 @@ export default function ProspectListPage() {
         onPageChange={setCurrentPage}
         onRowsPerPageChange={handleRowsPerPageChange}
       />
-      <ReservationModal open={showReserve} onClose={closeReserve} />
+      <ReservationModal open={showReserve} onClose={closeReserve} filters={filters} />
     </div>
   )
 }

@@ -36,7 +36,7 @@ class Client extends Model
      */
     public const STATUS_IN_PROGRESS = 'IN_PROGRESS';
 
-    /** Indisponible temporairement pour tous (NON : 3 mois / 2 tentatives : 21 j). */
+    /** Indisponible temporairement pour tous (NO : 3 mois / 3e BV : 21 j). */
     public const STATUS_UNAVAILABLE = 'UNAVAILABLE';
 
     /** Liste noire (`is_blacklisted = true`). */
@@ -314,9 +314,10 @@ class Client extends Model
     }
 
     /**
-     * Précharge la dernière réservation de tous les clients « RESERVED »
-     * d'un lot en **une seule requête** (sinon `displayStatus()` ferait une
-     * requête par ligne à formatter).
+     * Précharge la dernière réservation de tous les clients « RESERVED » /
+     * « CONFIRMED » d'un lot en **une seule requête** (sinon `displayStatus()`
+     * ferait une requête par ligne à formatter, et la visibilité du téléphone
+     * une seconde).
      *
      * @param  iterable<int|string, mixed>  $clients
      */
@@ -324,7 +325,7 @@ class Client extends Model
     {
         $pending = collect($clients)
             ->filter(fn ($client) => $client instanceof self
-                && $client->status === self::STATUS_RESERVED
+                && in_array($client->status, [self::STATUS_RESERVED, self::STATUS_CONFIRMED], true)
                 && ! $client->relationLoaded('latestReservation'));
 
         $ids = $pending->pluck('id');
@@ -337,7 +338,9 @@ class Client extends Model
             ->whereIn('client_id', $ids)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get(['id', 'client_id', 'status', 'created_at']);
+            // `comercial_id` : permet de savoir qui détient la réservation
+            // courante (visibilité du numéro de téléphone) sans requête de plus.
+            ->get(['id', 'client_id', 'comercial_id', 'status', 'created_at']);
 
         foreach ($rows as $row) {
             // Déjà trié du plus récent au plus ancien : on garde le 1er vu.
@@ -421,7 +424,7 @@ class Client extends Model
     /** Clé de cache d'une liste distincte. */
     private static function distinctCacheKey(string $column): string
     {
-        return 'clients:distinct:' . $column;
+        return 'clients:distinct:'.$column;
     }
 
     /** Auto-invalidation du cache des listes distinctes. */
@@ -480,8 +483,8 @@ class Client extends Model
     public static function getUniqueCategoriesAndMunicipalities(): array
     {
         return [
-            'categories'             => self::distinctValues('categories'),
-            'municipalities'         => self::distinctValues('municipality'),
+            'categories' => self::distinctValues('categories'),
+            'municipalities' => self::distinctValues('municipality'),
             'administrative_regions' => self::distinctValues('administrative_region'),
         ];
     }
@@ -541,6 +544,56 @@ class Client extends Model
     }
 
     /**
+     * Filtre par **statut client** — un ou plusieurs statuts à la fois,
+     * pour les badges « Tous + 4 statuts » de l'overview :
+     *
+     *   Client::query()->filterByStatuses('AVAILABLE,RESERVED')  // chaîne
+     *   Client::query()->filterByStatuses(['AVAILABLE'])         // tableau
+     *
+     * Valeurs validées contre `Client::STATUSES` (une valeur inconnue est
+     * ignorée), sans doublon ; vide / null = aucun filtre.
+     *
+     * Une ligne **blacklistée** appartient au seau `BLACKLISTED`, quel que
+     * soit son `status` (une donnée réelle a encore `status = AVAILABLE`) :
+     * elle n'entre donc que si `BLACKLISTED` est demandé. C'est la définition
+     * **exacte** de `by_status` (`GET clients/overview`) — le chiffre affiché
+     * sur un badge vaut alors le nombre de lignes renvoyées après clic.
+     */
+    public function scopeFilterByStatuses(Builder $query, string|array|null $statuses): Builder
+    {
+        $values = $statuses === null
+            ? []
+            : (is_array($statuses) ? $statuses : explode(',', (string) $statuses));
+
+        $statuses = array_values(array_unique(array_intersect(
+            array_map(fn ($value) => trim((string) $value), $values),
+            self::STATUSES,
+        )));
+
+        if ($statuses === []) {
+            return $query;
+        }
+
+        $others = array_values(array_diff($statuses, [self::STATUS_BLACKLISTED]));
+        $hasBlacklist = in_array(self::STATUS_BLACKLISTED, $statuses, true);
+
+        return $query->where(function (Builder $nested) use ($others, $hasBlacklist) {
+            if ($others !== []) {
+                $nested->where(function (Builder $group) use ($others) {
+                    $group->whereIn('status', $others)
+                        ->where('is_blacklisted', false);
+                });
+            }
+
+            if ($hasBlacklist) {
+                $others === []
+                    ? $nested->where('is_blacklisted', true)
+                    : $nested->orWhere('is_blacklisted', true);
+            }
+        });
+    }
+
+    /**
      * Recherche par sous-chaîne dans une colonne JSON (`respondents`,
      * `categories`, `authorized_categories`).
      *
@@ -553,7 +606,88 @@ class Client extends Model
     {
         $wrapped = $query->getQuery()->getGrammar()->wrap($column);
 
-        return $query->orWhereRaw('CAST(' . $wrapped . ' AS CHAR) LIKE ?', [$like]);
+        return $query->orWhereRaw('CAST('.$wrapped.' AS CHAR) LIKE ?', [$like]);
+    }
+
+    /**
+     * Colonnes triables de la page « Prospects » (`GET /clients`) — la même
+     * liste sert à la réservation d'un lot (`POST clients/reserver`).
+     */
+    public const SORTABLE = [
+        'name' => 'name',
+        'enterprise_name' => 'enterprise_name',
+        'email' => 'email',
+        'phone' => 'phone',
+        'status' => 'status',
+        'municipality' => 'municipality',
+        'created_at' => 'created_at',
+        'updated_at' => 'updated_at',
+        'licence_end_date' => 'licence_end_date',
+    ];
+
+    /**
+     * Requête **partagée** de la page « Prospects » : filtres (scopes
+     * Eloquent), exclusions d'affichage et tri.
+     *
+     * `GET /clients` **et** `POST clients/reserver` passent par ce scope :
+     * le lot réservé est exactement celui que l'employé voit à l'écran, dans
+     * le même ordre (docs/RULES.md §7 — « même filtre et même tri que la
+     * page »). `page` / `per_page` sont ignorés : la réservation prend le
+     * premier lot de candidats de cette liste.
+     *
+     * @param  array<string, mixed>  $input  Paramètres de requête de la page.
+     */
+    public function scopeProspectList(Builder $query, array $input = []): Builder
+    {
+        if ($municipality = $input['municipality'] ?? null) {
+            $query->filterByMunicipalities($municipality);
+        }
+
+        if ($category = $input['category'] ?? null) {
+            $query->filterByCategories($category);
+        }
+
+        if ($region = $input['administrative_region'] ?? null) {
+            $query->filterByAdministrativeRegions($region);
+        }
+
+        if ($search = $input['search'] ?? null) {
+            $like = "%{$search}%";
+            $query->where(function ($q) use ($like) {
+                $q->where('name', 'LIKE', $like)
+                    ->orWhere('enterprise_name', 'LIKE', $like)
+                    ->orWhere('email', 'LIKE', $like)
+                    ->orWhere('phone', 'LIKE', $like)
+                    ->orWhere('neq', 'LIKE', $like)
+                    ->orWhere('municipality', 'LIKE', $like)
+                    ->orWhere('licence_number', 'LIKE', $like)
+                    ->orWhere('licence_propre_numero', 'LIKE', $like)
+                  // Colonnes JSON : sous-chaîne via le scope dédié
+                  // (voir Client::scopeOrWhereJsonTextLike).
+                    ->orWhereJsonTextLike('respondents', $like)
+                    ->orWhereJsonTextLike('categories', $like)
+                    ->orWhereJsonTextLike('authorized_categories', $like);
+            });
+        }
+
+        // Exclusions de la page : hors liste noire, réellement disponible,
+        // aucune réservation active en cours (ni la sienne ni celle d'un
+        // autre employé).
+        $query->where('is_blacklisted', false)
+            ->available()
+            ->whereDoesntHave('reservations', fn ($q) => $q->active());
+
+        // Même tri que la page (défaut : `created_at` desc).
+        $sortBy = (string) ($input['sort_by'] ?? 'created_at');
+        $sortOrder = strtolower((string) ($input['sort_order'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if (array_key_exists($sortBy, self::SORTABLE)) {
+            $query->orderBy(self::SORTABLE[$sortBy], $sortOrder);
+        } else {
+            $query->orderByDesc('created_at');
+        }
+
+        return $query;
     }
 
     /** Liste de filtre nettoyée : chaînes non vides uniquement. */

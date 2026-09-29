@@ -31,6 +31,10 @@ class ReservationGroupController extends Controller
                 'reservations as injoinable_count' => fn ($q) => $q->where('status', Reservation::STATUS_CALL_BACK),
                 // Restant : pas encore appelés (PENDING).
                 'reservations as restant_count' => fn ($q) => $q->where('status', Reservation::STATUS_PENDING),
+                // Colonne « Blacklist » de Mes listes : clients de la liste
+                // passés en liste noire (auto après 3 NO, ou manuelle).
+                'reservations as blacklist_count' => fn ($q) => $q
+                    ->whereHas('client', fn ($c) => $c->where('is_blacklisted', true)),
             ])
             ->where('comercial_id', $user->id)
             ->orderByDesc('created_at')
@@ -39,7 +43,7 @@ class ReservationGroupController extends Controller
         $items = $groups->getCollection()->map(function (ReservationGroup $group) {
             $data = $group->toArray();
             $owner = $group->comercial;
-            $fullName = $owner ? trim(($owner->first_name ?? '') . ' ' . ($owner->last_name ?? '')) : '';
+            $fullName = $owner ? trim(($owner->first_name ?? '').' '.($owner->last_name ?? '')) : '';
             $data['employe'] = $fullName !== '' ? $fullName : ($owner?->email ?? null);
 
             return $data;
@@ -51,9 +55,9 @@ class ReservationGroupController extends Controller
                 'groups' => $items,
                 'pagination' => [
                     'current_page' => $groups->currentPage(),
-                    'last_page'    => $groups->lastPage(),
-                    'per_page'     => $groups->perPage(),
-                    'total'        => $groups->total(),
+                    'last_page' => $groups->lastPage(),
+                    'per_page' => $groups->perPage(),
+                    'total' => $groups->total(),
                 ],
             ],
         ]);

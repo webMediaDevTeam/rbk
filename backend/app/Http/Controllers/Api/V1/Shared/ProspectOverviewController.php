@@ -21,7 +21,17 @@ class ProspectOverviewController extends Controller
      *    l'a réservé a appelé et/ou fait évoluer son statut ;
      *  - « en cours » : traité mais encore `RESERVED` (BV / À rappeler /
      *    suite à donner) ;
-     *  - « succès » : traité et `CONFIRMED` (issue « YES »).
+     *  - « succès » : traité et `CONFIRMED` (issue « YES ») ;
+     *  - « par statut » (`by_status`) : une entrée par statut **courant**
+     *    (`AVAILABLE` / `RESERVED` / `CONFIRMED` / `UNAVAILABLE` /
+     *    `BLACKLISTED`), pour les badges « Tous + 4 statuts » qui servent de
+     *    filtre dans le panel admin. Chaque compteur a **exactement la même
+     *    définition** que le filtre `status` de `GET commercials/clients`
+     *    (une ligne blacklistée va dans `BLACKLISTED`, quel que soit son
+     *    `status`) : le chiffre affiché coïncide avec le nombre de lignes
+     *    renvoyées après clic. Les éventuels statuts historiques hors
+     *    `Client::STATUSES` sortent des badges, mais restent dans
+     *    `prospects.system` (le total du badge « Tous »).
      *
      * Requêtes en direct (pas de cache) : les compteurs bougent à chaque
      * appel réservé, inutile de les figer une semaine comme les listes
@@ -55,24 +65,44 @@ class ProspectOverviewController extends Controller
             ->where('status', Client::STATUS_RESERVED)
             ->count();
 
+        // ── 5. Statuts (badges de filtre du panel admin) ─────────────
+        // Un seul `GROUP BY` sur les clients non blacklistés : le compteur
+        // de chaque statut a **exactement** la même définition que le filtre
+        // `status` de `GET commercials/clients` (où `BLACKLISTED` filtre sur
+        // `is_blacklisted`) — ainsi le chiffre du badge et le nombre de lignes
+        // renvoyées après clic coïncident. Les lignes blacklistées, quel que
+        // soit leur `status`, vont dans le seau `BLACKLISTED`.
+        $statusCounts = Client::query()
+            ->where('is_blacklisted', false)
+            ->selectRaw('status, COUNT(*) AS total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
         return response()->json([
             'success' => true,
             'data' => [
                 'prospects' => [
-                    'system'          => $system,
+                    'system' => $system,
                     'not_blacklisted' => $system - $blacklisted,
-                    'blacklisted'     => $blacklisted,
-                    'available'       => $available,
+                    'blacklisted' => $blacklisted,
+                    'available' => $available,
                 ],
                 'reserved' => [
-                    'total'         => $reservedTotal,
-                    'processed'     => $reservedProcessed,
+                    'total' => $reservedTotal,
+                    'processed' => $reservedProcessed,
                     'not_processed' => $reservedTotal - $reservedProcessed,
                 ],
                 'processed' => [
-                    'total'       => $processedTotal,
-                    'success'     => $processedSuccess,
+                    'total' => $processedTotal,
+                    'success' => $processedSuccess,
                     'in_progress' => $processedInProgress,
+                ],
+                'by_status' => [
+                    Client::STATUS_AVAILABLE => (int) ($statusCounts[Client::STATUS_AVAILABLE] ?? 0),
+                    Client::STATUS_RESERVED => (int) ($statusCounts[Client::STATUS_RESERVED] ?? 0),
+                    Client::STATUS_CONFIRMED => (int) ($statusCounts[Client::STATUS_CONFIRMED] ?? 0),
+                    Client::STATUS_UNAVAILABLE => (int) ($statusCounts[Client::STATUS_UNAVAILABLE] ?? 0),
+                    Client::STATUS_BLACKLISTED => $blacklisted,
                 ],
             ],
         ]);

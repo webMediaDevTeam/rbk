@@ -10,7 +10,7 @@ import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/Re
  */
 export default function RemindersPage({
   type = 'CALL_BACK',
-  title = 'Rappels',
+  title = 'à Rappels',
   subtitle = 'Clients injoignables en attente de rappel.',
   emptyText = 'Aucun rappel en attente.',
 }) {

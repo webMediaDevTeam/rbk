@@ -1,25 +1,39 @@
-import { ChevronRight, Home, Eye, ListChecks } from 'lucide-react'
-import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
+import { ChevronRight, Home, Eye } from 'lucide-react'
 import { useMesListes } from './useMesListes.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 
+/**
+ * Page « Mes listes » — tableau épuré (plus de badge de statistiques) :
+ *
+ *   Liste      : employé + date de création, **calculés à l'affichage**
+ *                (le champ `name` sauvegardé n'est plus affiché) ;
+ *   Clients    : réservations réellement créées ;
+ *   État       : traités / clients de la liste ;
+ *   OUI, NON, BV, À rappeler (statut CALL_BACK), Blacklist ;
+ *   + colonnes supprimées : Demandé, Injoinable, Restant, Employé, Créé le.
+ *
+ * La liste courante (la plus récente, 1re ligne de la 1re page) porte la
+ * classe `row-current` : fond distinct (`--row-highlight`, `styles/theme.css`).
+ */
 export default function MesListesPage() {
   const {
     isLoading,
     groups,
-    total,
     isDesktop,
     currentPage,
     totalPages,
     rowsPerPage,
+    currentGroupId,
     handleAccueilClick,
     openGroupClick,
     openGroupStopClick,
     handlePageChange,
     handleRowsPerPageChange,
-    formatDate,
+    formatDateTime,
   } = useMesListes()
+
+  const isCurrent = (g) => g.id === currentGroupId
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -36,19 +50,7 @@ export default function MesListesPage() {
         <p className="text-sm text-muted-foreground mt-1">Groupes de réservations.</p>
       </div>
 
-      {!isLoading && total > 0 && (
-        <KpiBar>
-          <KpiPill
-            label="Listes"
-            value={formatCount(total)}
-            suffix={total > 1 ? 'total' : 'liste'}
-            suffixClass="text-muted-foreground"
-            icon={ListChecks}
-            iconClass="bg-primary/10 text-primary"
-            title="Nombre total de listes (toutes pages confondues)"
-          />
-        </KpiBar>
-      )}
+      {/* Badge de statistiques « Listes » supprimé à la demande. */}
 
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
@@ -61,17 +63,14 @@ export default function MesListesPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-background hover:bg-background">
-                <TableHead>Nom</TableHead>
-                <TableHead className="text-center">Clients</TableHead>
-                <TableHead className="text-center">Demandé</TableHead>
-                <TableHead className="text-center">Traités</TableHead>
+                <TableHead>Liste</TableHead>
+             
+                <TableHead className="text-center">État</TableHead>
                 <TableHead className="text-center">OUI</TableHead>
                 <TableHead className="text-center">NON</TableHead>
                 <TableHead className="text-center">BV</TableHead>
-                <TableHead className="text-center">Injoinable</TableHead>
-                <TableHead className="text-center">Restant</TableHead>
-                <TableHead>Employé</TableHead>
-                <TableHead>Créé le</TableHead>
+                <TableHead className="text-center">À rappeler</TableHead>
+                <TableHead className="text-center">Blacklist</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -79,22 +78,25 @@ export default function MesListesPage() {
               {groups.map((g) => (
                 <TableRow
                   key={g.id}
-                  className="cursor-pointer hover:bg-primary/10 transition-colors"
+                  className={`cursor-pointer hover:bg-primary/10 transition-colors${isCurrent(g) ? ' row-current' : ''}`}
                   onClick={openGroupClick(g.id)}
                 >
-                  <TableCell className="font-medium">{g.name}</TableCell>
-                  <TableCell className="text-center text-muted-foreground tabular-nums">{g.clients_count ?? 0}</TableCell>
-                  <TableCell className="text-center text-muted-foreground tabular-nums">{g.total}</TableCell>
-                  <TableCell className="text-center text-muted-foreground tabular-nums">{g.traites_count ?? 0}</TableCell>
+                  {/* Nom dynamique : employé + date de création. */}
+                  <TableCell>
+                    <span className="font-medium">{g.employe || '—'}</span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      {formatDateTime(g.created_at)}
+                    </span>
+                  </TableCell>
+               
+                  <TableCell className="text-center text-muted-foreground tabular-nums">
+                    {g.traites_count ?? 0}/{g.clients_count ?? 0}
+                  </TableCell>
                   <TableCell className="text-center tabular-nums">{g.oui_count ?? 0}</TableCell>
                   <TableCell className="text-center tabular-nums">{g.non_count ?? 0}</TableCell>
                   <TableCell className="text-center tabular-nums">{g.bv_count ?? 0}</TableCell>
                   <TableCell className="text-center tabular-nums">{g.injoinable_count ?? 0}</TableCell>
-                  <TableCell className="text-center tabular-nums">{g.restant_count ?? 0}</TableCell>
-                  <TableCell className="text-muted-foreground">{g.employe ?? '—'}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDate(g.created_at)}
-                  </TableCell>
+                  <TableCell className="text-center tabular-nums">{g.blacklist_count ?? 0}</TableCell>
                   <TableCell className="text-right">
                     <button
                       onClick={openGroupStopClick(g.id)}
@@ -114,26 +116,23 @@ export default function MesListesPage() {
           {groups.map((g) => (
             <div
               key={g.id}
-              className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
+              className={`relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer${isCurrent(g) ? ' row-current' : ''}`}
               onClick={openGroupClick(g.id)}
             >
-              <p className="text-sm font-semibold truncate">{g.name}</p>
+              {/* Nom dynamique : employé + date de création. */}
+              <p className="text-sm font-semibold truncate">{g.employe || '—'}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{formatDateTime(g.created_at)}</p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                 <span>{g.clients_count ?? 0} client(s)</span>
-                <span>{g.total} demandé(s)</span>
-                <span>{g.traites_count ?? 0} traité(s)</span>
-                <span>{g.restant_count ?? 0} restant(s)</span>
+                <span>État {g.traites_count ?? 0}/{g.clients_count ?? 0}</span>
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
                 <span>OUI {g.oui_count ?? 0}</span>
                 <span>NON {g.non_count ?? 0}</span>
                 <span>BV {g.bv_count ?? 0}</span>
-                <span>Injoinable {g.injoinable_count ?? 0}</span>
+                <span>À rappeler {g.injoinable_count ?? 0}</span>
+                <span>Blacklist {g.blacklist_count ?? 0}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1 truncate">Employé : {g.employe ?? '—'}</p>
-              <span className="text-xs text-muted-foreground mt-3 block">
-                {formatDate(g.created_at)}
-              </span>
             </div>
           ))}
         </div>

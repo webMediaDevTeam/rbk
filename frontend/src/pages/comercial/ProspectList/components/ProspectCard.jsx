@@ -35,10 +35,7 @@ export default function ProspectCard({ client, num, onViewDetail, showViewButton
           <span className="text-muted-foreground text-xs">E-mail</span>
           <p className="truncate">{client.email ?? '—'}</p>
         </div>
-        <div>
-          <span className="text-muted-foreground text-xs">Téléphone</span>
-          <p className="truncate">{client.phone ?? '—'}</p>
-        </div>
+       
         <div>
           <span className="text-muted-foreground text-xs">Municipalité</span>
           <p className="truncate">{client.municipality ?? '—'}</p>

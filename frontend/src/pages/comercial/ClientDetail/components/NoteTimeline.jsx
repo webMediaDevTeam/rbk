@@ -32,7 +32,11 @@ export default function NoteTimeline({ notes = [], readOnly = false }) {
 
       <div className="space-y-0">
         {allItems.map((item) => {
-          const { config, Icon } = getItemConfig(item)
+          // `getItemConfig` renvoie la config **à plat** ({icon, label,
+          // variant, nodeClass}) — l'ancien contrat `{config, Icon}` du
+          // refactoring a0571ed laissait `config` = undefined (crash sur
+          // `config.nodeClass`).
+          const { icon: Icon, ...config } = getItemConfig(item)
           const sender = senderName(item)
           const deletable = item.type === 'NOTE' && !readOnly
 

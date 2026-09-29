@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Home, ArrowLeft, Eye, Pencil, Check, X, Loader2, PhoneCall, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff } from 'lucide-react'
+import { ChevronRight, Home, ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff, Users } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
-import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import Input from '@/components/ui/input.jsx'
@@ -70,7 +69,10 @@ export default function GroupDetailPage() {
     isLoading,
     group,
     reservations,
-    hiddenCount,
+    filteredReservations,
+    statusFilters,
+    handleStatusToggle,
+    rappelCount,
     isDesktop,
     renameMutation,
     handleMesListesClick,
@@ -80,64 +82,99 @@ export default function GroupDetailPage() {
     formatDate,
   } = useGroupDetail()
 
-  // Compteurs renvoyés par le serveur (withCount) : traités = statut
-  // YES / NO / BV_VOICEMAIL / CALL_BACK, non traités = PENDING.
-  const listPills = [
+  // Barre de badges de statut de réservation — **même structure que la page
+  // « Tous les prospects »** (ProspectKpis) : `Tous` en 1er, puis les statuts
+  // dans l'ordre du workflow (`En attente` en 2e), sélection multiple, couleur
+  // pleine à la sélection et **tous les compteurs affichés, même à 0**.
+  const STATUS_PILLS = [
     {
-      primary: group?.traites_count ?? 0,
-      label: 'Traités',
-      value: formatCount(group?.traites_count),
-      suffix: `sur ${formatCount(group?.clients_count)} prospect(s)`,
-      suffixClass: 'text-muted-foreground',
-      icon: PhoneCall,
-      iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      title: 'Prospects déjà traités (YES, NO, BV ou CALL_BACK)',
-    },
-    {
-      primary: group?.restant_count ?? 0,
-      label: 'Non traités',
-      value: formatCount(group?.restant_count),
-      suffix: `sur ${formatCount(group?.clients_count)} prospect(s)`,
-      suffixClass: 'text-muted-foreground',
+      key: 'PENDING',
+      label: 'En attente',
       icon: Hourglass,
-      iconClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-      title: 'Prospects pas encore appelés (en attente)',
+      iconClass: 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
+      activeClass: 'border border-transparent bg-slate-600',
+      activeFg: 'text-white',
+      title: 'Réservations pas encore appelées (PENDING) — clique pour filtrer',
     },
-    // Détail des issues, mêmes couleurs que les badges de statut
-    // (ReservationStatusBadge) : success / destructive / warning / info.
     {
-      primary: group?.oui_count ?? 0,
-      label: 'OUI',
-      value: formatCount(group?.oui_count),
+      key: 'YES',
+      label: 'Confirmé',
       icon: ThumbsUp,
       iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      title: 'Réservations au statut YES (confirmées)',
+      activeClass: 'border border-transparent bg-emerald-700',
+      activeFg: 'text-white',
+      title: 'Réservations au statut YES — clique pour filtrer',
     },
     {
-      primary: group?.non_count ?? 0,
-      label: 'NON',
-      value: formatCount(group?.non_count),
+      key: 'NO',
+      label: 'Refusé',
       icon: ThumbsDown,
       iconClass: 'bg-destructive/10 text-destructive',
-      title: 'Réservations au statut NO (refusées)',
+      activeClass: 'border border-transparent bg-destructive',
+      activeFg: 'text-white',
+      title: 'Réservations au statut NO — clique pour filtrer',
     },
     {
-      primary: group?.bv_count ?? 0,
-      label: 'BV',
-      value: formatCount(group?.bv_count),
+      key: 'BV_VOICEMAIL',
+      label: 'Boîte vocale',
       icon: Voicemail,
-      iconClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-      title: 'Réservations au statut BV_VOICEMAIL (boîte vocale)',
+      iconClass: 'bg-amber-500/10 text-[var(--warning-fg)]',
+      activeClass: 'border border-transparent bg-amber-700',
+      activeFg: 'text-white',
+      title: 'Réservations au statut BV_VOICEMAIL — clique pour filtrer',
     },
     {
-      primary: group?.injoinable_count ?? 0,
-      label: 'Injoinable',
-      value: formatCount(group?.injoinable_count),
+      key: 'CALL_BACK',
+      label: 'À rappeler',
       icon: PhoneOff,
-      iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-      title: 'Réservations au statut CALL_BACK (à rappeler)',
+      iconClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+      activeClass: 'border border-transparent bg-sky-600',
+      activeFg: 'text-white',
+      title: 'Réservations au statut CALL_BACK — clique pour filtrer',
     },
-  ].filter((pill) => pill.primary > 0)
+  ]
+
+  // Compteurs des badges calculés sur **toutes** les lignes de la liste
+  // (`reservations`), pas sur la sélection de statut : le badge dit toujours
+  // le vrai total, quel que soit le filtre actif.
+  const counts = reservations.reduce((acc, r) => {
+    acc[r.status] = (acc[r.status] ?? 0) + 1
+    return acc
+  }, {})
+
+  const tousPill = {
+    key: 'ALL',
+    label: 'Tous',
+    primary: reservations.length,
+    value: formatCount(reservations.length),
+    icon: Users,
+    iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    activeClass: 'border border-transparent bg-blue-600',
+    activeFg: 'text-white',
+    active: statusFilters.length === 0,
+    onClick: () => handleStatusToggle(null),
+    title: 'Tous les prospects de la liste — clique pour retirer tous les filtres de statut',
+  }
+
+  const statusPills = STATUS_PILLS.map((pill) => ({
+    ...pill,
+    primary: counts[pill.key] ?? 0,
+    value: formatCount(counts[pill.key] ?? 0),
+    active: statusFilters.includes(pill.key),
+    onClick: () => handleStatusToggle(pill.key),
+    title: `${pill.title} (${counts[pill.key] ?? 0})`,
+  }))
+
+  // État de réservation (tableau **et** cartes mobiles) : « En attente »
+  // (`PENDING`) affiche simplement `—` — la ligne est déjà en gris
+  // `row-pending` et le badge « En attente » de la barre porte l'info.
+  // Les autres statuts gardent leur badge coloré.
+  const statusCell = (status) =>
+    status === 'PENDING' ? (
+      <span className="text-muted-foreground">—</span>
+    ) : (
+      <ReservationStatusBadge status={status} />
+    )
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -167,26 +204,32 @@ export default function GroupDetailPage() {
               <GroupNameEditor group={group} renameMutation={renameMutation} />
               <p className="text-sm text-muted-foreground mt-1">
                 {group.reserved_count} prospect(s) réservé(s) sur {group.total} demandé(s) — {formatDate(group.created_at)}
-                {hiddenCount > 0 && (
+                {rappelCount > 0 && (
                   <span className="ml-2 text-xs text-muted-foreground">
-                    ({hiddenCount} rappel(s) planifié(s) masqué(s) — voir « Rappels » / « Auto-rappels »)
+                    ({rappelCount} rappel(s) planifié(s) — voir « Rappels » / « Auto-rappels »)
                   </span>
                 )}
               </p>
             </div>
           </div>
 
-          {listPills.length > 0 && (
-            <KpiBar>
-              {listPills.map((pill) => (
-                <KpiPill key={pill.label} {...pill} />
-              ))}
-            </KpiBar>
-          )}
+          {/* Barre de filtres par statut de réservation — même structure que
+              ProspectKpis : « Tous » (1er) retire toutes les sélections,
+              `En attente` est sélectionné dès l'ouverture de la page. */}
+          <KpiBar>
+            <KpiPill {...tousPill} />
+            {statusPills.map((pill) => (
+              <KpiPill key={pill.key} {...pill} />
+            ))}
+          </KpiBar>
 
           {reservations.length === 0 ? (
             <div className="rounded-xl bg-card text-card-foreground shadow-sm h-32 flex items-center justify-center text-muted-foreground">
               Aucun prospect dans cette liste.
+            </div>
+          ) : filteredReservations.length === 0 ? (
+            <div className="rounded-xl bg-card text-card-foreground shadow-sm h-32 flex items-center justify-center text-muted-foreground">
+              Aucun prospect pour le(s) statut(s) sélectionné(s).
             </div>
           ) : isDesktop ? (
             <div className="rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
@@ -196,19 +239,24 @@ export default function GroupDetailPage() {
                     <TableHead>Prospect</TableHead>
                     <TableHead>Téléphone</TableHead>
                     <TableHead>Municipalité</TableHead>
-                    <TableHead>Etat</TableHead>
-                    <TableHead>Traitement</TableHead>
+                    <TableHead>État</TableHead>
+                    <TableHead>Rappel</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reservations.map((r) => (
+                  {filteredReservations.map((r) => (
                     <TableRow
                       key={r.id}
+                      // Lignes « En attente » en gris (même traitement que la
+                      // liste courante de « Mes listes ») ; BV / À rappeler
+                      // gardent leur fond de suivi (trail row).
                       className={`cursor-pointer transition-colors ${
-                        r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
-                          ? 'bg-muted/40 hover:bg-muted/70'
-                          : 'hover:bg-muted/50'
+                        r.status === 'PENDING'
+                          ? 'row-pending'
+                          : r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
+                            ? 'bg-muted/40 hover:bg-muted/70'
+                            : 'hover:bg-muted/50'
                       }`}
                       onClick={openProspectClick(r.client?.id)}
                     >
@@ -223,16 +271,13 @@ export default function GroupDetailPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">{r.client?.phone ?? '—'}</TableCell>
                       <TableCell className="text-muted-foreground">{r.client?.municipality ?? '—'}</TableCell>
-                      <TableCell>
-                        <ClientStatus
-                          status={r.client?.display_status ?? r.client?.status}
-                          isBlacklisted={r.client?.is_blacklisted}
-                          returnedAt={r.client?.returned_at}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <ReservationStatusBadge status={r.status} />
-                     
+                      {/* État = statut de **réservation**, pas le statut client
+                          (« En attente » → `—`). */}
+                      <TableCell>{statusCell(r.status)}</TableCell>
+                      {/* Rappel planifié (BV / À rappeler) : la ligne reste
+                          affichée, on montre juste la date de retour. */}
+                      <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                        {r.recall_at ? `Retour le ${formatDate(r.recall_at)}` : '—'}
                       </TableCell>
                       <TableCell className="text-right">
                         <button
@@ -250,13 +295,15 @@ export default function GroupDetailPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {reservations.map((r) => (
+              {filteredReservations.map((r) => (
                 <div
                   key={r.id}
                   className={`relative flex flex-col rounded-xl border border-border text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer ${
-                    r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
-                      ? 'bg-muted/40'
-                      : 'bg-card'
+                    r.status === 'PENDING'
+                      ? 'row-pending'
+                      : r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
+                        ? 'bg-muted/40'
+                        : 'bg-card'
                   }`}
                   onClick={openProspectClick(r.client?.id)}
                 >
@@ -276,14 +323,19 @@ export default function GroupDetailPage() {
                       <span className="text-muted-foreground text-xs">Municipalité</span>
                       <p className="truncate">{r.client?.municipality ?? '—'}</p>
                     </div>
+                    {/* Rappel planifié (BV / À rappeler) : ligne affichée,
+                        date de retour indiquée. */}
+                    {r.recall_at && (
+                      <div>
+                        <span className="text-muted-foreground text-xs">Rappel</span>
+                        <p className="truncate">Retour le {formatDate(r.recall_at)}</p>
+                      </div>
+                    )}
                   </div>
+                  {/* État = statut de **réservation**, comme la colonne du
+                      tableau (« En attente » → `—`). */}
                   <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-border">
-                    <ClientStatus
-                      status={r.client?.display_status ?? r.client?.status}
-                      isBlacklisted={r.client?.is_blacklisted}
-                      returnedAt={r.client?.returned_at}
-                    />
-                    <ReservationStatusBadge status={r.status} />
+                    {statusCell(r.status)}
                   </div>
                 </div>
               ))}

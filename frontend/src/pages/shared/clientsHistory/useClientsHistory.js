@@ -16,7 +16,9 @@ export function useClientsHistoryPage() {
   const navigate = useNavigate()
   const isDesktop = useIsDesktop()
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('')
+  // Filtre de statut en **sélection multiple** (badges de statut cliquables) :
+  // un tableau de statuts, le menu déroulant « Statut » a été supprimé.
+  const [statuses, setStatuses] = useState([])
   const [municipality, setMunicipality] = useState('')
   const [categories, setCategories] = useState('')
   const [region, setRegion] = useState('')
@@ -30,7 +32,7 @@ export function useClientsHistoryPage() {
 
   const { data, isLoading } = useAdminClientsHistory({
     search: searchParam,
-    status: status || undefined,
+    status: statuses.length > 0 ? statuses.join(',') : undefined,
     municipality: municipality || undefined,
     category: categories || undefined,
     administrative_region: region || undefined,
@@ -60,8 +62,14 @@ export function useClientsHistoryPage() {
     setCurrentPage(1)
   }
 
-  const handleStatusChange = (s) => {
-    setStatus(s)
+  // Bascule d'un badge de statut : ajoute / retire le statut de la
+  // sélection (filtres multiples) et revient à la 1re page. `null` = badge
+  // « Tous » → retire tous les filtres de statut.
+  const handleStatusToggle = (value) => {
+    setStatuses((prev) => {
+      if (value === null) return []
+      return prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
+    })
     setCurrentPage(1)
   }
 
@@ -92,8 +100,8 @@ export function useClientsHistoryPage() {
     isLoading,
     search,
     handleSearchChange,
-    status,
-    handleStatusChange,
+    statuses,
+    handleStatusToggle,
     municipality,
     handleMunicipalityChange,
     categories,

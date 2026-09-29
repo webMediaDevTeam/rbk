@@ -22,13 +22,49 @@ export function useClientDetailsTab({ client }) {
     .filter(Boolean)
 
   // Répondants : tableau de chaînes (n8n) ou d'objets { name, role } (ancien format).
-  const respondentList = (Array.isArray(client.respondents) ? client.respondents : [])
+  const allRespondents = (Array.isArray(client.respondents) ? client.respondents : [])
     .map((r) => (typeof r === 'string' ? { name: r } : { name: r?.name ?? '', role: r?.role }))
     .filter((r) => r.name)
 
+  // Le représentant est un répondant comme un autre : on l'affiche UNE seule
+  // fois, dans son propre bloc « Représentant ». « Répondants » ne liste donc
+  // que les AUTRES répondants (et disparaît si le représentant était le seul).
+  //
+  // Un répondant est reconnu comme représentant si son nom correspond à
+  // `representative_name`, ou si son rôle est explicitement « Représentant »
+  // (ancien format `{ name, role }`). La comparaison du nom ignore la casse,
+  // les accents et la ponctuation (« L'Oratoire, Saint-Joseph » =
+  // « l oratoire saint joseph »).
+  const normalizeName = (value) =>
+    (value ?? '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+
+  const representativeKey = normalizeName(client.representative_name)
+  const isRepresentative = (r) =>
+    (representativeKey !== '' && normalizeName(r.name) === representativeKey)
+    || normalizeName(r.role) === 'representant'
+
+  const respondentList = allRespondents.filter((r) => !isRepresentative(r))
+  const representative = allRespondents.find((r) => isRepresentative(r)) ?? null
+
+  // `representative_name` peut être vide en base alors que le représentant est
+  // identifié par son rôle dans `respondents` : on affiche alors le nom réel
+  // plutôt qu'un tiret.
+  const representativeName = client.representative_name || representative?.name || null
+
   const hasCategories = categoryList.length > 0
   const hasRespondents = respondentList.length > 0
+  const hasRepresentative = !!representativeName
   const hasActivity = client.reservations_count != null || client.notes_count != null
+
+  // Le numéro n'est envoyé par l'API qu'aux admins et au commercial qui détient
+  // la réservation en cours du client : son absence = droit de regard absent.
+  const hasPhone = !!client.phone
 
   return {
     licenceStartDate,
@@ -40,9 +76,14 @@ export function useClientDetailsTab({ client }) {
     suretyCompanyList,
     categoryList,
     respondentList,
-    respondentsCount: client.respondent_count || respondentList.length,
+    // Le compteur porte sur les répondants **affichés** : le représentant
+    // ayant son propre bloc, il n'est pas compté deux fois.
+    respondentsCount: respondentList.length,
+    representativeName,
     hasCategories,
     hasRespondents,
+    hasRepresentative,
     hasActivity,
+    hasPhone,
   }
 }

@@ -2,8 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client.js'
 
 /**
- * Cartes KPI « Overview » des listes de prospects (GET /clients/overview) :
- * chiffres globaux, indépendants des filtres de la liste.
+ * Compteurs de `GET clients/overview` — servent à la barre de filtres
+ * « Tous + 4 statuts » (Prospects commercial et Prospect list admin).
  *
  * Pas de cache long : le serveur recalcule à chaque appel (les compteurs
  * bougent à chaque réservation / issue d'appel), on rafraîchit côté client
