@@ -1,9 +1,31 @@
-script: |
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - master # or main depending on your primary branch name
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Executing Remote SSH Commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
             # 1. Ensure target directory exists
             mkdir -p ~/apps/main
             cd ~/apps/main
 
-            # 2. Clone if empty, otherwise fetch and pull
+            # 2. Clone repository if not present, otherwise pull latest changes
             if [ ! -d ".git" ]; then
               git clone https://github.com/${{ github.repository }}.git .
             else
@@ -11,7 +33,7 @@ script: |
               git reset --hard origin/master
             fi
 
-            # 3. Create or update root .env file
+            # 3. Create root .env file dynamically
             cat << 'EOF' > .env
             APP_NAME="RBQBot"
             APP_ENV=production
@@ -42,18 +64,18 @@ script: |
             APP_KEY=${{ secrets.APP_KEY }}
             EOF
 
-            # 4. Copy .env to backend
+            # 4. Copy .env to backend directory for Laravel
             cp .env ./backend/.env
 
-            # 5. Build and run containers
+            # 5. Build and launch Docker containers
             docker compose -f docker-compose.prod.yml up -d --build
 
-            # 6. Run backend migrations and optimizations
+            # 6. Install dependencies, run migrations and database seeding
             docker compose -f docker-compose.prod.yml exec -T backend composer install --no-interaction --prefer-dist --optimize-autoloader
             docker compose -f docker-compose.prod.yml exec -T backend php artisan migrate --force
             docker compose -f docker-compose.prod.yml exec -T backend php artisan db:seed --force
 
-            # 7. Clear & Cache Laravel config
+            # 7. Optimize Laravel caches
             docker compose -f docker-compose.prod.yml exec -T backend php artisan config:cache
             docker compose -f docker-compose.prod.yml exec -T backend php artisan route:cache
             docker compose -f docker-compose.prod.yml exec -T backend php artisan view:cache
