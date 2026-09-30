@@ -62,11 +62,15 @@ Configure each service in its own isolated container on `rbqbot-network`:
   - Mount persistent storage volume for `storage/app/public` and uploaded files.
   - Depend on `mysql` and `redis` healthchecks.
 
-- [x] **WebSocket Server Container (`reverb`)**
-  - Build context: `./backend`
-  - Container name: `rbqbot-reverb`
-  - Override command: `php artisan reverb:start --host=0.0.0.0 --port=8080`
-  - Expose internal port `8080`.
+- [ ] **WebSocket Server Container (`reverb`) — RETIRÉ le 2026-09-30**
+  - `laravel/reverb` n'est pas installé (absent de `composer.json` et de `vendor/`) :
+    `php artisan reverb:start` échouait en permanence, le conteneur tournait en
+    crash-loop (défaut hérité de l'ancien compose).
+  - Aucun usage du broadcast dans le code (ni `ShouldBroadcast`, ni client Echo) :
+    service supprimé du compose, `BROADCAST_CONNECTION=log`, gateway `/app` → `503`.
+  - Réactivation : `composer require laravel/reverb`, remettre le service, puis
+    décommenter le proxy `/app` (procédure en commentaire dans
+    `nginx/conf.d/default.conf`).
 
 - [x] **Queue Worker Container (`queue`)**
   - Build context: `./backend`
@@ -102,7 +106,10 @@ montages `./backend/public` + `backend_uploads` sur le gateway pour servir
 
 - [x] Route `/` requests to `http://rbqbot-frontend:80`.
 - [x] Route `/api` and PHP execution requests to `rbqbot-backend:9000` via FastCGI (`fastcgi_pass`).
-- [x] Route `/app` / WebSockets requests to `http://rbqbot-reverb:8080` with HTTP/1.1 Upgrade headers:
+- [x] Route `/app` / WebSockets → **désactivée depuis le retrait de `reverb`** :
+  `return 503 "WebSockets non configurés"` (au lieu de router vers un conteneur
+  absent). Bloc proxy conservé en commentaire, avec les en-têtes HTTP/1.1
+  requis :
   ```nginx
   proxy_set_header Upgrade $http_upgrade;
   proxy_set_header Connection "Upgrade";
@@ -119,8 +126,9 @@ non touchée, conteneurs/nettoyage supprimés ensuite) :*
 | `GET /clients/42` (fallback React) | `200 text/html` |
 | `GET /api/v1/...` (`Accept: application/json`) | `401 application/json` ← **FastCGI → Laravel OK** |
 | `GET /storage/avatars/*.jpg` | `200 image/jpeg` ← **uploads OK** |
-| `GET /app/uptime` (Reverb) | `200` |
-| `Upgrade: websocket` → Reverb | `X-Seen-Upgrade: websocket`, `X-Seen-Connection: upgrade` |
+| `GET /app/uptime` (Reverb) | `200` — *valide avant le retrait de `reverb` (30/09) ; depuis : `503`* |
+| `Upgrade: websocket` → Reverb | `X-Seen-Upgrade: websocket`, `X-Seen-Connection: upgrade` — *hors service depuis le 30/09* |
+| `GET /sanctum/csrf-cookie` (`Origin: …`) | `204` + `Access-Control-Allow-Origin` ← **route ajoutée le 30/09** (le front l'appelle hors `/api`) |
 | `GET /foo.php` | `404` (exécution PHP bloquée) |
 | `GET /.env` | `403` (fichiers cachés niés) |
 
@@ -139,29 +147,38 @@ bloquant les `.php`. Le port 443 est publié mais sans certificat : aucun
 ## Phase 5: Deployment & Validation
 
 * [x] Build all images: `docker compose build --no-cache` — **exécuté en local** (`backend` + `frontend` ; `reverb`/`queue`/`scheduler` partagent l'image de `backend`), tags `rbk-backend:prod` / `rbk-frontend:prod` (distincts des tags `:latest` de la stack de dev, restés intacts). Contenu vérifié : bundle Vite avec `http://51.255.192.50/api/v1` figé, `vendor/autoload.php` + extensions `pdo_mysql gd redis pcntl` présents.
-* [ ] Spin up containers in detached mode: `docker compose up -d`
-* [ ] Run initial Laravel setup commands inside `backend` container:
-* `docker compose exec backend php artisan migrate --force`
-* `docker compose exec backend php artisan config:cache`
-* `docker compose exec backend php artisan route:cache`
-* `docker compose exec backend php artisan event:cache`
+* [x] Spin up containers in detached mode — **exécuté sur le VPS par le CI à
+  chaque push** : `docker compose -f docker-compose.prod.yml up -d --build
+  --remove-orphans` (garde-fou : échec si un secret est vide ; diagnostic
+  complet `ps -a` + logs mysql/backend en cas d'échec de `up`).
+* [x] Run initial Laravel setup commands — **exécuté par le CI** :
+* `php artisan migrate --force` → `INFO Nothing to migrate.` (30/09, 09:42)
+* `php artisan config:cache` + `php artisan view:cache` → OK
+* `php artisan route:cache` → **retiré** : `routes/web.php` contient des
+  closures, l'artisan échouerait et annulerait le déploiement
+* `php artisan event:cache` → non exécuté (non requis)
 
+* [x] Verify connectivity — **réel sur `http://51.255.192.50` (30/09)** :
+* Frontend SPA → `200` (bundle `/build/index-*.js`, `VITE_API_URL` figé sur
+  `http://51.255.192.50`, plus de `@vite/client`)
+* API `/api/v1/…` → `401 application/json` + `Access-Control-Allow-Origin`
+  exacte derrière le gateway (`:8000` n'est plus publié)
+* `GET /sanctum/csrf-cookie` → `204` + cookie de session (route ajoutée au gateway)
+* phpMyAdmin → `200` sur `http://51.255.192.50:8081` (compte `rbqbot`)
+* WebSocket `ws://<your-ip>/app` → `503` (**reverb retiré**, voir phase 3)
 
-* [ ] Verify connectivity:
-* Frontend SPA accessible at `http://<your-ip>`
-* API endpoints accessible at `http://<your-ip>/api`
-* phpMyAdmin accessible at `http://<your-ip>:8081`
-* WebSocket connection establishes over `ws://<your-ip>/app`
-
-**Statut :** les trois dernières étapes (`up -d`, commandes `artisan`,
-vérifications) restent **à exécuter sur le VPS** — procédure complète remise en
-discussion. Pré-requis rappelés : `.env` racine présent sur le VPS,
-identifiants MySQL alignés avec le volume existant (voir incident du
-2026-09-30), ports 80/443/8081 libres. Aucun `migrate` destructeur :
-`migrate --force` ne fera qu'appliquer les migrations en attente (0 en local).
-À noter : ni le SPA ni Laravel n'utilisent encore les WebSockets (aucune classe
-`ShouldBroadcast`, aucun client Echo) — le test `ws://.../app` valide donc
-l'infrastructure (gateway → reverb), pas un flux applicatif réel.
+**Statut (30/09) : les 5 phases sont livrées.** Le déploiement est intégralement
+piloté par `.github/workflows/docker-deploy.yml` : à chaque push sur `master`,
+le CI régénère le `.env` du VPS **depuis les secrets GitHub** (`APP_KEY`,
+`DB_PASSWORD`, `DB_ROOT_PASSWORD`, `REVERB_APP_*`) — le `.env` local n'est
+plus versionné (`git rm --cached`, voir `.gitignore`) et n'est jamais utilisé
+en production. Correctifs CI apportés ce jour : bloc `env:` (les `envs:` ne
+transmettaient que des noms de variables → `APP_URL=http://` → `Invalid URI.`),
+identifiants MySQL de l'application au lieu de `root` (root n'est joignable
+qu'en socket), `--remove-orphans`, et `restart nginx` (la config du gateway
+est un bind mount : compose ne la détecte pas comme un changement). Aucun
+`migrate` destructeur : `Nothing to migrate.` Aucun usage des WebSockets
+(ni `ShouldBroadcast`, ni Echo) — voir le retrait de `reverb` en phase 3.
 
 
 
