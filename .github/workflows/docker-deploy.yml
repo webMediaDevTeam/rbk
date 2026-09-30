@@ -264,14 +264,18 @@ jobs:
 
             # ----------------------------------------
             # 9. Optimisations Laravel
-            #     route:cache retiré : routes/web.php contient des
-            #     closures, l'artisan échouerait et annulerait le deploy.
             # ----------------------------------------
 
             echo "==> Optimizing Laravel"
 
             docker compose -f docker-compose.prod.yml exec -T backend \
+              php artisan optimize:clear
+
+            docker compose -f docker-compose.prod.yml exec -T backend \
               php artisan config:cache
+
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              php artisan route:cache
 
             docker compose -f docker-compose.prod.yml exec -T backend \
               php artisan view:cache
