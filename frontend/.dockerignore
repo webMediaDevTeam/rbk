@@ -1,0 +1,7 @@
+node_modules
+dist
+_old_dist_20260915
+.env
+.env.*
+*.log
+.DS_Store
