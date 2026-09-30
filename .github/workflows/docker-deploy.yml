@@ -15,6 +15,19 @@ jobs:
 
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
+        # `envs:` ne fait que TRANSMETTRE des noms de variables : elles doivent
+        # exister dans l'environnement de cette étape. Un secret n'y figure que
+        # s'il est déclaré ci-dessous. Sans ce bloc, VPS_HOST / APP_KEY / DB_*
+        # arrivaient vides sur le VPS -> APP_URL=http:// -> "Invalid URI."
+        # au package:discover (déploiement en échec du 30/09 à 07:04).
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_ROOT_PASSWORD: ${{ secrets.DB_ROOT_PASSWORD }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          REVERB_APP_ID: ${{ secrets.REVERB_APP_ID }}
+          REVERB_APP_KEY: ${{ secrets.REVERB_APP_KEY }}
+          REVERB_APP_SECRET: ${{ secrets.REVERB_APP_SECRET }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -22,7 +35,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 20m
 
-          envs: DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,VPS_HOST
+          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,GITHUB_REPOSITORY,GITHUB_SHA
 
           script: |
             set -e
@@ -32,11 +45,24 @@ jobs:
             echo "==> Deploying $GITHUB_REPOSITORY"
             echo "==> Commit: $GITHUB_SHA"
 
+            # ----------------------------------------
+            # 0. Garde-fou : un secret non transmis = .env incomplet
+            # ----------------------------------------
+
+            for name in VPS_HOST APP_KEY DB_PASSWORD DB_ROOT_PASSWORD \
+                        REVERB_APP_ID REVERB_APP_KEY REVERB_APP_SECRET; do
+              value="$(printenv "$name" 2>/dev/null || true)"
+              if [ -z "$value" ]; then
+                echo "ERREUR: variable $name vide (bloc env:/envs: du workflow)"
+                exit 1
+              fi
+            done
+
             mkdir -p "$APP_DIR"
             cd "$APP_DIR"
 
             # ----------------------------------------
-            # 1. Get latest code
+            # 1. Code
             # ----------------------------------------
 
             if [ ! -d ".git" ]; then
@@ -53,7 +79,9 @@ jobs:
             fi
 
             # ----------------------------------------
-            # 2. Create production environment
+            # 2. Environnement de production
+            #    Source unique : docker-compose.prod.yml lit uniquement
+            #    MYSQL_* / CORS_* / REVERB_APP_* / VPS_IP / APP_KEY.
             # ----------------------------------------
 
             cat > .env <<EOF
@@ -73,10 +101,17 @@ jobs:
             DB_PASSWORD=${DB_PASSWORD}
             DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
 
+            # Bloc lu par docker-compose.prod.yml (service mysql + x-app-env).
+            # Mêmes valeurs que DB_* : sans elles, la stack retomberait sur
+            # rbqbot/rbqbot/root et l'application ne pourrait plus se connecter.
+            MYSQL_DATABASE=rbqbot
+            MYSQL_USER=rbqbot
+            MYSQL_PASSWORD=${DB_PASSWORD}
+            MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+
             CACHE_STORE=redis
             QUEUE_CONNECTION=redis
             SESSION_DRIVER=redis
-
             BROADCAST_CONNECTION=reverb
 
             REDIS_HOST=redis
@@ -85,8 +120,17 @@ jobs:
 
             REVERB_HOST=0.0.0.0
             REVERB_PORT=8080
+            REVERB_APP_ID=${REVERB_APP_ID}
+            REVERB_APP_KEY=${REVERB_APP_KEY}
+            REVERB_APP_SECRET=${REVERB_APP_SECRET}
 
-            VITE_API_URL=http://${VPS_HOST}:8000
+            # Origines CORS (backend/config/cors.php) : le front est servi
+            # depuis la même origine que l'API en production.
+            CORS_ALLOWED_ORIGINS=http://${VPS_HOST}
+
+            # URL de l'API compilée dans le bundle Vite : le front parle au
+            # gateway sur :80 (le backend n'est plus publié sur :8000).
+            VITE_API_URL=http://${VPS_HOST}
 
             APP_KEY=${APP_KEY}
             EOF
@@ -94,7 +138,7 @@ jobs:
             cp .env backend/.env
 
             # ----------------------------------------
-            # 3. Validate Compose configuration
+            # 3. Validation de la configuration
             # ----------------------------------------
 
             echo "==> Validating Docker Compose"
@@ -102,7 +146,16 @@ jobs:
             docker compose -f docker-compose.prod.yml config --quiet
 
             # ----------------------------------------
-            # 4. Build and start containers
+            # 4. Volume MySQL (external dans le compose)
+            # ----------------------------------------
+
+            if ! docker volume inspect mysql_data >/dev/null 2>&1; then
+              echo "==> Creating volume mysql_data"
+              docker volume create mysql_data >/dev/null
+            fi
+
+            # ----------------------------------------
+            # 5. Build et démarrage
             # ----------------------------------------
 
             echo "==> Starting Docker services"
@@ -110,18 +163,17 @@ jobs:
             docker compose -f docker-compose.prod.yml up -d --build
 
             # ----------------------------------------
-            # 5. Wait for MySQL
+            # 6. Attente de MySQL
+            #     mysqladmin ping renvoie 0 même avec un mauvais mot de
+            #     passe : on exécute une vraie requête authentifiée.
             # ----------------------------------------
 
             echo "==> Waiting for MySQL"
 
             for i in $(seq 1 60); do
               if docker compose -f docker-compose.prod.yml exec -T mysql \
-                mysqladmin ping \
-                -h127.0.0.1 \
-                -uroot \
-                -p"${DB_ROOT_PASSWORD}" \
-                --silent >/dev/null 2>&1; then
+                mysql -h127.0.0.1 -uroot -p"${DB_ROOT_PASSWORD}" \
+                -e "SELECT 1" >/dev/null 2>&1; then
 
                 echo "MySQL is ready"
                 break
@@ -137,7 +189,7 @@ jobs:
             done
 
             # ----------------------------------------
-            # 6. Wait for backend
+            # 7. Attente du backend
             # ----------------------------------------
 
             echo "==> Waiting for backend"
@@ -160,20 +212,10 @@ jobs:
             done
 
             # ----------------------------------------
-            # 7. Install PHP dependencies
-            # ----------------------------------------
-
-            echo "==> Installing Composer dependencies"
-
-            docker compose -f docker-compose.prod.yml exec -T backend \
-              composer install \
-              --no-interaction \
-              --prefer-dist \
-              --optimize-autoloader \
-              --no-dev
-
-            # ----------------------------------------
-            # 8. Database migrations
+            # 8. Migrations
+            #     Pas de `composer install` ici : vendor est déjà construit
+            #     dans l'image (backend/Dockerfile) et il n'y a plus de
+            #     bind mount en prod — un install serait perdu au recreate.
             # ----------------------------------------
 
             echo "==> Running migrations"
@@ -182,7 +224,9 @@ jobs:
               php artisan migrate --force
 
             # ----------------------------------------
-            # 9. Laravel caches
+            # 9. Optimisations Laravel
+            #     route:cache retiré : routes/web.php contient des
+            #     closures, l'artisan échouerait et annulerait le deploy.
             # ----------------------------------------
 
             echo "==> Optimizing Laravel"
@@ -191,13 +235,10 @@ jobs:
               php artisan config:cache
 
             docker compose -f docker-compose.prod.yml exec -T backend \
-              php artisan route:cache
-
-            docker compose -f docker-compose.prod.yml exec -T backend \
               php artisan view:cache
 
             # ----------------------------------------
-            # 10. Final status
+            # 10. État final
             # ----------------------------------------
 
             echo "==> Deployment complete"
