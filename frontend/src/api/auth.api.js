@@ -1,6 +1,16 @@
+import axios from 'axios'
 import { api } from './client.js'
 
-export function loginApi(payload) {
+const API_ROOT = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+
+export async function loginApi(payload) {
+  await axios.get(`${API_ROOT}/sanctum/csrf-cookie`, {
+    withCredentials: true,
+    headers: {
+      Accept: 'application/json',
+    },
+  })
+
   return api.post('/auth/login', payload)
 }
 

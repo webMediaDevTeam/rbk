@@ -7,13 +7,16 @@ const api = axios.create({
     Accept: 'application/json',
     'Content-Type': 'application/json',
   },
+  withCredentials: true,
 })
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const token = getToken()
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
   return config
 })
 
@@ -23,6 +26,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       clearSession()
     }
+
     return Promise.reject(error)
   }
 )
