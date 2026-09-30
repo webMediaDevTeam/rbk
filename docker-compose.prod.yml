@@ -47,9 +47,12 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      # mysqladmin ping renvoie 0 même avec un mauvais mot de passe :
-      # on exécute donc une vraie requête authentifiée.
-      test: ["CMD-SHELL", "mysql -h127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" -e \"SELECT 1\" >/dev/null 2>&1"]
+      # Liveness seule : `mysqladmin ping` répond 0 dès que mysqld écoute,
+      # même avec un mauvais mot de passe. Le contrôle d'identité réel est
+      # fait par le CI (étape « Waiting for MySQL ») qui, lui, affiche
+      # l'erreur exacte — un healthcheck strict ici ne serait visible
+      # nulle part et bloquerait tout le stack sans explication.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 12

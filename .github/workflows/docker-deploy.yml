@@ -160,7 +160,17 @@ jobs:
 
             echo "==> Starting Docker services"
 
-            docker compose -f docker-compose.prod.yml up -d --build
+            if ! docker compose -f docker-compose.prod.yml up -d --build; then
+              echo "==> 'up' a échoué — diagnostic"
+              docker compose -f docker-compose.prod.yml ps -a
+              docker inspect --format 'mysql: status={{.State.Status}} exit={{.State.ExitCode}} health={{.State.Health.Status}}' rbqbot-mysql 2>&1 || true
+              docker inspect --format '{{range .State.Health.Log}}{{.Start}} exit={{.ExitCode}} {{.Output}}{{end}}' rbqbot-mysql 2>&1 | tail -6 || true
+              echo "==> logs mysql"
+              docker compose -f docker-compose.prod.yml logs --tail=150 mysql
+              echo "==> logs backend"
+              docker compose -f docker-compose.prod.yml logs --tail=60 backend
+              exit 1
+            fi
 
             # ----------------------------------------
             # 6. Attente de MySQL
@@ -171,9 +181,9 @@ jobs:
             echo "==> Waiting for MySQL"
 
             for i in $(seq 1 60); do
-              if docker compose -f docker-compose.prod.yml exec -T mysql \
+              if err="$(docker compose -f docker-compose.prod.yml exec -T mysql \
                 mysql -h127.0.0.1 -uroot -p"${DB_ROOT_PASSWORD}" \
-                -e "SELECT 1" >/dev/null 2>&1; then
+                -e "SELECT 1" 2>&1 >/dev/null)"; then
 
                 echo "MySQL is ready"
                 break
@@ -181,7 +191,10 @@ jobs:
 
               if [ "$i" -eq 60 ]; then
                 echo "ERROR: MySQL did not become ready"
-                docker compose -f docker-compose.prod.yml logs --tail=100 mysql
+                echo "--- dernière erreur du client MySQL ---"
+                echo "$err"
+                docker compose -f docker-compose.prod.yml ps -a
+                docker compose -f docker-compose.prod.yml logs --tail=150 mysql
                 exit 1
               fi
 
