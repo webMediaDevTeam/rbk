@@ -73,9 +73,11 @@ services:
       PMA_PORT: "3306"
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
     ports:
-      # Localhost uniquement : phpMyAdmin ne doit pas être exposé
-      # sur Internet en production (tunnel SSH pour y accéder).
-      - "127.0.0.1:8081:80"
+      # Exposé à l'extérieur (décision du 30/09) : accès direct via
+      # http://<VPS>:8081 — compte applicatif `rbqbot` uniquement.
+      # Pour repasser en accès restreint : remettre "127.0.0.1:8081:80"
+      # et utiliser un tunnel SSH (-L 8081:127.0.0.1:8081).
+      - "8081:80"
     depends_on:
       mysql:
         condition: service_healthy

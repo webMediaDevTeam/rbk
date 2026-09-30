@@ -161,7 +161,10 @@ jobs:
 
             echo "==> Starting Docker services"
 
-            if ! docker compose -f docker-compose.prod.yml up -d --build; then
+            # --remove-orphans : purger les services supprimés du compose
+            # (ex. rbqbot-reverb, laissé par le retrait du service et qui
+            # tournait en crash-loop avec l'ancien port 8080 publié).
+            if ! docker compose -f docker-compose.prod.yml up -d --build --remove-orphans; then
               echo "==> 'up' a échoué — diagnostic"
               docker compose -f docker-compose.prod.yml ps -a
               docker inspect --format 'mysql: status={{.State.Status}} exit={{.State.ExitCode}} health={{.State.Health.Status}}' rbqbot-mysql 2>&1 || true
@@ -172,6 +175,15 @@ jobs:
               docker compose -f docker-compose.prod.yml logs --tail=60 backend
               exit 1
             fi
+
+            # La config du gateway est un bind mount sur le fichier du
+            # dépôt : compose ne la considère pas comme un changement de
+            # service, le conteneur n'est pas recréé et nginx garde son
+            # ancienne config en mémoire. On le redémarre pour qu'il
+            # relise nginx/conf.d/default.conf tel qu'il est dans le dépôt.
+            echo "==> Reloading gateway configuration"
+
+            docker compose -f docker-compose.prod.yml restart nginx
 
             # ----------------------------------------
             # 6. Attente de MySQL
