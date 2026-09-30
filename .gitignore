@@ -1,0 +1,9 @@
+# Environnement local — jamais poussé sur GitHub.
+# La prod lit ses valeurs dans les secrets du dépôt (Actions) : le CI
+# régénère .env sur le VPS à chaque déploiement. Ici, on s'appuie sur
+# .env.example comme modèle (cp .env.example .env puis édition).
+/.env
+
+# Dépendances / artefacts
+/vendor/
+/node_modules/
