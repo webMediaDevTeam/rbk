@@ -34,6 +34,7 @@ export function useReminders(type = 'CALL_BACK') {
   })
 }
 
+// Compteur des rappels échus (badge de la sidebar), rafraîchi chaque minute.
 export function useRemindersCount(enabled = true, type = 'CALL_BACK') {
   return useQuery({
     queryKey: ['reminders-count', type],

@@ -6,10 +6,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use Throwable;
 
 class Client extends Model
 {
@@ -59,6 +64,10 @@ class Client extends Model
         'enterprise_name',
         'categories',
         'status',
+        // Pointeur « réservation courante » : écrit uniquement par
+        // `syncCurrentReservation()` (jamais par un update applicatif).
+        'current_reservation_id',
+        'current_comercial_id',
         'is_blacklisted',
         'returned_at',
         'licence_number',
@@ -169,6 +178,316 @@ class Client extends Model
         return $attributes;
     }
 
+    /**
+     * Import d'un enregistrement scraper / webhook : **crée ou met à jour** le
+     * client identifié par sa licence (docs/RULES.md §12).
+     *
+     *  - **clé d'upsert** : `licence_number` ; en repli
+     *    `licence_propre_numero` (index `UNIQUE`) quand le payload ne porte
+     *    pas de numéro de licence classique ;
+     *  - **jamais d'état applicatif** : `status`, `is_blacklisted`,
+     *    `returned_at` et la réservation sont exclus de `PAYLOAD_MAP` — à la
+     *    création, valeurs neuves `AVAILABLE` / non blacklisté /
+     *    `returned_at = NULL` ;
+     *  - une ligne **identique** n'est pas réécrite (`unchanged`) :
+     *    `updated_at` ne bouge donc pas d'une resynchronisation à l'autre ;
+     *  - dérivations identiques à `ClientsFromJsonSeeder` : `categories` ←
+     *    `authorized_categories`, `licence_propre` ← numéro propre renseigné.
+     *
+     * @return string `created` | `updated` | `unchanged`
+     *
+     * @throws InvalidArgumentException si aucune clé d'upsert n'est fournie
+     */
+    public static function upsertFromScraperPayload(array $payload): string
+    {
+        $attributes = self::attributesFromPayload($payload);
+
+        $licenceNumber = $attributes['licence_number'] ?? null;
+        $licencePropre = $attributes['licence_propre_numero'] ?? null;
+
+        if (($licenceNumber === null || $licenceNumber === '') && $licencePropre === null) {
+            throw new InvalidArgumentException(
+                'Clé d\'upsert manquante : « Licence » (ou « Licence (propre) » en repli).'
+            );
+        }
+
+        // Dérivations (mêmes conventions que l'import JSON, §12).
+        if (array_key_exists('authorized_categories', $attributes)) {
+            $attributes['categories'] = $attributes['authorized_categories'] ?? [];
+        }
+
+        if (array_key_exists('licence_propre_numero', $attributes)) {
+            $attributes['licence_propre'] = $licencePropre !== null;
+        }
+
+        $client = self::query()
+            ->where(
+                ($licenceNumber === null || $licenceNumber === '')
+                    ? ['licence_propre_numero' => $licencePropre]
+                    : ['licence_number' => $licenceNumber]
+            )
+            ->first();
+
+        if ($client === null) {
+            self::create(array_merge(
+                ['categories' => []],
+                $attributes,
+                // État applicatif : toujours neuf à la création, quel que
+                // soit ce que le payload aurait pu tenter d'envoyer.
+                ['status' => self::STATUS_AVAILABLE, 'is_blacklisted' => false, 'returned_at' => null]
+            ));
+
+            return 'created';
+        }
+
+        $client->fill($attributes);
+
+        if (! $client->isDirty()) {
+            return 'unchanged';
+        }
+
+        $client->save();
+
+        return 'updated';
+    }
+
+    /**
+     * Import **en masse** du webhook public `POST clients/bulk-upsert`
+     * (docs/RULES.md §12).
+     *
+     * Chaque enregistrement est traité **dans sa propre transaction** : une
+     * ligne invalide (ou un conflit d'unicité) est comptée dans `failed` et
+     * détaillée dans `errors`, sans annuler le reste du lot — l'import partiel
+     * reste exploitable côté scraper.
+     *
+     * @param  list<mixed>  $payloads
+     * @return array{received:int, processed:int, created:int, updated:int, unchanged:int, failed:int, errors:list<array{index:int, licence_number:?string, error:string}>}
+     */
+    public static function bulkUpsertFromScraperPayload(array $payloads): array
+    {
+        $result = [
+            'received' => count($payloads),
+            'processed' => 0,
+            'created' => 0,
+            'updated' => 0,
+            'unchanged' => 0,
+            'failed' => 0,
+            'errors' => [],
+        ];
+
+        foreach (array_values($payloads) as $index => $payload) {
+            try {
+                if (! is_array($payload)) {
+                    throw new InvalidArgumentException('Enregistrement attendu : un objet JSON par ligne.');
+                }
+
+                $outcome = DB::transaction(fn () => self::upsertFromScraperPayload($payload));
+
+                $result[$outcome] += 1;
+                $result['processed'] += 1;
+            } catch (QueryException $e) {
+                // Violation d'unicité (ex. `licence_propre_numero` déjà pris
+                // par un autre client) : le SQL n'est jamais exposé au
+                // client du webhook, il est journalisé côté serveur.
+                Log::warning('Import public de clients : conflit de données.', [
+                    'index' => $index,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'licence_number' => self::payloadLicenceNumber($payload),
+                    'error' => 'Conflit de données : numéro de licence déjà utilisé par un autre client.',
+                ];
+            } catch (Throwable $e) {
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'licence_number' => self::payloadLicenceNumber($payload),
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /** Clé d'upsert d'un item brut (rapport d'erreurs du webhook). */
+    private static function payloadLicenceNumber(mixed $payload): ?string
+    {
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        foreach (['licence_number', 'Licence', ''] as $key) {
+            $value = $payload[$key] ?? null;
+
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                return trim((string) $value);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Suppression **en masse** du webhook public `POST|DELETE
+     * clients/bulk-delete` (docs/RULES.md §12).
+     *
+     * Garantie centrale : **un client qui porte des données liées n'est pas
+     * supprimé.** Les tables enfants (`reservations`, `notes`, `rappels`)
+     * sont toutes en `cascadeOnDelete` — supprimer le client effacerait son
+     * historique. L'entrée est alors comptée dans `skipped`, détaillée dans
+     * `skipped_items` avec le décompte des liens, et **la boucle passe au
+     * client suivant** : un lot ne supprime que les clients vierges.
+     *
+     * Formes d'item acceptées : une chaîne (numéro de licence) **ou** un
+     * objet payload (clés françaises, repli `licence_propre_numero`) —
+     * mêmes formes que l'import.
+     *
+     * @param  list<mixed>  $items
+     * @return array{received:int, processed:int, deleted:int, skipped:int, missing:int, failed:int, skipped_items:list<array{index:int, licence_number:?string, linked:array{reservations:int, notes:int, rappels:int}}>, missing_items:list<array{index:int, licence_number:?string}>, errors:list<array{index:int, licence_number:?string, error:string}>}
+     */
+    public static function bulkDeleteFromScraper(array $items): array
+    {
+        $result = [
+            'received' => count($items),
+            'processed' => 0,
+            'deleted' => 0,
+            'skipped' => 0,
+            'missing' => 0,
+            'failed' => 0,
+            'skipped_items' => [],
+            'missing_items' => [],
+            'errors' => [],
+        ];
+
+        foreach (array_values($items) as $index => $item) {
+            try {
+                $key = self::scraperLookupKey($item);
+
+                if ($key === []) {
+                    throw new InvalidArgumentException('Clé manquante : « Licence » (ou « Licence (propre) »).');
+                }
+
+                $licence = isset($key['licence_number'])
+                    ? (string) $key['licence_number']
+                    : (string) $key['licence_propre_numero'];
+
+                // Transaction par ligne : la vérification des liens et la
+                // suppression forment un seul geste (aucun client supprimé
+                // pendant qu'une réservation viendrait d'être créée).
+                $step = DB::transaction(function () use ($key, $licence): array {
+                    $client = self::query()
+                        ->where($key)
+                        ->lockForUpdate()
+                        ->withCount(['reservations', 'notes', 'rappels'])
+                        ->first();
+
+                    if ($client === null) {
+                        return ['outcome' => 'missing'];
+                    }
+
+                    $linked = [
+                        'reservations' => (int) $client->reservations_count,
+                        'notes' => (int) $client->notes_count,
+                        'rappels' => (int) $client->rappels_count,
+                    ];
+
+                    if (array_sum($linked) > 0) {
+                        // Données liées : on **ignore** cette suppression et
+                        // on passe au client suivant.
+                        return [
+                            'outcome' => 'skipped',
+                            'licence_number' => $client->licence_number !== null && $client->licence_number !== ''
+                                ? $client->licence_number
+                                : $licence,
+                            'linked' => $linked,
+                        ];
+                    }
+
+                    // Suppression Eloquent (pas la requête brute) : le
+                    // événement `deleted` invalide les listes distinctes.
+                    $client->delete();
+
+                    return ['outcome' => 'deleted'];
+                });
+
+                $result['processed'] += 1;
+
+                if ($step['outcome'] === 'deleted') {
+                    $result['deleted'] += 1;
+                } elseif ($step['outcome'] === 'skipped') {
+                    $result['skipped'] += 1;
+                    $result['skipped_items'][] = [
+                        'index' => $index,
+                        'licence_number' => $step['licence_number'],
+                        'linked' => $step['linked'],
+                    ];
+                } else {
+                    $result['missing'] += 1;
+                    $result['missing_items'][] = ['index' => $index, 'licence_number' => $licence];
+                }
+            } catch (QueryException $e) {
+                Log::warning('Suppression publique de clients : conflit de données.', [
+                    'index' => $index,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'licence_number' => self::payloadLicenceNumber($item),
+                    'error' => 'Conflit de données : suppression impossible.',
+                ];
+            } catch (Throwable $e) {
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'licence_number' => self::payloadLicenceNumber($item),
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Clé d'identification d'un item de suppression : chaîne nue → numéro de
+     * licence, objet payload → `licence_number` puis repli
+     * `licence_propre_numero` (mêmes règles que l'import).
+     *
+     * @return array<string, mixed> vide si aucune clé n'est fournie
+     */
+    private static function scraperLookupKey(mixed $item): array
+    {
+        if (is_scalar($item)) {
+            $licence = trim((string) $item);
+
+            return $licence === '' ? [] : ['licence_number' => $licence];
+        }
+
+        if (! is_array($item)) {
+            return [];
+        }
+
+        $attributes = self::attributesFromPayload($item);
+
+        $licence = $attributes['licence_number'] ?? null;
+
+        if (is_string($licence) && $licence !== '') {
+            return ['licence_number' => $licence];
+        }
+
+        if (($attributes['licence_propre_numero'] ?? null) !== null) {
+            return ['licence_propre_numero' => $attributes['licence_propre_numero']];
+        }
+
+        return [];
+    }
+
     /** Clé payload → forme normalisée (minuscules, sans ponctuation). */
     private static function normalizePayloadKey(string $key): string
     {
@@ -200,7 +519,7 @@ class Client extends Model
     {
         try {
             return Carbon::parse($value)->toDateString();
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return null;
         }
     }
@@ -250,6 +569,65 @@ class Client extends Model
     public function latestReservation()
     {
         return $this->hasOne(Reservation::class, 'client_id')->latestOfMany('created_at', 'id');
+    }
+
+    /**
+     * Réservation **courante** (pointeur dénormalisé, cf. migration
+     * `2026_09_30_000002`) : la dernière réservation, jointure directe au
+     * lieu d'une sous-requête. `current_reservation_id` en encode le statut ;
+     * `current_comercial_id` porte l'employé qui la détient (visibilité du
+     * téléphone, filtres « par commercial »).
+     */
+    public function currentReservation(): BelongsTo
+    {
+        return $this->belongsTo(Reservation::class, 'current_reservation_id');
+    }
+
+    /** Employé détenteur de la réservation courante (NULL sans réservation). */
+    public function currentComercial(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'current_comercial_id');
+    }
+
+    /**
+     * Recalcule le pointeur « réservation courante » du client à partir de
+     * `reservations`.
+     *
+     * **Seul chemin d'écriture** de `current_reservation_id` /
+     * `current_comercial_id` : `Reservation` l'appelle à chaque `saved` et
+     * `deleted` (création, issue d'appel, suppression), et
+     * `AdminController::debloquerClient()` l'appelle après sa suppression
+     * massique — la seule écriture qui contourne Eloquent. Le pointeur ne
+     * peut donc pas diverger de la réalité.
+     *
+     * Écriture en query builder : aucun événement de modèle, et surtout pas
+     * d'`updated_at` — une réservation qui évolue ne doit pas reclasser son
+     * client dans les listes triées « mis à jour le ».
+     */
+    public function syncCurrentReservation(): void
+    {
+        // Même ordre que `latestReservation()` : created_at, puis id, décroissants.
+        $latest = $this->reservations()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first(['id', 'client_id', 'comercial_id', 'status', 'created_at']);
+
+        DB::table($this->getTable())
+            ->where('id', $this->id)
+            ->update([
+                'current_reservation_id' => $latest?->id,
+                'current_comercial_id' => $latest?->comercial_id,
+            ]);
+
+        // Miroir en mémoire : les écritures qui suivent dans la même requête
+        // (payload, visibilité du téléphone) voient la bonne valeur sans
+        // recharger la ligne, sans marquer le modèle comme modifié.
+        $this->forceFill([
+            'current_reservation_id' => $latest?->id,
+            'current_comercial_id' => $latest?->comercial_id,
+        ]);
+        $this->syncOriginalAttributes(['current_reservation_id', 'current_comercial_id']);
+        $this->setRelation('currentReservation', $latest);
     }
 
     // ------------------------------------------------------------------
@@ -315,9 +693,11 @@ class Client extends Model
 
     /**
      * Précharge la dernière réservation de tous les clients « RESERVED » /
-     * « CONFIRMED » d'un lot en **une seule requête** (sinon `displayStatus()`
-     * ferait une requête par ligne à formatter, et la visibilité du téléphone
-     * une seconde).
+     * « CONFIRMED » / « UNAVAILABLE » d'un lot en **une seule requête** (sinon
+     * `displayStatus()` ferait une requête par ligne à formatter, la visibilité
+     * du téléphone une seconde, et la colonne « Statut » — qui affiche le
+     * statut de la **dernière réservation** hors `AVAILABLE` / liste noire —
+     * une troisième).
      *
      * @param  iterable<int|string, mixed>  $clients
      */
@@ -325,7 +705,7 @@ class Client extends Model
     {
         $pending = collect($clients)
             ->filter(fn ($client) => $client instanceof self
-                && in_array($client->status, [self::STATUS_RESERVED, self::STATUS_CONFIRMED], true)
+                && in_array($client->status, [self::STATUS_RESERVED, self::STATUS_CONFIRMED, self::STATUS_UNAVAILABLE], true)
                 && ! $client->relationLoaded('latestReservation'));
 
         $ids = $pending->pluck('id');
@@ -591,6 +971,45 @@ class Client extends Model
                     : $nested->orWhere('is_blacklisted', true);
             }
         });
+    }
+
+    /**
+     * Filtre par **statut de réservation courante** (badges « Oui / Non /
+     * BV / À rappeler / - » de la colonne « Statut », docs/RULES.md §9).
+     *
+     * Le statut affiché se déduit de `current_reservation_id` (pointer
+     * maintenu par `syncCurrentReservation()`) : la valeur du badge et la
+     * valeur filtrée proviennent donc de la **même** colonne — l'invariant
+     * « compteur du badge = lignes rendues » tient par construction.
+     *
+     * Les deux dimensions de badges sont **disjoints** : un client `AVAILABLE`
+     * (relisté) ou en liste noire affiche son statut **client**, jamais sa
+     * réservation, et ce scope l'exclut donc toujours. Combiner
+     * `filterByStatuses()` et `scopeFilterByReservationStatuses()` en `OR`
+     * donne alors une union exacte.
+     */
+    public function scopeFilterByReservationStatuses(Builder $query, string|array|null $statuses): Builder
+    {
+        $values = $statuses === null
+            ? []
+            : (is_array($statuses) ? $statuses : explode(',', (string) $statuses));
+
+        $statuses = array_values(array_unique(array_intersect(
+            array_map(fn ($value) => trim((string) $value), $values),
+            Reservation::STATUSES,
+        )));
+
+        if ($statuses === []) {
+            return $query;
+        }
+
+        return $query
+            ->where('is_blacklisted', false)
+            ->where('status', '!=', self::STATUS_AVAILABLE)
+            ->whereIn(
+                'current_reservation_id',
+                Reservation::query()->whereIn('status', $statuses)->select('id')
+            );
     }
 
     /**

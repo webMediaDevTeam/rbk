@@ -41,7 +41,7 @@ export default function ProspectListPage() {
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Liste de tous les prospects</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Grande liste</h1>
           <p className="text-sm text-muted-foreground mt-1">Visualisez et gérez tous les prospects disponibles.</p>
         </div>
         <div className="flex items-center gap-3">

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Shared\AuthController;
 use App\Http\Controllers\Api\V1\Shared\DashboardController;
 use App\Http\Controllers\Api\V1\Shared\ProspectFilterController;
 use App\Http\Controllers\Api\V1\Shared\ProspectOverviewController;
+use App\Http\Controllers\Api\V1\Shared\PublicClientController;
 use App\Http\Controllers\Api\V1\Shared\UserController;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,19 @@ Route::post('auth/forgot-password/verify', [AuthController::class, 'verifyForgot
 Route::post('auth/forgot-password/reset', [AuthController::class, 'resetForgotPassword']);
 Route::post('auth/verify-account', [AuthController::class, 'verifyAccount']);
 Route::post('auth/resend-verification', [AuthController::class, 'resendVerification']);
+
+// ── Public : import de prospects (webhook scraper / n8n) ────
+// AUCUNE authentification (spec docs/public_api.md, règles RULES.md §12) :
+// CORS couvert par `config/cors.php` (`paths` = `api/*`), lot borné par
+// `public_api.max_items`. Déclarée avant toute route `clients/{…}` pour
+// ne jamais être capturée par un paramètre de route.
+Route::post('clients/bulk-upsert', [PublicClientController::class, 'bulkUpsert']);
+
+// Suppression en masse, même règle de sécurité de bout en bout : un client
+// qui porte des données liées (réservations / notes / rappels, toutes en
+// `cascadeOnDelete`) est **ignoré**, la boucle passe au client suivant
+// (RULES §12). `POST` et `DELETE` pointent sur la même action.
+Route::match(['post', 'delete'], 'clients/bulk-delete', [PublicClientController::class, 'bulkDelete']);
 
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -43,16 +57,16 @@ Route::middleware('auth:sanctum')->group(function () {
 // ── User Management ─────────────────────────────────────────
 // ADMIN       → manages COMERCIAL
 // SUPER_ADMIN → manages everyone
-Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
-    Route::get('users',            [UserController::class, 'index']);
-    Route::get('users/{id}',       [UserController::class, 'show']);
+Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
+    Route::get('users', [UserController::class, 'index']);
+    Route::get('users/{id}', [UserController::class, 'show']);
     // A user may update their own avatar (self-only enforced in UserController::canAct).
     Route::post('users/{id}/avatar', [UserController::class, 'updateAvatar']);
 });
 
-Route::middleware(['auth:sanctum', CheckRole::class . ':ADMIN,SUPER_ADMIN'])->group(function () {
-    Route::post('users',            [UserController::class, 'store']);
-    Route::put('users/{id}',        [UserController::class, 'update']);
+Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->group(function () {
+    Route::post('users', [UserController::class, 'store']);
+    Route::put('users/{id}', [UserController::class, 'update']);
     Route::patch('users/{id}/status', [UserController::class, 'toggleStatus']);
-    Route::delete('users/{id}',       [UserController::class, 'destroy']);
+    Route::delete('users/{id}', [UserController::class, 'destroy']);
 });

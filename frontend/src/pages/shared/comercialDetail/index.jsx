@@ -6,6 +6,7 @@ import Tabs from './components/Tabs.jsx'
 import CommercialInfoCard from './components/CommercialInfoCard.jsx'
 import HistoryList from './components/HistoryList.jsx'
 import HistoryToolbar from './components/HistoryToolbar.jsx'
+import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 export default function ComercialDetailPage() {
   const {
@@ -18,6 +19,9 @@ export default function ComercialDetailPage() {
     handleRowsPerPageChange,
     search,
     handleSearchChange,
+    statusFilters,
+    handleStatusToggle,
+    badges,
     commercial,
     employee,
     entreprise,
@@ -53,6 +57,13 @@ export default function ComercialDetailPage() {
         />
       ) : (
         <div className="space-y-6">
+          {/* Badges de la colonne « Statut » = filtre (sélection unique),
+              compteurs limités à l'historique de cet employé. */}
+          <ProspectKpis
+            statusFilters={statusFilters}
+            onStatusFilterChange={handleStatusToggle}
+            counts={badges}
+          />
           <HistoryToolbar search={search} setSearch={handleSearchChange} />
           <HistoryList
             clients={clients}

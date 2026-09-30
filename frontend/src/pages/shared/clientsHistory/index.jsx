@@ -12,7 +12,7 @@ export default function ClientsHistoryPage() {
     isLoading,
     search,
     handleSearchChange,
-    statuses,
+    statusFilters,
     handleStatusToggle,
     municipality,
     handleMunicipalityChange,
@@ -40,19 +40,20 @@ export default function ClientsHistoryPage() {
           <Home className="h-3.5 w-3.5" /> Accueil
         </a>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">Prospect list</span>
+        <span className="font-medium text-foreground">Grande liste</span>
       </nav>
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Prospect list</h1>
-          <p className="text-sm text-muted-foreground mt-1">Tous les clients ayant déjà été contactés par un employé.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Grande liste</h1>
+          <p className="text-sm text-muted-foreground mt-1">Tous les prospects de la base, sans restriction.</p>
         </div>
       </div>
 
-      {/* Badges de statut = filtre (sélection multiple, couleur pleine pour
-          l'état sélectionné) : ils remplacent l'ancien menu « Statut ». */}
-      <ProspectKpis statusFilters={statuses} onStatusFilterChange={handleStatusToggle} />
+      {/* Badges de la colonne « Statut » = filtre (sélection **unique**,
+          couleur pleine pour l'état sélectionné) : une seule valeur par
+          ligne, deux dimensions disjointes (statut client / réservation). */}
+      <ProspectKpis statusFilters={statusFilters} onStatusFilterChange={handleStatusToggle} />
 
       <ClientsHistoryToolbar
         search={search} setSearch={handleSearchChange}

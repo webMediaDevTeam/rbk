@@ -17,6 +17,9 @@
 return [
     'paths' => [
         'api/*',
+        // Webhook public d'import (RULES §12) : couvert par `api/*`, listé
+        // ici pour tracer le endpoint ouvert sans authentification.
+        'api/v1/clients/bulk-upsert',
         'sanctum/csrf-cookie',
         'login',
         'logout',

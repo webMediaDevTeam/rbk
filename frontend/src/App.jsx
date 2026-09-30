@@ -31,7 +31,7 @@ const ROLE_NAV = {
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
         { title: 'Employés', path: '/commerciaux', icon: List },
-        { title: 'Prospect list', path: '/clients-historique', icon: UserSearch },
+        { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
       ],
     },
@@ -54,7 +54,7 @@ const ROLE_NAV = {
       items: [
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
         { title: 'Employés', path: '/commerciaux', icon: List },
-        { title: 'Prospect list', path: '/clients-historique', icon: UserSearch },
+        { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
       ],
     },
     {
@@ -74,10 +74,10 @@ const ROLE_NAV = {
     {
       title: 'Prospects',
       items: [
-        { title: 'Tous les prospects', path: '/prospects', icon: UserSearch },
+        { title: 'Grande liste', path: '/prospects', icon: UserSearch },
         { title: 'Mes listes', path: '/mes-listes', icon: ListChecks },
-        { title: 'à Rappels', path: '/reminders', icon: Bell },
-        { title: 'Boite vocale', path: '/auto-rappels', icon: Voicemail },
+        { title: 'À rappeler', path: '/reminders', icon: Bell },
+        { title: 'BV', path: '/auto-rappels', icon: Voicemail },
       ],
     },
     {

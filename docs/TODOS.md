@@ -12,7 +12,7 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
 - [x] `reservations` : compteurs `bv_count`, `injoinable_count` (alimentés depuis
       l'historique d'appel), colonne **`expires_at` supprimée**.
 - [x] `reservations.status` : `EN_ATTENT`, `OUI`, `NON`, `BV`, `INJOINABLE`
-      (INJOINABLE affiché « à RAPPELER »).
+      (INJOINABLE affiché « à rappeler »).
 - [x] `call_outcomes.outcome` : `BOITE_VOCALE` → `BV` (renommé partout).
 - [x] `reservation_groups.name` éditable.
 - [x] Migrations 1/2/3 exécutées et vérifiées sur MySQL (150 clients, 69 résa).
@@ -88,7 +88,7 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       placeholders, badge rôle profil/header, note d'auto-blacklist). Les
       identifiants de code (`/commerciaux`, `Commercial*Api`, rôle `COMERCIAL`)
       sont inchangés.
-- [x] `useNoteTimeline` : `BV` (affiche « À RAPPELER » pour INJOINABLE),
+- [x] `useNoteTimeline` : `BV` (affiche « À rappeler » pour INJOINABLE),
       unités SEMAINE/MOIS retirées des maps d'affichage.
 - [x] Badges statut : nouveaux statuts client + `ReservationStatusBadge` créé.
 - [x] `ClientsHistoryToolbar` : statuts recalibrés, filtres « Du / Au »
@@ -135,8 +135,24 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       caution), liste des cautionnements, catégories, répondants normalisés
       (chaîne ou `{name, role}`).
 - [x] Tests : `ClientLicenceFieldsApiTest` (5 tests) — 65 tests au total.
-- [ ] **Webhook n8n** : endpoint, contrat payload, auth `X-N8N-Token`, validation
-      NOT NULL côté webhook — **reporté** (décision projet).
+- [x] **Webhook n8n / scraper** : `POST /api/v1/clients/bulk-upsert`
+      (`PublicClientController`) **livré** — enveloppe `{"clients": [...]}` ou
+      liste JSON nue, `Client::bulkUpsertFromScraperPayload()` (transaction par
+      ligne, clé `licence_number` + repli `licence_propre_numero`), réponse
+      `{success, data:{received, processed, created, updated, unchanged,
+      failed, errors[]}}`, lot borné par `PUBLIC_API_MAX_ITEMS` (1000),
+      CORS (`config/cors.php`) + `config/public_api.php`, tests
+      `PublicClientBulkUpsertTest` (10 tests). **Sans authentification** et
+      sans validation NOT NULL côté webhook : choix confirmé (spec
+      `docs/public_api.md`), cf. RULES §12.
+- [x] **Suppression en masse** : `POST|DELETE /api/v1/clients/bulk-delete`
+      (même contrôleur) — corps `{"licences": [...]}` / `{"clients": [...]}` /
+      liste JSON nue, `Client::bulkDeleteFromScraper()` (transaction par
+      ligne). **Un client avec des données liées (`reservations`, `notes`,
+      `rappels`) est ignoré** : `skipped` + `skipped_items[{index,
+      licence_number, linked:{…}}]` et la boucle passe au client suivant ;
+      absent → `missing_items[]`. Tests `PublicClientBulkDeleteTest`
+      (10 tests).
 
 ## Phase 7 — Écarts API (audit du 2026-09-29) ⏳
 

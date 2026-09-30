@@ -5,7 +5,7 @@ import { useStoreOutcome } from '../useOutcomes.js'
 const OUTCOMES = [
   { value: 'YES', label: 'Oui', recall: 'none' },
   { value: 'NO', label: 'Non', recall: 'none' },
-  { value: 'BV', label: 'Boîte vocale', recall: 'auto' },
+  { value: 'BV', label: 'BV', recall: 'auto' },
   { value: 'CALL_BACK', label: 'à rappeler', recall: 'custom' },
 ]
 

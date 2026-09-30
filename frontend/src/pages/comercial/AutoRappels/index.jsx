@@ -8,7 +8,7 @@ export default function AutoRappelsPage() {
   return (
     <RemindersPage
       type="BV"
-      title="Boite vocale"
+      title="BV"
       subtitle="Rappels automatiques de boîte vocale planifiés sous 3 jours."
       emptyText="Aucun auto-rappel en attente."
     />

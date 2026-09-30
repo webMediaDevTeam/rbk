@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCommercialProspect, useAdminClientDetail } from '@/pages/comercial/ProspectList/useCommercialProspectList.js'
@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContext.jsx'
 export function useClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { role } = useAuth()
   const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN'
 
@@ -20,7 +21,12 @@ export function useClientDetail() {
   const qc = useQueryClient()
 
   const [actionOpen, setActionOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('details')
+  // `?tab=history` : ouverture directe sur l'onglet « Historique » — c'est
+  // l'entrée du bouton « Voir » des pages Rappels / Auto-rappels.
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(location.search).get('tab')
+    return tab === 'history' ? 'history' : 'details'
+  })
   const [blacklistOpen, setBlacklistOpen] = useState(false)
   const [blacklistNote, setBlacklistNote] = useState('')
   const [blacklistError, setBlacklistError] = useState(null)

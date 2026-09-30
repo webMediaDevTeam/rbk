@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
 import { listAdminClientsApi } from '@/api/commercial.api.js'
+import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 export function useAdminClientsHistory(params = {}) {
   return useQuery({
@@ -16,9 +17,12 @@ export function useClientsHistoryPage() {
   const navigate = useNavigate()
   const isDesktop = useIsDesktop()
   const [search, setSearch] = useState('')
-  // Filtre de statut en **sélection multiple** (badges de statut cliquables) :
-  // un tableau de statuts, le menu déroulant « Statut » a été supprimé.
-  const [statuses, setStatuses] = useState([])
+  // Sélection **unique** des **badges de la colonne « Statut »** (valeurs
+  // affichées, §9) : `null` = « Tous » (aucun filtre), sinon une seule valeur
+  // active à la fois — Disponible / Blacklist filtrent le statut **client**,
+  // Oui / Non / BV / À rappeler le statut de la **réservation courante**.
+  // Les deux paramètres serveur sont distincts et combinés en `OR`.
+  const [statusFilter, setStatusFilter] = useState(null)
   const [municipality, setMunicipality] = useState('')
   const [categories, setCategories] = useState('')
   const [region, setRegion] = useState('')
@@ -30,9 +34,16 @@ export function useClientsHistoryPage() {
   const debouncedSearch = useDebouncedValue(search, 400)
   const searchParam = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined
 
+  // Ventilation du badge sélectionné entre les deux dimensions (un seul à
+  // la fois : la barre est en sélection unique).
+  const clientStatuses = statusFilter && CLIENT_STATUS_KEYS.includes(statusFilter) ? [statusFilter] : []
+  const reservationStatuses = statusFilter && !CLIENT_STATUS_KEYS.includes(statusFilter) ? [statusFilter] : []
+  const statusFilters = statusFilter ? [statusFilter] : []
+
   const { data, isLoading } = useAdminClientsHistory({
     search: searchParam,
-    status: statuses.length > 0 ? statuses.join(',') : undefined,
+    status: clientStatuses.length > 0 ? clientStatuses.join(',') : undefined,
+    reservation_status: reservationStatuses.length > 0 ? reservationStatuses.join(',') : undefined,
     municipality: municipality || undefined,
     category: categories || undefined,
     administrative_region: region || undefined,
@@ -62,14 +73,11 @@ export function useClientsHistoryPage() {
     setCurrentPage(1)
   }
 
-  // Bascule d'un badge de statut : ajoute / retire le statut de la
-  // sélection (filtres multiples) et revient à la 1re page. `null` = badge
-  // « Tous » → retire tous les filtres de statut.
+  // Badges en **sélection unique** : cliquer un badge le rend seul actif,
+  // un second clic dessus repasse à « Tous » (`null`), et « Tous » retire
+  // l'unique filtre actif. Revient toujours à la 1re page.
   const handleStatusToggle = (value) => {
-    setStatuses((prev) => {
-      if (value === null) return []
-      return prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]
-    })
+    setStatusFilter((prev) => (value === null || prev === value ? null : value))
     setCurrentPage(1)
   }
 
@@ -100,7 +108,7 @@ export function useClientsHistoryPage() {
     isLoading,
     search,
     handleSearchChange,
-    statuses,
+    statusFilters,
     handleStatusToggle,
     municipality,
     handleMunicipalityChange,

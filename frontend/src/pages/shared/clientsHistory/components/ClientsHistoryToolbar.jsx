@@ -6,7 +6,7 @@ import { useFilterOptions } from '@/hooks/use-filter-options.js'
 export default function ClientsHistoryToolbar(props) {
   // Le filtre « Statut » (menu déroulant) a été supprimé : ce sont les
   // badges de statut de l'overview, au-dessus, qui filtrent — en
-  // sélection multiple. Le composant ne pilote donc plus que la recherche
+  // sélection unique. Le composant ne pilote donc plus que la recherche
   // et les filtres géographiques / catégorie.
   const { searchInputProps } = useClientsHistoryToolbar(props)
   const { municipalitiesList, categoriesList, regionsList } = useFilterOptions()

@@ -1,5 +1,5 @@
 import { Eye } from 'lucide-react'
-import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
+import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { useHistoryCard } from './useHistoryCard.js'
 
@@ -45,8 +45,10 @@ export default function HistoryCard(props) {
       </div>
 
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-        <ClientStatus
-          status={client.display_status ?? client.status}
+        <ProspectStatus
+          status={client.status}
+          displayStatus={client.display_status}
+          reservationStatus={client.reservation_status}
           isBlacklisted={client.is_blacklisted}
           returnedAt={client.returned_at}
         />

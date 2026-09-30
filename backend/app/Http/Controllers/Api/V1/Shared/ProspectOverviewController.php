@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Reservation;
 use Illuminate\Http\JsonResponse;
 
 class ProspectOverviewController extends Controller
@@ -32,6 +33,17 @@ class ProspectOverviewController extends Controller
      *    renvoyées après clic. Les éventuels statuts historiques hors
      *    `Client::STATUSES` sortent des badges, mais restent dans
      *    `prospects.system` (le total du badge « Tous »).
+     *  - « par statut affiché » (`by_display_status`) : une entrée par valeur
+     *    que la **colonne « Statut »** montre réellement — `AVAILABLE`
+     *    (Disponible), `BLACKLISTED` (Blacklist), puis le statut de la
+     *    réservation **courante** `YES` / `NO` / `BV_VOICEMAIL` / `CALL_BACK`
+     *    / `PENDING` (« - »). Ce sont les 7 badges de filtre demandés ;
+     *    chaque compteur est calculé **par le scope qui pilote le filtre**
+     *    (`filterByStatuses()` / `filterByReservationStatuses()`), donc le
+     *    chiffre affiché coïncide avec le nombre de lignes renvoyées après
+     *    clic, et les jeux sont disjoints (un client AVAILABLE ou
+     *    blacklisté n'entre jamais dans la dimension réservation) — une
+     *    sélection mêlant les deux dimensions est une union exacte.
      *
      * Requêtes en direct (pas de cache) : les compteurs bougent à chaque
      * appel réservé, inutile de les figer une semaine comme les listes
@@ -78,6 +90,29 @@ class ProspectOverviewController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
+        // ── 6. Statut affiché (les 7 badges de la colonne « Statut ») ────
+        // Disponible / Blacklist = dimension **client** ; Oui / Non / BV /
+        // À rappeler / - = dimension **réservation courante**. Les compteurs
+        // sont produits par les scopes mêmes qui filtrent la liste, avec les
+        // mêmes paramètres que `GET commercials/clients`.
+        $displayCounts = [];
+        $clientBuckets = [Client::STATUS_AVAILABLE, Client::STATUS_BLACKLISTED];
+        $reservationBuckets = [
+            Reservation::STATUS_YES,
+            Reservation::STATUS_NO,
+            Reservation::STATUS_BV_VOICEMAIL,
+            Reservation::STATUS_CALL_BACK,
+            Reservation::STATUS_PENDING,
+        ];
+
+        foreach ($clientBuckets as $bucket) {
+            $displayCounts[$bucket] = Client::query()->filterByStatuses($bucket)->count();
+        }
+
+        foreach ($reservationBuckets as $bucket) {
+            $displayCounts[$bucket] = Client::query()->filterByReservationStatuses($bucket)->count();
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -104,6 +139,10 @@ class ProspectOverviewController extends Controller
                     Client::STATUS_UNAVAILABLE => (int) ($statusCounts[Client::STATUS_UNAVAILABLE] ?? 0),
                     Client::STATUS_BLACKLISTED => $blacklisted,
                 ],
+                // Badges « Tous / Disponible / Oui / Non / BV / À rappeler /
+                // Blacklist » : une entrée par valeur affichée, comptée par
+                // le filtre qu'elle pilote (invariant badge ⇄ lignes).
+                'by_display_status' => $displayCounts,
             ],
         ]);
     }

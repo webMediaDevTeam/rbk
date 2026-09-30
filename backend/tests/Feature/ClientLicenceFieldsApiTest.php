@@ -269,7 +269,8 @@ class ClientLicenceFieldsApiTest extends TestCase
         $commercial = $this->makeUser('COMERCIAL');
         $client = $this->makeN8nClient();
 
-        // La liste admin ne montre que les clients avec historique d'appel.
+        // La liste admin = la grande liste : tout prospect y figure (ceux
+        // avec historique d'appel comme les autres).
         Note::create([
             'client_id' => $client->id,
             'sender_id' => $commercial->id,

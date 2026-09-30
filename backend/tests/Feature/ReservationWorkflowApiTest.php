@@ -538,6 +538,47 @@ class ReservationWorkflowApiTest extends TestCase
             ->assertJsonPath('data.count', 1);
     }
 
+    public function test_reminder_row_is_flagged_stale_when_a_newer_suivi_exists(): void
+    {
+        $commercial = $this->makeCommercial();
+        $client = $this->makeClient(['status' => 'RESERVED']);
+        $reservation = $this->makeReservation($client, $commercial, [
+            'status' => Reservation::STATUS_CALL_BACK,
+        ]);
+        $rappel = $this->makeRappel($reservation, now()->addDay());
+
+        Sanctum::actingAs($commercial);
+
+        $row = collect($this->getJson('/api/v1/reminders')->assertOk()->json('data'))
+            ->firstWhere('id', $rappel->id);
+
+        // Colonnes « Prospects » + drapeaux d'obsolescence.
+        $this->assertArrayHasKey('licence_number', $row);
+        $this->assertArrayHasKey('respondents', $row);
+        $this->assertArrayHasKey('display_status', $row);
+        $this->assertArrayHasKey('has_newer_suivi', $row);
+        $this->assertFalse($row['has_newer_suivi'], 'Aucun suivi après le rappel.');
+        $this->assertFalse($row['status_changed']);
+        $this->assertNull($row['done_at']);
+
+        // Un suivi créé APRÈS le rappel : la ligne devient obsolète et le
+        // bouton « Voir » sera masqué côté client.
+        Carbon::setTestNow(now()->addMinutes(5));
+        Note::create([
+            'client_id' => $client->id,
+            'sender_id' => $commercial->id,
+            'type' => Note::TYPE_NOTE,
+            'description' => 'Suivi refait après le rappel',
+        ]);
+        Carbon::setTestNow();
+
+        $row = collect($this->getJson('/api/v1/reminders')->assertOk()->json('data'))
+            ->firstWhere('id', $rappel->id);
+
+        $this->assertTrue($row['has_newer_suivi'], 'Un suivi plus récent rend la ligne obsolète.');
+        $this->assertFalse($row['status_changed'], 'Le statut de réservation, lui, n\'a pas bougé.');
+    }
+
     // ------------------------------------------ Recall custom (CALL_BACK)
 
     public function test_outcome_call_back_requires_custom_recall_at(): void
@@ -752,5 +793,84 @@ class ReservationWorkflowApiTest extends TestCase
         $this->assertSame(0, $row['clients_count']);
         $this->assertSame(0, $row['traites_count']);
         $this->assertSame(0, $row['restant_count']);
+    }
+
+    // -------------------------------------------- Reminders « terminer » (done)
+
+    private function makeDueCallBackRappel(User $commercial): Rappel
+    {
+        return $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->subMinute()
+        );
+    }
+
+    public function test_mark_reminder_done_removes_it_from_lists_and_writes_history_note(): void
+    {
+        $commercial = $this->makeCommercial();
+        $rappel = $this->makeDueCallBackRappel($commercial);
+
+        Sanctum::actingAs($commercial);
+
+        $this->postJson("/api/v1/reminders/{$rappel->id}/done", ['note' => 'Rappel fait jeudi matin'])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $rappel->refresh();
+        $this->assertNotNull($rappel->done_at, 'Le rappel est marqué comme terminé.');
+        $this->assertSame('Rappel fait jeudi matin', $rappel->done_note);
+
+        // Il quitte la liste et le compteur du menu.
+        $this->assertCount(0, $this->getJson('/api/v1/reminders')->assertOk()->json('data'));
+        $this->getJson('/api/v1/reminders/count')
+            ->assertOk()
+            ->assertJsonPath('data.count', 0);
+
+        // La note rejoint l'historique du client.
+        $note = Note::where('client_id', $rappel->client_id)->first();
+        $this->assertNotNull($note);
+        $this->assertSame(Note::TYPE_NOTE, $note->type);
+        $this->assertSame('Rappel fait jeudi matin', $note->description);
+        $this->assertSame($commercial->id, $note->sender_id);
+    }
+
+    public function test_mark_reminder_done_works_without_note_and_cannot_run_twice(): void
+    {
+        $commercial = $this->makeCommercial();
+        $rappel = $this->makeDueCallBackRappel($commercial);
+
+        Sanctum::actingAs($commercial);
+
+        $this->postJson("/api/v1/reminders/{$rappel->id}/done")->assertOk();
+
+        $this->assertNull($rappel->fresh()->done_note, 'Note facultative.');
+        $this->assertSame(0, Note::count(), 'Sans note, rien dans l\'historique.');
+
+        // Déjà terminé : introuvable pour la suite.
+        $this->postJson("/api/v1/reminders/{$rappel->id}/done")->assertStatus(404);
+    }
+
+    public function test_mark_reminder_done_is_limited_to_owner_and_to_eight_words(): void
+    {
+        $commercial = $this->makeCommercial();
+        $rappel = $this->makeDueCallBackRappel($commercial);
+
+        // Un autre employé ne touche pas au rappel d'autrui.
+        Sanctum::actingAs($this->makeCommercial());
+        $this->postJson("/api/v1/reminders/{$rappel->id}/done")->assertStatus(404);
+        $this->assertNull($rappel->fresh()->done_at);
+
+        // Plus de 8 mots : refusé, le rappel reste en attente.
+        Sanctum::actingAs($commercial);
+        $this->postJson("/api/v1/reminders/{$rappel->id}/done", [
+            'note' => 'un deux trois quatre cinq six sept huit neuf',
+        ])->assertStatus(422);
+
+        $this->assertNull($rappel->fresh()->done_at);
+        $this->assertSame(0, Note::count());
     }
 }

@@ -9,6 +9,7 @@ use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
 use App\Services\CallWorkflowService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -53,21 +54,47 @@ class CommercialAdminController extends Controller
         $perPage = min((int) $request->input('per_page', 10), 300);
         $page = max((int) $request->input('page', 1), 1);
 
-        $historyQuery = Client::query()
-            ->whereHas('notes', fn ($q) => $q->where('sender_id', $id)->calls())
-            ->with(['notes' => fn ($q) => $q->where('sender_id', $id)->with('sender:id,first_name,last_name')->orderByDesc('created_at')]);
+        // Périmètre de l'historique : les clients que **cet employé** a déjà
+        // appelés (+ recherche texte). Reconstruit à chaque besoin pour que
+        // les compteurs des badges partagent **exactement** la même base que
+        // le tableau.
+        $historyBase = function () use ($id, $request) {
+            $query = Client::query()
+                ->whereHas('notes', fn ($q) => $q->where('sender_id', $id)->calls());
 
-        if ($search = $request->input('search')) {
-            $like = "%{$search}%";
-            $historyQuery->where(function ($q) use ($like) {
-                $q->where('name', 'LIKE', $like)
-                    ->orWhere('email', 'LIKE', $like)
-                    ->orWhere('phone', 'LIKE', $like)
-                    ->orWhere('municipality', 'LIKE', $like);
-            });
-        }
+            if ($search = $request->input('search')) {
+                $like = "%{$search}%";
+                $query->where(function ($q) use ($like) {
+                    $q->where('name', 'LIKE', $like)
+                        ->orWhere('email', 'LIKE', $like)
+                        ->orWhere('phone', 'LIKE', $like)
+                        ->orWhere('municipality', 'LIKE', $like);
+                });
+            }
+
+            return $query;
+        };
+
+        $historyQuery = $historyBase()->with([
+            'notes' => fn ($q) => $q->where('sender_id', $id)->with('sender:id,first_name,last_name')->orderByDesc('created_at'),
+            'currentReservation:id,status',
+        ]);
+
+        // Badges de la colonne « Statut » (RULES §9) : mêmes paramètres que
+        // la grande liste admin — `status` / `reservation_status`, union OR.
+        $this->applyStatusFilters($historyQuery, $request);
 
         $clientsPage = $historyQuery->paginate($perPage, ['*'], 'page', $page);
+
+        // Compteurs des 7 badges : périmètre employé, calculés par les scopes
+        // qui pilotent les filtres (compteur du badge = lignes après clic).
+        // **Même forme que `data` de `GET clients/overview`**
+        // (`{prospects, by_display_status}`) : la page les passe tels quels à
+        // `<ProspectKpis counts={…}>`.
+        $badges = [
+            'prospects' => ['system' => $historyBase()->count()],
+            'by_display_status' => $this->displayStatusCounts($historyBase),
+        ];
 
         // Statut affiché : dernière réservation de chaque client en 1 requête.
         Client::loadLatestReservations($clientsPage->getCollection());
@@ -82,6 +109,9 @@ class CommercialAdminController extends Controller
                 'phone' => $c->phone,
                 'status' => $c->status,
                 'display_status' => $c->displayStatus(),
+                // Statut de la réservation courante : valeur que la colonne
+                // « Statut » affiche (sauf client AVAILABLE / liste noire).
+                'reservation_status' => $c->currentReservation?->status,
                 'is_blacklisted' => $c->is_blacklisted,
                 'returned_at' => $c->returned_at,
                 'municipality' => $c->municipality,
@@ -132,6 +162,9 @@ class CommercialAdminController extends Controller
             ] : null,
             'historique' => [
                 'clients' => $historique,
+                // Compteurs des 7 badges de statut, sur le périmètre de cet
+                // employé (alimente `<ProspectKpis>` de l'onglet Historique).
+                'badges' => $badges,
                 'pagination' => [
                     'current_page' => $clientsPage->currentPage(),
                     'last_page' => $clientsPage->lastPage(),
@@ -148,9 +181,18 @@ class CommercialAdminController extends Controller
      */
     public function clients(Request $request)
     {
+        // **Grande liste** du panel admin : tous les prospects de la base,
+        // sans restriction (plus de condition « déjà appelé par un employé »,
+        // ni de filtrage lié à une réservation). Le périmètre est donc
+        // exactement celui de `prospects.system` (badge *Tous* de
+        // `GET clients/overview`) : compteur du badge = lignes rendues.
         $query = Client::query()
-            ->whereHas('notes', fn ($q) => $q->calls())
-            ->with(['notes' => fn ($q) => $q->with('sender:id,first_name,last_name')->orderByDesc('created_at')]);
+            ->with([
+                'notes' => fn ($q) => $q->with('sender:id,first_name,last_name')->orderByDesc('created_at'),
+                // Pointeur de réservation courante : la colonne « Statut » en
+                // déduit la valeur affichée (Oui / Non / BV / À rappeler / -).
+                'currentReservation:id,status',
+            ]);
 
         if ($search = $request->input('search')) {
             $like = "%{$search}%";
@@ -172,11 +214,8 @@ class CommercialAdminController extends Controller
 
         // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
 
-        // Filtre de statut : un **ou plusieurs** statuts à la fois, choisis
-        // par les badges « Tous + 4 statuts » de l'overview (le menu
-        // déroulant « Statut » a été supprimé). Même définition que les
-        // compteurs `by_status` → voir `Client::scopeFilterByStatuses()`.
-        $query->filterByStatuses($request->input('status'));
+        // Badges de la colonne « Statut » → deux paramètres serveur (§9).
+        $this->applyStatusFilters($query, $request);
 
         // Filtres de listes (scopes Eloquent) : mêmes paramètres que la liste
         // commerciale — municipalité, catégorie et région administrative.
@@ -227,6 +266,11 @@ class CommercialAdminController extends Controller
                 'phone' => $c->phone,
                 'status' => $c->status,
                 'display_status' => $c->displayStatus(),
+                // Statut de la réservation courante (NULL si aucune) : la
+                // colonne « Statut » l'affiche tel quel, sauf client
+                // `AVAILABLE` (relisté) ou en liste noire → statut client.
+                'reservation_status' => $c->currentReservation?->status,
+                'current_comercial_id' => $c->current_comercial_id,
                 'is_blacklisted' => $c->is_blacklisted,
                 'returned_at' => $c->returned_at,
                 'municipality' => $c->municipality,
@@ -259,6 +303,74 @@ class CommercialAdminController extends Controller
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Badges de la colonne « Statut » → **deux paramètres serveur** (RULES §9).
+     *
+     *   - `status`             → statut **client** (Disponible / Blacklist),
+     *     même définition que `by_status`, `Client::scopeFilterByStatuses()` ;
+     *   - `reservation_status` → statut de la **réservation courante**
+     *     (Oui / Non / BV / À rappeler / « - »), c'est-à-dire la valeur que la
+     *     colonne « Statut » affiche, `scopeFilterByReservationStatuses()`.
+     *
+     * Les deux jeux sont **disjoints** (un client `AVAILABLE` ou blacklisté
+     * n'entre jamais dans la dimension réservation) et combinés en **union
+     * `OR`** : la somme des compteurs vaut exactement le nombre de lignes
+     * rendues.
+     */
+    private function applyStatusFilters(Builder $query, Request $request): Builder
+    {
+        if ($request->filled('status') && $request->filled('reservation_status')) {
+            $clientStatuses = $request->input('status');
+            $reservationStatuses = $request->input('reservation_status');
+
+            return $query->where(function (Builder $q) use ($clientStatuses, $reservationStatuses) {
+                $q->where(fn (Builder $inner) => $inner->filterByStatuses($clientStatuses))
+                    ->orWhere(fn (Builder $inner) => $inner->filterByReservationStatuses($reservationStatuses));
+            });
+        }
+
+        if ($request->filled('status')) {
+            return $query->filterByStatuses($request->input('status'));
+        }
+
+        if ($request->filled('reservation_status')) {
+            return $query->filterByReservationStatuses($request->input('reservation_status'));
+        }
+
+        return $query;
+    }
+
+    /**
+     * Compteurs des **7 badges** pour un périmètre donné (RULES §9) :
+     * `$base` reconstruit une requête **fraîche** (même base, sans filtre de
+     * statut) et chaque compteur est produit **par le scope qui pilote le
+     * filtre** — le chiffre affiché vaut donc le nombre de lignes rendues
+     * après clic sur ce badge.
+     *
+     * @param  callable(): Builder  $base
+     * @return array<string, int>
+     */
+    private function displayStatusCounts(callable $base): array
+    {
+        $counts = [];
+
+        foreach ([Client::STATUS_AVAILABLE, Client::STATUS_BLACKLISTED] as $bucket) {
+            $counts[$bucket] = $base()->filterByStatuses($bucket)->count();
+        }
+
+        foreach ([
+            Reservation::STATUS_YES,
+            Reservation::STATUS_NO,
+            Reservation::STATUS_BV_VOICEMAIL,
+            Reservation::STATUS_CALL_BACK,
+            Reservation::STATUS_PENDING,
+        ] as $bucket) {
+            $counts[$bucket] = $base()->filterByReservationStatuses($bucket)->count();
+        }
+
+        return $counts;
     }
 
     /**

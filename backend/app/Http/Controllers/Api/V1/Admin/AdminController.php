@@ -42,6 +42,11 @@ class AdminController extends Controller
             $client->rappels()->delete();
             $client->reservations()->delete();
 
+            // Suppression massique : aucun événement Eloquent ne part, donc le
+            // pointeur « réservation courante » est recalculed ici (aucune
+            // réservation restante → les deux colonnes repassent à NULL).
+            $client->syncCurrentReservation();
+
             Note::create([
                 'client_id' => $client->id,
                 'sender_id' => $request->user()->id,

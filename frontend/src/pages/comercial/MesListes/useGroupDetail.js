@@ -12,7 +12,7 @@ export function useGroupDetail() {
   const qc = useQueryClient()
 
   // Filtre par **statut de réservation** : barre de badges identique à celle
-  // de « Tous les prospects » (Tous → statuts), sélection multiple. « En
+  // de « Grande liste » (Tous → statuts), sélection multiple. « En
   // attente » (PENDING) est sélectionné dès l'ouverture de la page ; « Tous »
   // retire toutes les sélections.
   const [statusFilters, setStatusFilters] = useState(['PENDING'])

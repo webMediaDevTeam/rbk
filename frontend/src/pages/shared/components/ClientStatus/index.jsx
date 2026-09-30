@@ -49,8 +49,8 @@ const STYLES = {
   SUCCESS: { label: 'Confirmé', variant: 'success' },
   UNAVAILABLE_TEMP: { label: 'Non disponible', variant: 'destructive' },
   IN_PROGRESS_RECALL: { label: 'En cours de traitement', variant: 'info' },
-  VOICEMAIL: { label: 'Boîte vocale', variant: 'info' },
-  INJOINABLE: { label: 'À RAPPELER', variant: 'info' },
+  VOICEMAIL: { label: 'BV', variant: 'info' },
+  INJOINABLE: { label: 'À rappeler', variant: 'info' },
   BLOCKED: { label: 'Bloqué', variant: 'destructive' },
   ARCHIVED: { label: 'Archivé', variant: 'outline' },
 }

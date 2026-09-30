@@ -92,6 +92,24 @@ class Reservation extends Model
     }
 
     /**
+     * Pointeur « réservation courante » du client (`clients.current_reservation_id`
+     * / `current_comercial_id`) : **recalculé à chaque écriture** — création,
+     * issue d'appel (Oui / Non / BV / À rappeler), suppression — pour que le
+     * statut affiché et les badges de filtre dérivent d'une colonne toujours
+     * juste.
+     *
+     * C'est la seule maintenance nécessaire : toute écriture d'une réservation
+     * passe par Eloquent. La seule exception est la suppression **massique**
+     * du déblocage admin (`$client->reservations()->delete()`, sans événement),
+     * qui appelle elle-même `Client::syncCurrentReservation()`.
+     */
+    protected static function booted(): void
+    {
+        static::saved(fn (self $reservation) => $reservation->client?->syncCurrentReservation());
+        static::deleted(fn (self $reservation) => $reservation->client?->syncCurrentReservation());
+    }
+
+    /**
      * Réservations actives : le couple (statut de réservation, statut client)
      * montre que le client est toujours tenu par l'employé.
      */

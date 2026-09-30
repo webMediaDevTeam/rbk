@@ -2,7 +2,7 @@ import Badge from '@/components/ui/badge.jsx'
 
 /**
  * Badge du statut de réservation (valeurs du modèle, docs/models.puml).
- * CALL_BACK s'affiche « À RAPPELER » (UDAPTE.md).
+ * CALL_BACK s'affiche « À rappeler » (UDAPTE.md).
  */
 export default function ReservationStatusBadge({ status }) {
   const variants = {
@@ -18,7 +18,7 @@ export default function ReservationStatusBadge({ status }) {
     PENDING: 'En attente',
     YES: 'Oui',
     NO: 'Non',
-    BV_VOICEMAIL: 'Boîte vocale',
+    BV_VOICEMAIL: 'BV',
     CALL_BACK: 'À rappeler',
     REALIZED: 'Réalisé',
   }

@@ -2,7 +2,7 @@ import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
-import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
+import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import { respondentsText } from './prospectFormat'
 
 /**
@@ -71,11 +71,13 @@ export default function ProspectTable({ clients, startIndex = 0, sortBy, sortOrd
                     {c.licence_number ?? '—'}
                   </div>
                 </TableCell>
-                {/* `whitespace-normal` : le badge peut passer sur deux lignes
-                    plutôt que de déborder de sa cellule. */}
+                {/* Une seule valeur : statut client si blacklisté/disponible,
+                    sinon statut de la réservation courante (§9). */}
                 <TableCell className="whitespace-normal overflow-hidden">
-                  <ClientStatus
-                    status={c.display_status ?? c.status}
+                  <ProspectStatus
+                    status={c.status}
+                    displayStatus={c.display_status}
+                    reservationStatus={c.reservation_status}
                     isBlacklisted={c.is_blacklisted}
                     returnedAt={c.returned_at}
                     className="w-full max-w-full"

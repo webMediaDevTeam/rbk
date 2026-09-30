@@ -4,10 +4,12 @@ use App\Http\Controllers\Api\V1\Commercial\ClientController;
 use App\Http\Controllers\Api\V1\Commercial\NoteController;
 use App\Http\Controllers\Api\V1\Commercial\OutcomeController;
 use App\Http\Controllers\Api\V1\Commercial\ReminderController;
+use App\Http\Controllers\Api\V1\Commercial\ReservationController;
+use App\Http\Controllers\Api\V1\Commercial\ReservationGroupController;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL'])->group(function () {
+Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(function () {
     Route::get('clients', [ClientController::class, 'index']);
     Route::get('clients/mes', [ClientController::class, 'mine']);
     Route::get('clients/{id}', [ClientController::class, 'show']);
@@ -20,17 +22,19 @@ Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL'])->group(func
 
     Route::get('reminders', [ReminderController::class, 'index']);
     Route::get('reminders/count', [ReminderController::class, 'count']);
+    // Marquer un rappel comme terminé (+ note facultative dans l'historique)
+    Route::post('reminders/{id}/done', [ReminderController::class, 'done']);
 
-    Route::get('reservation-groups', [\App\Http\Controllers\Api\V1\Commercial\ReservationGroupController::class, 'index']);
-    Route::get('reservation-groups/{id}', [\App\Http\Controllers\Api\V1\Commercial\ReservationGroupController::class, 'show']);
-    Route::post('clients/reserver', [\App\Http\Controllers\Api\V1\Commercial\ReservationController::class, 'store']);
+    Route::get('reservation-groups', [ReservationGroupController::class, 'index']);
+    Route::get('reservation-groups/{id}', [ReservationGroupController::class, 'show']);
+    Route::post('clients/reserver', [ReservationController::class, 'store']);
 
     // Compteur header : réservations actives du commercial connecté
-    Route::get('reservations/active-count', [\App\Http\Controllers\Api\V1\Commercial\ReservationController::class, 'activeCount']);
+    Route::get('reservations/active-count', [ReservationController::class, 'activeCount']);
 });
 
 // Renommage de liste : propriétaire (COMERCIAL) ou ADMIN / SUPER_ADMIN.
 // Route hors groupe COMERCIAL pur pour que le contrôleur puisse autoriser un admin.
-Route::middleware(['auth:sanctum', CheckRole::class . ':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
-    Route::patch('reservation-groups/{id}', [\App\Http\Controllers\Api\V1\Commercial\ReservationGroupController::class, 'update']);
+Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
+    Route::patch('reservation-groups/{id}', [ReservationGroupController::class, 'update']);
 });

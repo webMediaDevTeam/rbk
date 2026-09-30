@@ -28,7 +28,7 @@ const NOTE_TYPE_CONFIG = {
   },
   BV: {
     icon: Voicemail,
-    label: 'Boîte vocale',
+    label: 'BV',
     variant: 'warning',
     nodeClass: 'bg-amber-500',
   },

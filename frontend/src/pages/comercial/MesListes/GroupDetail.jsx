@@ -3,7 +3,7 @@ import { ChevronRight, Home, ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglas
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
-import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
+import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import Input from '@/components/ui/input.jsx'
 import Button from '@/components/ui/button.jsx'
@@ -83,7 +83,7 @@ export default function GroupDetailPage() {
   } = useGroupDetail()
 
   // Barre de badges de statut de réservation — **même structure que la page
-  // « Tous les prospects »** (ProspectKpis) : `Tous` en 1er, puis les statuts
+  // « Grande liste »** (ProspectKpis) : `Tous` en 1er, puis les statuts
   // dans l'ordre du workflow (`En attente` en 2e), sélection multiple, couleur
   // pleine à la sélection et **tous les compteurs affichés, même à 0**.
   const STATUS_PILLS = [
@@ -116,7 +116,7 @@ export default function GroupDetailPage() {
     },
     {
       key: 'BV_VOICEMAIL',
-      label: 'Boîte vocale',
+      label: 'BV',
       icon: Voicemail,
       iconClass: 'bg-amber-500/10 text-[var(--warning-fg)]',
       activeClass: 'border border-transparent bg-amber-700',
@@ -167,14 +167,18 @@ export default function GroupDetailPage() {
 
   // État de réservation (tableau **et** cartes mobiles) : « En attente »
   // (`PENDING`) affiche simplement `—` — la ligne est déjà en gris
-  // `row-pending` et le badge « En attente » de la barre porte l'info.
-  // Les autres statuts gardent leur badge coloré.
-  const statusCell = (status) =>
-    status === 'PENDING' ? (
-      <span className="text-muted-foreground">—</span>
-    ) : (
-      <ReservationStatusBadge status={status} />
-    )
+  // Une seule valeur par ligne (docs/RULES.md §9) : statut client si le
+  // prospect est blacklisté ou (re)disponible, sinon statut de la
+  // réservation courante — « En attente » s'affiche « - ».
+  const statusCell = (r) => (
+    <ProspectStatus
+      status={r.client?.status}
+      displayStatus={r.client?.display_status}
+      reservationStatus={r.status}
+      isBlacklisted={r.client?.is_blacklisted}
+      returnedAt={r.client?.returned_at}
+    />
+  )
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -271,9 +275,9 @@ export default function GroupDetailPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">{r.client?.phone ?? '—'}</TableCell>
                       <TableCell className="text-muted-foreground">{r.client?.municipality ?? '—'}</TableCell>
-                      {/* État = statut de **réservation**, pas le statut client
-                          (« En attente » → `—`). */}
-                      <TableCell>{statusCell(r.status)}</TableCell>
+                      {/* État = une seule valeur : statut client si
+                          blacklisté/disponible, sinon réservation (§9). */}
+                      <TableCell>{statusCell(r)}</TableCell>
                       {/* Rappel planifié (BV / À rappeler) : la ligne reste
                           affichée, on montre juste la date de retour. */}
                       <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
@@ -332,10 +336,10 @@ export default function GroupDetailPage() {
                       </div>
                     )}
                   </div>
-                  {/* État = statut de **réservation**, comme la colonne du
-                      tableau (« En attente » → `—`). */}
+                  {/* État = une seule valeur, comme la colonne du tableau
+                      (docs/RULES.md §9). */}
                   <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-border">
-                    {statusCell(r.status)}
+                    {statusCell(r)}
                   </div>
                 </div>
               ))}
