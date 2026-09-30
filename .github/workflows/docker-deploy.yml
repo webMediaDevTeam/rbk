@@ -3,7 +3,7 @@ name: Deploy to VPS
 on:
   push:
     branches:
-      - master # or main depending on your primary branch name
+      - master
 
 jobs:
   deploy:
@@ -13,69 +13,193 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Executing Remote SSH Commands
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          script: |
-            # 1. Ensure target directory exists
-            mkdir -p ~/apps/main
-            cd ~/apps/main
+          command_timeout: 20m
 
-            # 2. Clone repository if not present, otherwise pull latest changes
+          envs: DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,VPS_HOST
+
+          script: |
+            set -e
+
+            APP_DIR="$HOME/apps/main"
+
+            echo "==> Deploying $GITHUB_REPOSITORY"
+            echo "==> Commit: $GITHUB_SHA"
+
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+
+            # ----------------------------------------
+            # 1. Get latest code
+            # ----------------------------------------
+
             if [ ! -d ".git" ]; then
-              git clone https://github.com/${{ github.repository }}.git .
+              echo "==> Cloning repository"
+
+              git clone "git@github.com:${GITHUB_REPOSITORY}.git" .
             else
-              git fetch --all
+              echo "==> Updating repository"
+
+              git fetch origin master
+              git checkout master
               git reset --hard origin/master
+              git clean -fd
             fi
 
-            # 3. Create root .env file dynamically
-            cat << 'EOF' > .env
+            # ----------------------------------------
+            # 2. Create production environment
+            # ----------------------------------------
+
+            cat > .env <<EOF
             APP_NAME="RBQBot"
             APP_ENV=production
             APP_DEBUG=false
-            VPS_IP=${{ secrets.VPS_HOST }}
-            APP_URL=http://${{ secrets.VPS_HOST }}
-            FRONTEND_URL=http://${{ secrets.VPS_HOST }}
+
+            VPS_IP=${VPS_HOST}
+            APP_URL=http://${VPS_HOST}
+            FRONTEND_URL=http://${VPS_HOST}
 
             DB_CONNECTION=mysql
             DB_HOST=mysql
             DB_PORT=3306
             DB_DATABASE=rbqbot
             DB_USERNAME=rbqbot
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}
+            DB_PASSWORD=${DB_PASSWORD}
+            DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
 
             CACHE_STORE=redis
             QUEUE_CONNECTION=redis
             SESSION_DRIVER=redis
+
             BROADCAST_CONNECTION=reverb
+
             REDIS_HOST=redis
             REDIS_PORT=6379
             REDIS_PASSWORD=null
 
             REVERB_HOST=0.0.0.0
             REVERB_PORT=8080
-            VITE_API_URL=http://${{ secrets.VPS_HOST }}:8000
-            APP_KEY=${{ secrets.APP_KEY }}
+
+            VITE_API_URL=http://${VPS_HOST}:8000
+
+            APP_KEY=${APP_KEY}
             EOF
 
-            # 4. Copy .env to backend directory for Laravel
-            cp .env ./backend/.env
+            cp .env backend/.env
 
-            # 5. Build and launch Docker containers
+            # ----------------------------------------
+            # 3. Validate Compose configuration
+            # ----------------------------------------
+
+            echo "==> Validating Docker Compose"
+
+            docker compose -f docker-compose.prod.yml config --quiet
+
+            # ----------------------------------------
+            # 4. Build and start containers
+            # ----------------------------------------
+
+            echo "==> Starting Docker services"
+
             docker compose -f docker-compose.prod.yml up -d --build
 
-            # 6. Install dependencies, run migrations and database seeding
-            docker compose -f docker-compose.prod.yml exec -T backend composer install --no-interaction --prefer-dist --optimize-autoloader
-            docker compose -f docker-compose.prod.yml exec -T backend php artisan migrate --force
-            docker compose -f docker-compose.prod.yml exec -T backend php artisan db:seed --force
+            # ----------------------------------------
+            # 5. Wait for MySQL
+            # ----------------------------------------
 
-            # 7. Optimize Laravel caches
-            docker compose -f docker-compose.prod.yml exec -T backend php artisan config:cache
-            docker compose -f docker-compose.prod.yml exec -T backend php artisan route:cache
-            docker compose -f docker-compose.prod.yml exec -T backend php artisan view:cache
+            echo "==> Waiting for MySQL"
+
+            for i in $(seq 1 60); do
+              if docker compose -f docker-compose.prod.yml exec -T mysql \
+                mysqladmin ping \
+                -h127.0.0.1 \
+                -uroot \
+                -p"${DB_ROOT_PASSWORD}" \
+                --silent >/dev/null 2>&1; then
+
+                echo "MySQL is ready"
+                break
+              fi
+
+              if [ "$i" -eq 60 ]; then
+                echo "ERROR: MySQL did not become ready"
+                docker compose -f docker-compose.prod.yml logs --tail=100 mysql
+                exit 1
+              fi
+
+              sleep 2
+            done
+
+            # ----------------------------------------
+            # 6. Wait for backend
+            # ----------------------------------------
+
+            echo "==> Waiting for backend"
+
+            for i in $(seq 1 30); do
+              if docker compose -f docker-compose.prod.yml exec -T backend \
+                php artisan --version >/dev/null 2>&1; then
+
+                echo "Backend is ready"
+                break
+              fi
+
+              if [ "$i" -eq 30 ]; then
+                echo "ERROR: Backend did not become ready"
+                docker compose -f docker-compose.prod.yml logs --tail=100 backend
+                exit 1
+              fi
+
+              sleep 2
+            done
+
+            # ----------------------------------------
+            # 7. Install PHP dependencies
+            # ----------------------------------------
+
+            echo "==> Installing Composer dependencies"
+
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              composer install \
+              --no-interaction \
+              --prefer-dist \
+              --optimize-autoloader \
+              --no-dev
+
+            # ----------------------------------------
+            # 8. Database migrations
+            # ----------------------------------------
+
+            echo "==> Running migrations"
+
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              php artisan migrate --force
+
+            # ----------------------------------------
+            # 9. Laravel caches
+            # ----------------------------------------
+
+            echo "==> Optimizing Laravel"
+
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              php artisan config:cache
+
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              php artisan route:cache
+
+            docker compose -f docker-compose.prod.yml exec -T backend \
+              php artisan view:cache
+
+            # ----------------------------------------
+            # 10. Final status
+            # ----------------------------------------
+
+            echo "==> Deployment complete"
+
+            docker compose -f docker-compose.prod.yml ps
