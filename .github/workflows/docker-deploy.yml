@@ -112,7 +112,8 @@ jobs:
             CACHE_STORE=redis
             QUEUE_CONNECTION=redis
             SESSION_DRIVER=redis
-            BROADCAST_CONNECTION=reverb
+            # laravel/reverb n'est pas installé : broadcast vers le journal
+            BROADCAST_CONNECTION=log
 
             REDIS_HOST=redis
             REDIS_PORT=6379
@@ -180,12 +181,25 @@ jobs:
 
             echo "==> Waiting for MySQL"
 
+            # Identifiants de l'APPLICATION, lus dans le .env qu'on vient
+            # d'écrire : c'est exactement ce compte que Laravel utilisera.
+            # On n'utilise pas root : sur cette base il n'est joignable que
+            # par socket/localhost, et un essai en TCP échoue avec
+            # « Access denied for user 'root'@'127.0.0.1' ».
+            DBU="$(sed -n 's/^DB_USERNAME=//p' .env)"
+            DBP="$(sed -n 's/^DB_PASSWORD=//p' .env)"
+
+            if [ -z "$DBU" ] || [ -z "$DBP" ]; then
+              echo "ERREUR: DB_USERNAME/DB_PASSWORD absents du .env généré"
+              exit 1
+            fi
+
             for i in $(seq 1 60); do
               if err="$(docker compose -f docker-compose.prod.yml exec -T mysql \
-                mysql -h127.0.0.1 -uroot -p"${DB_ROOT_PASSWORD}" \
+                mysql -h127.0.0.1 -u"${DBU}" -p"${DBP}" \
                 -e "SELECT 1" 2>&1 >/dev/null)"; then
 
-                echo "MySQL is ready"
+                echo "MySQL is ready (compte ${DBU})"
                 break
               fi
 

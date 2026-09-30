@@ -24,7 +24,10 @@ x-app-env: &app-env
   CACHE_STORE: redis
   QUEUE_CONNECTION: redis
   SESSION_DRIVER: redis
-  BROADCAST_CONNECTION: reverb
+  # `laravel/reverb` n'est pas installé (aucun usage dans le code) :
+  # broadcast vers le journal. Passer à `reverb` après
+  # `composer require laravel/reverb` + réactivation du service.
+  BROADCAST_CONNECTION: log
   REVERB_HOST: 0.0.0.0
   REVERB_PORT: "8080"
   REVERB_APP_ID: ${REVERB_APP_ID}
@@ -120,33 +123,7 @@ services:
     networks:
       - rbqbot-network
 
-  # ---------- 5. Serveur WebSocket ----------
-  reverb:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: rbk-backend:prod
-    container_name: rbqbot-reverb
-    restart: always
-    working_dir: /var/www/html
-    volumes:
-      - backend_uploads:/var/www/html/storage/app/public
-    depends_on:
-      backend:
-        condition: service_started
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    command: php artisan reverb:start --host=0.0.0.0 --port=8080
-    environment:
-      <<: *app-env
-    expose:
-      - "8080"
-    networks:
-      - rbqbot-network
-
-  # ---------- 6. Worker de files ----------
+  # ---------- 5. Worker de files ----------
   queue:
     build:
       context: ./backend
@@ -170,7 +147,7 @@ services:
     networks:
       - rbqbot-network
 
-  # ---------- 7. Scheduler ----------
+  # ---------- 6. Scheduler ----------
   scheduler:
     build:
       context: ./backend
@@ -194,7 +171,7 @@ services:
     networks:
       - rbqbot-network
 
-  # ---------- 8. Frontend (statique, Nginx interne) ----------
+  # ---------- 7. Frontend (statique, Nginx interne) ----------
   frontend:
     build:
       context: ./frontend
@@ -212,7 +189,7 @@ services:
     networks:
       - rbqbot-network
 
-  # ---------- 9. Reverse proxy (point d'entrée) ----------
+  # ---------- 8. Reverse proxy (point d'entrée) ----------
   nginx:
     image: nginx:alpine
     container_name: rbqbot-gateway
@@ -230,7 +207,6 @@ services:
     depends_on:
       - frontend
       - backend
-      - reverb
     networks:
       - rbqbot-network
 
