@@ -912,6 +912,24 @@ mêmes clés françaises que l'import avec repli `Licence (propre)`).
   corps invalide, tableau vide ou lot trop long → `422` (rien n'est
   supprimé).
 
+## 13. Téléphonie & Call Logs (RingCentral)
+
+Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/exteranl_api.md`).
+
+* **Configuration** (`config/services.php` sous `ringcentral`) :
+  - `RINGCENTRAL_CLIENT_ID`
+  - `RINGCENTRAL_CLIENT_SECRET`
+  - `RINGCENTRAL_SERVER_URL` (défaut : `https://platform.ringcentral.com`)
+  - `RINGCENTRAL_JWT`
+* **Service** : `App\Services\RingCentralService` (authentification JWT, lecture des extensions et de l'historique d'appels).
+* **Endpoints** (`auth:sanctum`) :
+  - `GET /api/v1/call-logs/users` : liste des utilisateurs / extensions
+  - `GET /api/v1/call-logs/users/{extensionId}` : historique d'appels d'une extension
+  - `GET /api/v1/call-logs/by-phone/{phone}` : historique d'appels vers un numéro cible
+* **Gestion des erreurs** : exception SDK / API injoignable → réponse HTTP `502` avec `{success: false, error: "..."}`.
+* **Test Interface (Super Admin)** : `/call-logs-test` (visualisation brute des données pour validation).
+
+
 **Conservés inchangés** (existaient avant l'alignement) :
 
 * `id` UUID reste la clé primaire (FK `reservations`, `rappels`, `notes`) ;

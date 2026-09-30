@@ -14,6 +14,7 @@ import RemindersPage from '@/pages/comercial/Reminders/index.jsx'
 import AutoRappelsPage from '@/pages/comercial/AutoRappels/index.jsx'
 import ComercialDetailPage from '@/pages/shared/comercialDetail/index.jsx'
 import ClientsHistoryPage from '@/pages/shared/clientsHistory/index.jsx'
+import CallLogTestPage from '@/pages/superAdmin/CallLogTest/index.jsx'
 export default function AppRoutes() {
   return (
     <Routes>
@@ -31,6 +32,7 @@ export default function AppRoutes() {
       <Route path="/reminders" element={<RemindersPage />} />
       <Route path="/auto-rappels" element={<AutoRappelsPage />} />
       <Route path="/admins" element={<AdminListPage />} />
+      <Route path="/call-logs-test" element={<CallLogTestPage />} />
       <Route path="/connexion" element={<ConnexionPage />} />
       <Route path="/verify-account" element={<VerifyAccountPage />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

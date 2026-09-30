@@ -16,6 +16,7 @@ import {
   Bell,
   Voicemail,
   UserSearch,
+  PhoneCall,
 } from 'lucide-react'
 
 const ROLE_NAV = {
@@ -33,6 +34,7 @@ const ROLE_NAV = {
         { title: 'Employés', path: '/commerciaux', icon: List },
         { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
+        { title: 'Test Appels (RingCentral)', path: '/call-logs-test', icon: PhoneCall },
       ],
     },
     {

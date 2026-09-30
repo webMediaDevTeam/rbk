@@ -154,6 +154,16 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       absent → `missing_items[]`. Tests `PublicClientBulkDeleteTest`
       (10 tests).
 
+## Phase 6bis — Intégration RingCentral (Call Logs) 📞
+
+- [x] Dépendance SDK : `ringcentral/ringcentral-php` (^3.0).
+- [x] Config & Env : `config/services.php` + `backend/.env.example`.
+- [x] Service : `App\Services\RingCentralService` (getAllUsers, getCallHistoryByUser, getCallHistoryToNumber).
+- [x] Contrôleur : `CallLogController` (`/api/v1/call-logs/*`) avec gestion d'erreurs HTTP 502.
+- [x] Tests : `CallLogApiTest` (5 tests validés).
+- [x] Vue de test Super Admin : `/call-logs-test` dans la navigation Super Admin.
+
+
 ## Phase 7 — Écarts API (audit du 2026-09-29) ⏳
 
 Audit complet des routes (`routes/api/*.php`), de `CallWorkflowService`, des

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Shared\AuthController;
+use App\Http\Controllers\Api\V1\Shared\CallLogController;
 use App\Http\Controllers\Api\V1\Shared\DashboardController;
 use App\Http\Controllers\Api\V1\Shared\ProspectFilterController;
 use App\Http\Controllers\Api\V1\Shared\ProspectOverviewController;
@@ -52,6 +53,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // globaux). Déclarée avant `clients/{id}` (routes/api/commercial.php) :
     // les routes se lisent dans l'ordre de chargement des fichiers.
     Route::get('clients/overview', [ProspectOverviewController::class, 'overview']);
+
+    // ── RingCentral / Call Logs ──────────────────────────────────
+    Route::get('call-logs/users', [CallLogController::class, 'users']);
+    Route::get('call-logs/users/{extensionId}', [CallLogController::class, 'userCalls']);
+    Route::get('call-logs/by-phone/{phone}', [CallLogController::class, 'callsToNumber']);
 });
 
 // ── User Management ─────────────────────────────────────────
