@@ -151,9 +151,12 @@ class Client extends Model
      */
     public static function attributesFromPayload(array $payload): array
     {
-        $columns = [];
+        $columns = [
+            'cautionnementcompagnie' => 'cautionnement_compagnie',
+        ];
         foreach (self::PAYLOAD_MAP as $payloadKey => $column) {
             $columns[self::normalizePayloadKey($payloadKey)] = $column;
+            $columns[self::normalizePayloadKey($column)] = $column;
         }
 
         $attributes = [];
@@ -166,6 +169,10 @@ class Client extends Model
 
             $attributes[$column] = self::castPayloadValue($column, $value);
         }
+
+        // Nettoyage applicatif : le webhook ne valide pas (choix projet §12),
+        // il normalise — voir `scrubAttributes()`.
+        $attributes = self::scrubAttributes($attributes);
 
         // Le payload ne porte qu'un seul nom (« Nom de l'intervenant /
         // Entreprise ») : `enterprise_name` fait foi, `name` (affichage) et
@@ -507,11 +514,46 @@ class Client extends Model
 
         return match ($column) {
             'licence_propre_numero', 'respondent_count', 'sub_category_count' => (int) $value,
-            'surety_amount' => is_numeric($value) ? (float) $value : null,
+            'surety_amount' => self::cleanAmount($value),
             'licence_start_date', 'licence_end_date' => self::payloadDate($value),
-            'respondents', 'authorized_categories' => self::payloadArray($value),
+            // Liste JSON / tableau natif / chaîne séparée : `scrubAttributes()`
+            // en fait un tableau (`cautionnement_compagnie`) + la 1re valeur (`surety_company`).
+            'respondents', 'authorized_categories', 'cautionnement_compagnie', 'surety_company' => self::payloadArray($value),
             default => is_scalar($value) ? (string) $value : null,
         };
+    }
+
+    /** Montant : nombre natif (int/float), chaîne brute ("20000"), formatée ("20 000 $", "20,000.00"). */
+    private static function cleanAmount(mixed $value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (float) $value;
+        }
+
+        if (is_string($value)) {
+            $cleaned = trim($value);
+
+            if (is_numeric($cleaned)) {
+                return (float) $cleaned;
+            }
+
+            // Retrait des symboles monétaires, espaces et insécables
+            $cleaned = preg_replace('/[\s\x{00A0}$€CAD]+/u', '', $cleaned) ?? '';
+
+            if (preg_match('/^\d+,\d{1,2}$/', $cleaned)) {
+                $cleaned = str_replace(',', '.', $cleaned);
+            } else {
+                $cleaned = str_replace(',', '', $cleaned);
+            }
+
+            return is_numeric($cleaned) ? (float) $cleaned : null;
+        }
+
+        return null;
     }
 
     /** Date ISO n8n (`2025-05-28T00:00:00`) → `Y-m-d`, illisible → NULL. */
@@ -524,7 +566,243 @@ class Client extends Model
         }
     }
 
-    /** Tableau JSON n8n → tableau PHP (chaîne brute = un seul élément). */
+    /**
+     * Nettoyage des attributs mappés **avant** écriture (docs/RULES.md §12).
+     *
+     * Le webhook public n'impose aucune validation (choix projet) : il
+     * normalise à la place, pour que ce qui arrive par n8n / scraper soit
+     * présentable tel quel dans les vues et les filtres.
+     *
+     *  - textes        : espaces (dont insécables) réduits, quotes retirées ;
+     *  - libellés      : code de tête `[1.23]` / `1.23 — ` / `ADM — ` retiré,
+     *                    casse MAJUSCULE ramenée en casse normale (accents et
+     *                    casse existante conservés) ;
+     *  - téléphone     : `5143535820 Ext.: 5417` → `514-353-5820 ext. 5417` ;
+     *  - courriel      : validé + minuscules, invalide → NULL ;
+     *  - listes        : items nettoyés + doublons retirés (insensibles à la
+     *                    casse) puis stockées en JSON ;
+     *  - cautionnement : `cautionnement_compagnie` (JSON) + 1re valeur dans
+     *                    `surety_company` (string historique).
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private static function scrubAttributes(array $attributes): array
+    {
+        foreach (['licence_number', 'enterprise_name', 'intervenant_name',
+            'licence_status', 'full_address'] as $column) {
+            if (array_key_exists($column, $attributes)) {
+                $attributes[$column] = self::cleanText($attributes[$column]);
+            }
+        }
+
+        foreach (['municipality', 'administrative_region'] as $column) {
+            if (array_key_exists($column, $attributes)) {
+                $attributes[$column] = self::cleanLabel($attributes[$column]);
+            }
+        }
+
+        if (array_key_exists('neq', $attributes)) {
+            $attributes['neq'] = self::cleanNeq($attributes['neq']);
+        }
+
+        if (array_key_exists('phone', $attributes)) {
+            $attributes['phone'] = self::cleanPhone($attributes['phone']);
+        }
+
+        if (array_key_exists('email', $attributes)) {
+            $attributes['email'] = self::cleanEmail($attributes['email']);
+        }
+
+        foreach (['respondents', 'authorized_categories'] as $column) {
+            if (array_key_exists($column, $attributes)) {
+                $attributes[$column] = self::cleanList($attributes[$column]);
+            }
+        }
+
+        // Cautionnement : tableau JSON / natif + le string historique (1re valeur).
+        if (array_key_exists('surety_company', $attributes) || array_key_exists('cautionnement_compagnie', $attributes)) {
+            $source = $attributes['cautionnement_compagnie'] ?? $attributes['surety_company'];
+            $companies = self::cleanList($source);
+            $attributes['cautionnement_compagnie'] = $companies;
+            $attributes['surety_company'] = $companies[0] ?? null;
+        }
+
+        return $attributes;
+    }
+
+    /** Trim + espaces répétés (dont insécables) réduits, quotes retirées. */
+    private static function cleanText(mixed $value): ?string
+    {
+        if ($value === null || ! is_scalar($value)) {
+            return null; // NULL ou liste placée dans une colonne texte
+        }
+
+        $text = preg_replace('/[\x{00A0}\s]+/u', ' ', (string) $value) ?? '';
+        $text = trim(trim($text), "\"'“”‘’«»");
+
+        return $text === '' ? null : $text;
+    }
+
+    /** Texte + code de tête retiré + casse MAJUSCULE ramenée en casse normale. */
+    private static function cleanLabel(mixed $value): ?string
+    {
+        $text = self::cleanText($value);
+
+        if ($text === null) {
+            return null;
+        }
+
+        // `[1.23] Libellé`, `[GPC] Libellé`
+        $text = preg_replace('/^\[[^\]]{1,24}\]\s*/u', '', $text) ?? $text;
+        // `1.23 — Libellé`, `ADM - Libellé` (code numérique ou sigle seulement)
+        $text = preg_replace('/^(?:\d+(?:\.\d+)*|[A-Z]{2,}[0-9]*)\s*[—–-]{1,2}\s+/u', '', $text) ?? $text;
+
+        // « MONTREAL » → « Montreal » (les libellés déjà en casse normale,
+        // accents compris, ne sont pas touchés).
+        if (mb_strlen($text) > 3
+            && mb_strtoupper($text, 'UTF-8') === $text
+            && preg_match('/\p{L}{2,}/u', $text)) {
+            $text = mb_convert_case($text, MB_CASE_TITLE, 'UTF-8');
+        }
+
+        $text = trim($text, " \t\n\r\0\x0B,;:");
+
+        return $text === '' ? null : $text;
+    }
+
+    /** NEQ : chiffres seuls quand la valeur n'en contient qu'à eux. */
+    private static function cleanNeq(mixed $value): ?string
+    {
+        $text = self::cleanText($value);
+
+        if ($text === null) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $text) ?? '';
+
+        return $digits !== '' ? $digits : $text;
+    }
+
+    /**
+     * Téléphone nord-américain reformatté, extension conservée :
+     * `5143535820 Ext.: 5417` → `514-353-5820 ext. 5417`.
+     * Une valeur trop courte ou étrangère est laissée telle quelle.
+     */
+    private static function cleanPhone(mixed $value): ?string
+    {
+        $text = self::cleanText($value);
+
+        if ($text === null) {
+            return null;
+        }
+
+        $extension = null;
+        if (preg_match('/^(.*?)\s*(?:ext(?:ension)?\.?|poste|#)\s*[:.]?\s*(\d{1,8})\s*$/iu', $text, $m)) {
+            $text = trim($m[1]);
+            $extension = $m[2];
+        }
+
+        $digits = preg_replace('/\D+/', '', $text) ?? '';
+
+        if (strlen($digits) === 10) {
+            $text = sprintf('%s-%s-%s', substr($digits, 0, 3), substr($digits, 3, 3), substr($digits, 6));
+        } elseif (strlen($digits) === 11 && $digits[0] === '1') {
+            $text = sprintf('1 %s-%s-%s', substr($digits, 1, 3), substr($digits, 4, 3), substr($digits, 7));
+        }
+
+        return $extension === null || $extension === ''
+            ? ($text === '' ? null : $text)
+            : sprintf('%s ext. %s', $text, $extension);
+    }
+
+    /** Courriel validé : minuscules, 1re adresse valide, sinon NULL. */
+    private static function cleanEmail(mixed $value): ?string
+    {
+        if ($value === null || ! is_scalar($value)) {
+            return null;
+        }
+
+        $text = mb_strtolower(trim(preg_replace('/[\x{00A0}\s]+/u', ' ', (string) $value) ?? ''), 'UTF-8');
+        $text = preg_replace('/^mailto:/', '', $text) ?? $text;
+
+        if ($text === '') {
+            return null;
+        }
+
+        foreach (preg_split('/[,;]|\s+/', $text) ?: [] as $candidate) {
+            $candidate = trim($candidate, ".,;()<>");
+
+            if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Liste (tableau PHP / chaîne JSON / chaîne séparée) → items nettoyés,
+     * vides retirés et doublons éliminés (insensibles à la casse).
+     *
+     * Accepte tous les formats :
+     *  - données déjà propres : `["Jean Dupont", "Marie Curie"]`
+     *  - données brutes en chaîne JSON : `'["[1.23] Électricité", "ÉLECTRICITÉ"]'`
+     *  - chaîne séparée par pipe : `"Catégorie 1 | Catégorie 2"`
+     *  - objets structurés : `[['name' => 'Jean', 'role' => 'Sécurité']]`
+     *
+     * @return list<string>
+     */
+    private static function cleanList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded)
+                ? $decoded
+                : (str_contains($value, '|') ? array_map('trim', explode('|', $value)) : [$value]);
+        }
+
+        if (! is_array($value)) {
+            $value = $value === null ? [] : [$value];
+        }
+
+        $cleaned = [];
+        $seen = [];
+
+        foreach ($value as $item) {
+            if (is_array($item)) {
+                $name = $item['name'] ?? $item['nom'] ?? null;
+                $qual = $item['qualification'] ?? $item['role'] ?? null;
+                if ($name && $qual) {
+                    $item = "{$name} ({$qual})";
+                } elseif ($name) {
+                    $item = (string) $name;
+                } else {
+                    $item = implode(' ', array_filter(array_map('strval', $item)));
+                }
+            }
+
+            $label = self::cleanLabel($item);
+
+            if ($label === null) {
+                continue;
+            }
+
+            $key = mb_strtolower($label, 'UTF-8');
+
+            if (isset($seen[$key])) {
+                continue; // doublon
+            }
+
+            $seen[$key] = true;
+            $cleaned[] = $label;
+        }
+
+        return array_values($cleaned);
+    }
+
+    /** Tableau JSON n8n / tableau PHP / chaîne brute → tableau PHP. */
     private static function payloadArray(mixed $value): array
     {
         if (is_array($value)) {
@@ -534,7 +812,25 @@ class Client extends Model
         if (is_string($value)) {
             $decoded = json_decode($value, true);
 
-            return is_array($decoded) ? $decoded : [$value];
+            if (is_array($decoded)) {
+                return array_values($decoded);
+            }
+
+            $value = trim($value);
+
+            if ($value === '') {
+                return [];
+            }
+
+            if (str_contains($value, ' | ')) {
+                return array_map('trim', explode(' | ', $value));
+            }
+
+            if (str_contains($value, '|')) {
+                return array_map('trim', explode('|', $value));
+            }
+
+            return [$value];
         }
 
         return [];

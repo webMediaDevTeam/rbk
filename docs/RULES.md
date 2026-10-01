@@ -794,7 +794,7 @@ existante**. Mapping officiel payload → colonne :
 
 | Payload n8n | Colonne `clients` | Type |
 |---|---|---|
-| `licence_propre` | `licence_propre_numero` | INT UNSIGNED, UNIQUE |
+| `licence_propre` | `licence_propre_numero` | BIGINT UNSIGNED, UNIQUE (10 chiffres : 9 999 999 999 max, `INT UNSIGNED` casse à 4 294 967 295) |
 | `numero_licence` | `licence_number` | string |
 | `nom_intervenant_entreprise` | `intervenant_name` (+ `clients.name` / `enterprise_name`) | string |
 | `statut_licence` | `licence_status` | string (`valide` / `invalide`) |
@@ -885,7 +885,33 @@ le webhook scraper / n8n, CORS ouvert par `config/cors.php` (`paths` :
   état applicatif (`status` / `is_blacklisted` / `returned_at` / réservation)
   **jamais** repris, et une ligne **identique** n'est pas réécrite
   (`unchanged` : `updated_at` ne bouge pas d'une resynchronisation à
-  l'autre).
+  l'autre) ;
+* **nettoyage du payload** — `Client::scrubAttributes()`, appelé en fin de
+  `Client::attributesFromPayload()` (donc aussi par le seeder JSON et par la
+  clé de recherche du `bulk-delete`). Le webhook ne **valide** pas (choix
+  projet), il **normalise** ; le script d'import n'envoie que des **chaînes**
+  et c'est l'API qui type et nettoie :
+  - **textes** : espaces répétés (dont l'insécable) réduits, quotes de
+    protection retirées, `""` → `NULL` ;
+  - **libellés** (`municipality`, `administrative_region`,
+    `authorized_categories` → `categories`, `respondents`,
+    `cautionnement_compagnie`) : code de tête retiré — `[1.23] `, `[GPC] `,
+    `1.23 — `, `ADM - ` (uniquement code numérique ou sigle : `Saint-Hyacinthe`
+    et `cat1, 1.2` passent intacts) — puis casse **MAJUSCULE** ramenée en
+    casse normale (`MONTÉRÉGIE` → `Montérégie`) : accents et casse
+    existante **non touchés** ;
+  - **téléphone** : format nord-américain, extension conservée —
+    `5143535820 Ext.: 5417` → `514-353-5820 ext. 5417` ; valeur trop courte
+    ou étrangère laissée telle quelle (`555` reste `555`) ;
+  - **courriel** : minuscules, `mailto:` retiré, **validé**
+    (`filter_var`, `FILTER_VALIDATE_EMAIL`) : seule la première adresse
+    valide est conservée, une adresse invalide part en `NULL` ;
+  - **listes** : items nettoyés, vides retirés, **doublons éliminés**
+    (insensibles à la casse, la première occurrence gagne) et stockées en
+    JSON ; `surety_company` (string historique) reçoit la **1re** valeur de    la liste — un tableau arrivant dans cette colonne n'est plus perdu ;
+  - **NEQ** : chiffres seuls quand la valeur n'en contient qu'à eux ;
+  - **clé d'upsert** : `licence_number` est normalisé **avant** la
+    recherche, `  L-1  ` retrouve `L-1` (pas de doublon possible).
 
 **Endpoint public — suppression en masse** (`POST` **ou** `DELETE`
 `/api/v1/clients/bulk-delete`) : mêmes conditions que l'import (aucune
