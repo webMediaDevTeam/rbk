@@ -51,6 +51,17 @@ x-app-env: &app-env
   MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
   MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Zdig IA}
 
+  # --- RingCentral (téléphonie, SUPER_ADMIN) ---------------------------
+  # ⚠️ OBLIGATOIRE : en production il n'y a **pas** de bind mount, donc le
+  # `backend/.env` écrit par le CI n'est pas visible dans le conteneur.
+  # Sans ces variables d'environnement, Laravel n'a aucun credential et
+  # `RingCentralService` répond « RingCentral non configuré
+  # (RINGCENTRAL_CLIENT_ID ou CLIENT_SECRET manquant) ».
+  RINGCENTRAL_CLIENT_ID: ${RINGCENTRAL_CLIENT_ID:-}
+  RINGCENTRAL_CLIENT_SECRET: ${RINGCENTRAL_CLIENT_SECRET:-}
+  RINGCENTRAL_SERVER_URL: ${RINGCENTRAL_SERVER_URL:-https://platform.ringcentral.com}
+  RINGCENTRAL_JWT: ${RINGCENTRAL_JWT:-}
+
 services:
   # ---------- 1. Base de données ----------
   mysql:
