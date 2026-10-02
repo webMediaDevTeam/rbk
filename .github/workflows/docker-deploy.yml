@@ -9,6 +9,14 @@ name: Deploy to VPS
 #   Reverb                : REVERB_APP_ID, REVERB_APP_KEY, REVERB_APP_SECRET
 #   **SMTP Gmail**        : MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM_ADDRESS,
 #                           MAIL_FROM_NAME
+#   **RingCentral**       : RINGCENTRAL_CLIENT_ID, RINGCENTRAL_CLIENT_SECRET,
+#                           RINGCENTRAL_JWT
+#                           (RINGCENTRAL_SERVER_URL est optionnel : défaut
+#                           https://platform.ringcentral.com)
+#
+# ⚠️ RingCentral n'est **pas** bloquant : tant que ces secrets ne sont pas
+#    déclarés, le déploiement aboutit et seule la téléphonie
+#    (`/api/v1/call-logs*`, SUPER_ADMIN) reste inopérante.
 # ---------------------------------------------------------------
 
 on:
@@ -44,6 +52,10 @@ jobs:
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
           MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
           MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
+          RINGCENTRAL_CLIENT_ID: ${{ secrets.RINGCENTRAL_CLIENT_ID }}
+          RINGCENTRAL_CLIENT_SECRET: ${{ secrets.RINGCENTRAL_CLIENT_SECRET }}
+          RINGCENTRAL_SERVER_URL: ${{ secrets.RINGCENTRAL_SERVER_URL }}
+          RINGCENTRAL_JWT: ${{ secrets.RINGCENTRAL_JWT }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -51,7 +63,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 20m
 
-          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,MAIL_USERNAME,MAIL_PASSWORD,MAIL_FROM_ADDRESS,MAIL_FROM_NAME,GITHUB_REPOSITORY,GITHUB_SHA
+          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,MAIL_USERNAME,MAIL_PASSWORD,MAIL_FROM_ADDRESS,MAIL_FROM_NAME,RINGCENTRAL_CLIENT_ID,RINGCENTRAL_CLIENT_SECRET,RINGCENTRAL_SERVER_URL,RINGCENTRAL_JWT,GITHUB_REPOSITORY,GITHUB_SHA
 
           script: |
             set -e
@@ -74,6 +86,15 @@ jobs:
               if [ -z "$value" ]; then
                 echo "ERREUR: variable $name vide (bloc env:/envs: du workflow)"
                 exit 1
+              fi
+            done
+
+            # RingCentral / téléphonie : pas bloquant (Super Admin seulement),
+            # on se contente de signaler l'absence des secrets.
+            for name in RINGCENTRAL_CLIENT_ID RINGCENTRAL_CLIENT_SECRET RINGCENTRAL_JWT; do
+              value="$(printenv "$name" 2>/dev/null || true)"
+              if [ -z "$value" ]; then
+                echo "ATTENTION: secret $name absent -> téléphonie (/api/v1/call-logs*) indisponible"
               fi
             done
 
@@ -160,6 +181,17 @@ jobs:
             MAIL_PASSWORD="${MAIL_PASSWORD}"
             MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}
             MAIL_FROM_NAME="${MAIL_FROM_NAME:-Zdig IA}"
+
+            # --- RingCentral (téléphonie, SUPER_ADMIN) -------------------
+            # Secrets GitHub, jamais dans le dépôt. Lus par Laravel via
+            # backend/.env (ce fichier est recopié juste après) puis
+            # config/services.php -> RingCentralService.
+            # RINGCENTRAL_JWT porte l'extension source des appels sortants
+            # (from.extensionId doit être l'extension de la session).
+            RINGCENTRAL_CLIENT_ID=${RINGCENTRAL_CLIENT_ID}
+            RINGCENTRAL_CLIENT_SECRET=${RINGCENTRAL_CLIENT_SECRET}
+            RINGCENTRAL_SERVER_URL=${RINGCENTRAL_SERVER_URL:-https://platform.ringcentral.com}
+            RINGCENTRAL_JWT=${RINGCENTRAL_JWT}
 
             # URL de l'API compilée dans le bundle Vite : le front parle au
             # gateway sur :80 (le backend n'est plus publié sur :8000).
