@@ -120,6 +120,15 @@ class RingCentralApiTest extends TestCase
     {
         Sanctum::actingAs($this->superAdmin);
 
+        // ⚠️ Le contrôleur résout la source par défaut via `getMyExtension()` :
+        // sans mock, une suite qui répond (JWT valide) **déclencherait un vrai
+        // appel**. On force donc l'échec de résolution → 422, sans réseau.
+        // (Le pendant « source résolue » est couvert par
+        // `test_make_call_defaults_to_session_extension`.)
+        $mock = $this->mockService();
+        $mock->shouldReceive('getMyExtension')->once()->andThrow(new Exception('RingCentral non configuré'));
+        $mock->shouldNotReceive('makeCallOut');
+
         $this->postJson('/api/v1/call-logs/call', ['to' => '15145550123'])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['device_id']);
