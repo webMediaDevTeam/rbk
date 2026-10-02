@@ -20,13 +20,17 @@ return [
         // Webhook public d'import (RULES §12) : couvert par `api/*`, listé
         // ici pour tracer le endpoint ouvert sans authentification.
         'api/v1/clients/bulk-upsert',
-        // Conversion en liste noire par nom (endpoint public temporaire) :
-        // couvert par `api/*`, listé ici pour tracer la route ouverte.
+        // Conversion en liste noire par nom ou licence (endpoint public
+        // temporaire) : couvert par `api/*`, listé ici pour tracer la route
+        // ouverte.
         'api/v1/clients/convert-to-blacklist',
         // Indisponibilité en masse par numéro de téléphone (endpoint public
         // temporaire) : couvert par `api/*`, listé ici pour tracer la
         // route ouverte.
         'api/v1/clients/convert-to-unavailable',
+        // Fausses réservations « NON » (endpoint public temporaire) :
+        // couvert par `api/*`, listé ici pour tracer la route ouverte.
+        'api/v1/clients/create-no-reservations',
         'sanctum/csrf-cookie',
         'login',
         'logout',

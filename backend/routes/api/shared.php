@@ -49,6 +49,14 @@ Route::post('clients/convert-to-blacklist', [PublicClientController::class, 'con
 // visée → `UNAVAILABLE` + `returned_at = now + 3 mois` (geste NO).
 Route::post('clients/convert-to-unavailable', [PublicClientController::class, 'convertToUnavailable']);
 
+// Fausses réservations « NON » (endpoint public **temporaire**, spec
+// docs/create_no_reservations_api.md) : même surface que les routes
+// ci-dessus, aucune authentification, lot borné par
+// `PUBLIC_API_MAX_ITEMS` (mode `{"status": …}` : borné par
+// `NO_RESERVATIONS_STATUS_LIMIT`). Une ligne `reservations` `NO` par client
+// visé, attribuée à **un seul employé**, sans effet de bord métier.
+Route::post('clients/create-no-reservations', [PublicClientController::class, 'createNoReservations']);
+
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);

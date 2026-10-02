@@ -142,6 +142,27 @@ class PublicClientConvertToBlacklistTest extends TestCase
         $this->assertFalse((bool) $other->refresh()->is_blacklisted);
     }
 
+    public function test_a_partial_name_reaches_every_row_that_contains_it(): void
+    {
+        // Le mode **nom** est une recherche **partielle** (`LIKE '%nom%'`,
+        // insensible à la casse) : c'est le comportement historique de
+        // l'endpoint, contrairement au mode licence (égalité exacte).
+        $first = $this->makeClient(['enterprise_name' => 'Entreprises Richard Forget & Fils Inc.']);
+        $second = $this->makeClient(['enterprise_name' => 'FORGET Construction']);
+        $other = $this->makeClient(['enterprise_name' => 'Sans rapport Inc.']);
+
+        $this->postJson(self::URI, ['name' => 'forget'])
+            ->assertOk()
+            ->assertJsonPath('data.processed', 1)
+            ->assertJsonPath('data.matched', 2)
+            ->assertJsonPath('data.zapped', 2)
+            ->assertJsonPath('data.failed', 0);
+
+        $this->assertTrue((bool) $first->refresh()->is_blacklisted);
+        $this->assertTrue((bool) $second->refresh()->is_blacklisted);
+        $this->assertFalse((bool) $other->refresh()->is_blacklisted);
+    }
+
     public function test_already_blacklisted_rows_are_counted_and_not_rewritten(): void
     {
         $client = $this->makeClient([
@@ -302,6 +323,174 @@ class PublicClientConvertToBlacklistTest extends TestCase
         $this->assertTrue((bool) $alpha->refresh()->is_blacklisted);
         $this->assertTrue((bool) $beta->refresh()->is_blacklisted);
         $this->assertTrue((bool) $gamma->refresh()->is_blacklisted);
+    }
+
+    // ------------------------------------------------------ Cible : licence
+
+    public function test_guest_can_blacklist_by_licence_propre_without_authentication(): void
+    {
+        $client = $this->makeClient([
+            'enterprise_name' => 'Ville De Drummondville',
+            'licence_number' => '1100-3571-01',
+            'licence_propre_numero' => 1100357101,
+        ]);
+
+        $this->postJson(self::URI, ['licence' => '1100357101'])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.received', 1)
+            ->assertJsonPath('data.processed', 1)
+            ->assertJsonPath('data.matched', 1)
+            ->assertJsonPath('data.zapped', 1)
+            ->assertJsonPath('data.failed', 0)
+            // Ligne de rapport : cible = licence, `name` neutre.
+            ->assertJsonPath('data.zapped_items.0.index', 0)
+            ->assertJsonPath('data.zapped_items.0.type', Client::BLACKLIST_MODE_LICENCE)
+            ->assertJsonPath('data.zapped_items.0.key', '1100357101')
+            ->assertJsonPath('data.zapped_items.0.licence', '1100357101')
+            ->assertJsonPath('data.zapped_items.0.name', null)
+            ->assertJsonPath('data.zapped_items.0.zapped', 1);
+
+        $client->refresh();
+        $this->assertTrue((bool) $client->is_blacklisted);
+        $this->assertSame(Client::STATUS_BLACKLISTED, $client->status);
+
+        // La note reprend la licence visée.
+        $note = Note::where('client_id', $client->id)->firstOrFail();
+        $this->assertSame(
+            'Liste noire (API publique) : licence 1100357101',
+            $note->description
+        );
+    }
+
+    public function test_licence_number_column_is_used_when_propre_is_absent(): void
+    {
+        $client = $this->makeClient([
+            'enterprise_name' => 'Emard Couvre-Planchers inc.',
+            'licence_number' => '1104-8618-06',
+            'licence_propre_numero' => null,
+        ]);
+
+        // « Licence » (texte, forme `XXXX-XXXX-XX`) : pas de repli numérique.
+        $this->postJson(self::URI, ['licence' => '1104-8618-06'])
+            ->assertOk()
+            ->assertJsonPath('data.matched', 1)
+            ->assertJsonPath('data.zapped', 1);
+
+        $this->assertTrue((bool) $client->refresh()->is_blacklisted);
+    }
+
+    public function test_numeric_licence_reaches_both_licence_columns(): void
+    {
+        $propre = $this->makeClient([
+            'enterprise_name' => 'Par le numéro RBQ',
+            'licence_propre_numero' => 1105228909,
+        ]);
+        $text = $this->makeClient([
+            'enterprise_name' => 'Par le texte Licence',
+            'licence_number' => '1105228909',
+        ]);
+        $other = $this->makeClient(['enterprise_name' => 'Autre']);
+
+        // Valeur numérique pure → `licence_propre_numero` **et**
+        // `licence_number` sont visés (le champ « Licence (propre) » du
+        // registre peut être stocké dans l'un ou l'autre selon l'import).
+        $this->postJson(self::URI, ['licence' => '1105228909'])
+            ->assertOk()
+            ->assertJsonPath('data.matched', 2)
+            ->assertJsonPath('data.zapped', 2);
+
+        $this->assertTrue((bool) $propre->refresh()->is_blacklisted);
+        $this->assertTrue((bool) $text->refresh()->is_blacklisted);
+        $this->assertFalse((bool) $other->refresh()->is_blacklisted);
+    }
+
+    public function test_text_licence_never_matches_a_similar_numeric_one(): void
+    {
+        $client = $this->makeClient([
+            'enterprise_name' => 'Roy & Fils Ltée',
+            'licence_propre_numero' => 1105228909,
+        ]);
+
+        // `RB-1105228909` ne doit pas valider le numéro RBQ 1105228909.
+        $this->postJson(self::URI, ['licence' => 'RB-1105228909'])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.matched', 0)
+            ->assertJsonPath('data.zapped', 0)
+            ->assertJsonPath('data.ignored', 1)
+            ->assertJsonPath('data.not_found', 1)
+            ->assertJsonPath('data.failed', 0);
+
+        $this->assertFalse((bool) $client->refresh()->is_blacklisted);
+    }
+
+    public function test_licences_envelope_and_scraper_items_are_accepted(): void
+    {
+        $alpha = $this->makeClient(['enterprise_name' => 'Alpha Inc.', 'licence_propre_numero' => 1100357101]);
+        $beta = $this->makeClient(['enterprise_name' => 'Beta Inc.', 'licence_number' => '1104-8618-06']);
+        $gamma = $this->makeClient(['enterprise_name' => 'Gamma Inc.', 'licence_number' => '1100-3571-01']);
+
+        // {"licences": [...]}
+        $this->postJson(self::URI, ['licences' => ['1100357101', '1104-8618-06']])
+            ->assertOk()
+            ->assertJsonPath('data.received', 2)
+            ->assertJsonPath('data.matched', 2)
+            ->assertJsonPath('data.zapped', 2);
+
+        // Liste JSON nue d'objets scraper : la clé de licence prime sur le
+        // nom (qui ne correspondrait à aucune ligne).
+        $this->rawPost(json_encode([
+            ['Licence' => '1100-3571-01', 'Nom de l\'intervenant / Entreprise' => 'Inexistante Inc.'],
+        ], JSON_UNESCAPED_UNICODE))
+            ->assertOk()
+            ->assertJsonPath('data.zapped_items.0.type', Client::BLACKLIST_MODE_LICENCE)
+            ->assertJsonPath('data.zapped_items.0.licence', '1100-3571-01')
+            ->assertJsonPath('data.matched', 1);
+
+        $this->assertTrue((bool) $alpha->refresh()->is_blacklisted);
+        $this->assertTrue((bool) $beta->refresh()->is_blacklisted);
+        $this->assertTrue((bool) $gamma->refresh()->is_blacklisted);
+    }
+
+    public function test_unknown_licence_is_ignored_and_rerun_is_idempotent(): void
+    {
+        $client = $this->makeClient(['enterprise_name' => 'Idempotente Inc.', 'licence_propre_numero' => 1107833420]);
+
+        $this->postJson(self::URI, ['licences' => ['1107833420', '9999999999']])
+            ->assertOk()
+            ->assertJsonPath('data.processed', 2)
+            ->assertJsonPath('data.zapped', 1)
+            ->assertJsonPath('data.not_found', 1)
+            ->assertJsonPath('data.failed', 0)
+            ->assertJsonPath('data.ignored_items.0.index', 1)
+            ->assertJsonPath('data.ignored_items.0.licence', '9999999999')
+            ->assertJsonPath('data.ignored_items.0.reason', 'not_found');
+
+        $this->postJson(self::URI, ['licences' => ['1107833420']])
+            ->assertOk()
+            ->assertJsonPath('data.processed', 1)
+            ->assertJsonPath('data.zapped', 0)
+            ->assertJsonPath('data.already_blacklisted', 1)
+            ->assertJsonPath('data.failed', 0);
+
+        $this->assertSame(1, Note::count(), 'Un seul journal malgré deux passages.');
+        $this->assertTrue((bool) $client->refresh()->is_blacklisted);
+    }
+
+    public function test_licence_items_without_any_licence_key_are_failures(): void
+    {
+        $this->postJson(self::URI, ['licences' => [['municipality' => 'sans licence'], ['Licence' => '   ']]])
+            ->assertOk()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('data.processed', 0)
+            ->assertJsonPath('data.failed', 2)
+            ->assertJsonPath('data.errors.0.index', 0)
+            ->assertJsonPath('data.errors.0.licence', null);
+
+        $this->postJson(self::URI, ['licence' => ''])->assertStatus(422);
+        $this->postJson(self::URI, ['licence' => ['a' => 'b']])->assertStatus(422);
+        $this->assertSame(0, Note::count());
     }
 
     // --------------------------------------------------------- Erreurs partielles
