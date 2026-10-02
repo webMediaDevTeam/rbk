@@ -18,7 +18,7 @@ export default function ProspectToolbar(props) {
         inputProps={{
           value: search,
           onChange: (e) => setSearch(e.target.value),
-          placeholder: 'Rechercher prospects... (min 3 chars)',
+          placeholder: 'Rechercher : nom, entreprise, téléphone, NEQ, licence, catégorie… (3 car. — 2 pour un numéro)',
           'aria-label': 'Rechercher prospects',
         }}
       />

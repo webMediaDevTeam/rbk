@@ -166,7 +166,8 @@ export default function GroupDetailPage() {
   }))
 
   // État de réservation (tableau **et** cartes mobiles) : « En attente »
-  // (`PENDING`) affiche simplement `—` — la ligne est déjà en gris
+  // (`PENDING`) affiche simplement `—` — la ligne reste en fond normal
+  // (le gris est passé sur les lignes déjà traitées).
   // Une seule valeur par ligne (docs/RULES.md §9) : statut client si le
   // prospect est blacklisté ou (re)disponible, sinon statut de la
   // réservation courante — « En attente » s'affiche « - ».
@@ -252,15 +253,12 @@ export default function GroupDetailPage() {
                   {filteredReservations.map((r) => (
                     <TableRow
                       key={r.id}
-                      // Lignes « En attente » en gris (même traitement que la
-                      // liste courante de « Mes listes ») ; BV / À rappeler
-                      // gardent leur fond de suivi (trail row).
+                      // Fond gris inversé : les lignes **déjà traitées**
+                      // (statut ≠ PENDING) passent en `row-dimmed`
+                      // (gris clair / gris foncé en dark) ; les lignes
+                      // « En attente » gardent un fond normal.
                       className={`cursor-pointer transition-colors ${
-                        r.status === 'PENDING'
-                          ? 'row-pending'
-                          : r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
-                            ? 'bg-muted/40 hover:bg-muted/70'
-                            : 'hover:bg-muted/50'
+                        r.status === 'PENDING' ? 'hover:bg-muted/50' : 'row-dimmed'
                       }`}
                       onClick={openProspectClick(r.client?.id)}
                     >
@@ -302,12 +300,10 @@ export default function GroupDetailPage() {
               {filteredReservations.map((r) => (
                 <div
                   key={r.id}
+                  // Fond gris inversé : cartes **déjà traitées** en
+                  // `row-dimmed`, « En attente » en fond carte normal.
                   className={`relative flex flex-col rounded-xl border border-border text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer ${
-                    r.status === 'PENDING'
-                      ? 'row-pending'
-                      : r.status === 'BV_VOICEMAIL' || r.status === 'CALL_BACK'
-                        ? 'bg-muted/40'
-                        : 'bg-card'
+                    r.status === 'PENDING' ? 'bg-card' : 'row-dimmed'
                   }`}
                   onClick={openProspectClick(r.client?.id)}
                 >

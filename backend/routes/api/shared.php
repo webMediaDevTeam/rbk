@@ -33,6 +33,13 @@ Route::post('clients/bulk-upsert', [PublicClientController::class, 'bulkUpsert']
 // (RULES §12). `POST` et `DELETE` pointent sur la même action.
 Route::match(['post', 'delete'], 'clients/bulk-delete', [PublicClientController::class, 'bulkDelete']);
 
+// Conversion en liste noire par nom — endpoint public **temporaire**
+// (spec docs/convert_to_blacklist_api.md) : même surface que les deux
+// routes ci-dessus, aucune authentification, lot borné par
+// `PUBLIC_API_MAX_ITEMS`. Recherche par `enterprise_name` / `name`
+// insensible à la casse.
+Route::post('clients/convert-to-blacklist', [PublicClientController::class, 'convertToBlacklist']);
+
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);

@@ -263,6 +263,76 @@ class ClientLicenceFieldsApiTest extends TestCase
         }
     }
 
+    public function test_search_matches_phone_regardless_of_formatting(): void
+    {
+        $commercial = $this->makeUser('COMERCIAL');
+        $admin = $this->makeUser('ADMIN');
+        $target = Client::create([
+            'name' => 'Numéro Formaté', 'enterprise_name' => 'Formaté Inc',
+            'status' => 'AVAILABLE',
+            'phone' => '9900-0895-49',
+        ]);
+        $other = Client::create([
+            'name' => 'Autre Numéro', 'enterprise_name' => 'Autre Inc',
+            'status' => 'AVAILABLE',
+            'phone' => '514-555-0199',
+        ]);
+
+        // Même numéro saisi de n'importe quelle façon — chiffres bruts,
+        // format exact, parenthèses / espaces, indicatif « + », fragment.
+        $terms = [
+            '9900089549',
+            '9900-0895-49',
+            '(9900) 0895 49',
+            '+9900 0895 49',
+            '0895',
+        ];
+
+        // Grande liste commerciale (`GET /clients`).
+        Sanctum::actingAs($commercial);
+
+        foreach ($terms as $term) {
+            $ids = collect($this->getJson('/api/v1/clients?search='.urlencode($term))
+                ->assertOk()
+                ->json('data.clients'))->pluck('id');
+
+            $this->assertTrue($ids->contains($target->id), "Recherche téléphone « {$term} ».");
+            $this->assertFalse($ids->contains($other->id), "Seul le client ciblé doit matcher (« {$term} »).");
+        }
+
+        // Grande liste admin (`GET /commercials/clients`) : même comportement.
+        Sanctum::actingAs($admin);
+
+        foreach ($terms as $term) {
+            $ids = collect($this->getJson('/api/v1/commercials/clients?search='.urlencode($term))
+                ->assertOk()
+                ->json('data.clients'))->pluck('id');
+
+            $this->assertTrue($ids->contains($target->id), "Recherche admin téléphone « {$term} ».");
+            $this->assertFalse($ids->contains($other->id), "Seul le client ciblé doit matcher (« {$term} »).");
+        }
+    }
+
+    public function test_admin_search_covers_licence_propre_numero(): void
+    {
+        $admin = $this->makeUser('ADMIN');
+        $target = $this->makeN8nClient();
+        $other = Client::create([
+            'name' => 'Autre Inc',
+            'status' => 'AVAILABLE',
+            'licence_propre_numero' => 87654321,
+        ]);
+
+        Sanctum::actingAs($admin);
+
+        $ids = collect($this->getJson('/api/v1/commercials/clients?search=12345678')
+            ->assertOk()
+            ->json('data.clients'))->pluck('id');
+
+        $this->assertTrue($ids->contains($target->id), 'La licence propre doit être recherchable côté admin.');
+        $this->assertFalse($ids->contains($other->id), 'Seul le client ciblé doit matcher.');
+    }
+
     public function test_admin_prospect_list_returns_the_same_displayed_columns(): void
     {
         $admin = $this->makeUser('ADMIN');

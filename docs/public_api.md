@@ -288,3 +288,20 @@ always in `skipped_items` / `missing_items` / `errors`.
 access, `DELETE` verb, skip + continue, note-only client, missing licence,
 string/object/bare-list bodies, 422 envelopes, lot bound, filter-cache
 invalidation, CORS preflight.
+
+---
+
+# Public Convert-To-Blacklist API
+
+Third public route on the same surface (no authentication, CORS `api/*`,
+lot bounded by `PUBLIC_API_MAX_ITEMS`):
+
+* `POST /api/v1/clients/convert-to-blacklist` — blacklist clients **by
+  name** (`LOWER(enterprise_name) = LOWER(?) OR LOWER(name) = LOWER(?)`,
+  case-insensitive, every matching row converted).
+
+**Endpoint is temporary** — full spec (request bodies, business gesture
+§3.4, consolidated report, removal procedure): [`docs/convert_to_blacklist_api.md`](convert_to_blacklist_api.md).
+Report keys: `processed` (success) / `zapped` / `ignored` (unknown name =
+ignored, never an error) / `failed` (errors) — rerun-safe (idempotent).
+Tests: `backend/tests/Feature/PublicClientConvertToBlacklistTest.php` (15 tests).

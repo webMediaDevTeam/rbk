@@ -1,5 +1,16 @@
 name: Deploy to VPS
 
+# ---------------------------------------------------------------
+# Secrets GitHub à déclarer (Settings > Secrets and variables >
+# Actions) — noms seuls ici, **jamais** les valeurs :
+#
+#   Réseau / déploiement : VPS_HOST, VPS_USERNAME, VPS_SSH_KEY, VPS_PORT
+#   Laravel               : APP_KEY, DB_PASSWORD, DB_ROOT_PASSWORD
+#   Reverb                : REVERB_APP_ID, REVERB_APP_KEY, REVERB_APP_SECRET
+#   **SMTP Gmail**        : MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM_ADDRESS,
+#                           MAIL_FROM_NAME
+# ---------------------------------------------------------------
+
 on:
   push:
     branches:
@@ -20,6 +31,7 @@ jobs:
         # s'il est déclaré ci-dessous. Sans ce bloc, VPS_HOST / APP_KEY / DB_*
         # arrivaient vides sur le VPS -> APP_URL=http:// -> "Invalid URI."
         # au package:discover (déploiement en échec du 30/09 à 07:04).
+        # MAIL_* suivent la même règle : SMTP Gmail réel côté production.
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
@@ -28,6 +40,10 @@ jobs:
           REVERB_APP_ID: ${{ secrets.REVERB_APP_ID }}
           REVERB_APP_KEY: ${{ secrets.REVERB_APP_KEY }}
           REVERB_APP_SECRET: ${{ secrets.REVERB_APP_SECRET }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
+          MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -35,7 +51,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 20m
 
-          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,GITHUB_REPOSITORY,GITHUB_SHA
+          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,MAIL_USERNAME,MAIL_PASSWORD,MAIL_FROM_ADDRESS,MAIL_FROM_NAME,GITHUB_REPOSITORY,GITHUB_SHA
 
           script: |
             set -e
@@ -47,10 +63,13 @@ jobs:
 
             # ----------------------------------------
             # 0. Garde-fou : un secret non transmis = .env incomplet
+            #    (MAIL_* = SMTP Gmail : sans eux, Laravel retomberait sur
+            #    `log` / `hello@example.com` en production)
             # ----------------------------------------
 
             for name in VPS_HOST APP_KEY DB_PASSWORD DB_ROOT_PASSWORD \
-                        REVERB_APP_ID REVERB_APP_KEY REVERB_APP_SECRET; do
+                        REVERB_APP_ID REVERB_APP_KEY REVERB_APP_SECRET \
+                        MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_ADDRESS; do
               value="$(printenv "$name" 2>/dev/null || true)"
               if [ -z "$value" ]; then
                 echo "ERREUR: variable $name vide (bloc env:/envs: du workflow)"
@@ -128,6 +147,19 @@ jobs:
             # Origines CORS (backend/config/cors.php) : le front est servi
             # depuis la même origine que l'API en production.
             CORS_ALLOWED_ORIGINS=http://${VPS_HOST}
+
+            # --- SMTP Gmail (identifiants réels, venant des secrets GitHub) --
+            # Port 587 + STARTTLS (MAIL_SCHEME=smtp) ; alternative TLS
+            # implicite : 465 + smtps. MAIL_PASSWORD est entre guillemets :
+            # le mot de passe d'application contient des espaces.
+            MAIL_MAILER=smtp
+            MAIL_SCHEME=smtp
+            MAIL_HOST=smtp.gmail.com
+            MAIL_PORT=587
+            MAIL_USERNAME=${MAIL_USERNAME}
+            MAIL_PASSWORD="${MAIL_PASSWORD}"
+            MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}
+            MAIL_FROM_NAME="${MAIL_FROM_NAME:-Zdig IA}"
 
             # URL de l'API compilée dans le bundle Vite : le front parle au
             # gateway sur :80 (le backend n'est plus publié sur :8000).

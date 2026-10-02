@@ -13,8 +13,10 @@ import Pagination from '@/pages/shared/components/Pagination/index.jsx'
  *   OUI, NON, BV, À rappeler (statut CALL_BACK), Blacklist ;
  *   + colonnes supprimées : Demandé, Injoinable, Restant, Employé, Créé le.
  *
- * La liste courante (la plus récente, 1re ligne de la 1re page) porte la
- * classe `row-current` : fond distinct (`--row-highlight`, `styles/theme.css`).
+ * Fond gris inversé : la **liste courante** (la plus récente, 1re ligne de
+ * la 1re page) reste en fond normal (blanc / noir en dark), ce sont les
+ * **anciennes listes** qui portent la classe `row-dimmed`
+ * (`--row-highlight`, `styles/theme.css`).
  */
 export default function MesListesPage() {
   const {
@@ -78,7 +80,7 @@ export default function MesListesPage() {
               {groups.map((g) => (
                 <TableRow
                   key={g.id}
-                  className={`cursor-pointer hover:bg-primary/10 transition-colors${isCurrent(g) ? ' row-current' : ''}`}
+                  className={`cursor-pointer hover:bg-primary/10 transition-colors${isCurrent(g) ? '' : ' row-dimmed'}`}
                   onClick={openGroupClick(g.id)}
                 >
                   {/* Nom dynamique : employé + date de création. */}
@@ -116,7 +118,7 @@ export default function MesListesPage() {
           {groups.map((g) => (
             <div
               key={g.id}
-              className={`relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer${isCurrent(g) ? ' row-current' : ''}`}
+              className={`relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer${isCurrent(g) ? '' : ' row-dimmed'}`}
               onClick={openGroupClick(g.id)}
             >
               {/* Nom dynamique : employé + date de création. */}

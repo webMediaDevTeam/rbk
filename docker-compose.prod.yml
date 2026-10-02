@@ -36,6 +36,21 @@ x-app-env: &app-env
   # Origines CORS acceptées par backend/config/cors.php (sans slash final)
   CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8000,http://51.255.192.50}
 
+  # --- SMTP Gmail -------------------------------------------------------
+  # Identifiants réels : secrets GitHub transmis par le CI dans le `.env`
+  # racine (workflow `docker-deploy.yml`, bloc MAIL_*), jamais dans le dépôt.
+  # Les variables d'environnement du conteneur priment sur `backend/.env` :
+  # on les expose ici pour que backend / queue / scheduler partagent les
+  # mêmes identifiants. Port 587 + STARTTLS (alternative : 465 / smtps).
+  MAIL_MAILER: ${MAIL_MAILER:-smtp}
+  MAIL_SCHEME: ${MAIL_SCHEME:-smtp}
+  MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+  MAIL_PORT: ${MAIL_PORT:-587}
+  MAIL_USERNAME: ${MAIL_USERNAME:-}
+  MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+  MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+  MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Zdig IA}
+
 services:
   # ---------- 1. Base de données ----------
   mysql:

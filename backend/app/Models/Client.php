@@ -462,6 +462,222 @@ class Client extends Model
     }
 
     /**
+     * Clés d'item acceptées pour la conversion en liste noire par nom —
+     * forme normalisée (`Client::normalizePayloadKey()`), donc insensible à
+     * la casse et à la ponctuation : `name`, `enterprise_name`,
+     * `intervenant_name` et leurs équivalents français.
+     */
+    private const BLACKLIST_NAME_KEYS = [
+        'name',
+        'nom',
+        'enterprisename',
+        'entreprise',
+        'intervenantname',
+        'nomdelintervenantentreprise',
+    ];
+
+    /**
+     * Conversion **en masse** en liste noire par nom d'entreprise / de client
+     * — endpoint public **temporaire** `POST clients/convert-to-blacklist`
+     * (spec : `docs/convert_to_blacklist_api.md`).
+     *
+     * Recherche **insensible à la casse des deux côtés** :
+     * `LOWER(entreprise_name) = LOWER(?) OR LOWER(name) = LOWER(?)`. Un même
+     * nom peut viser plusieurs lignes : **toutes** sont passées en liste
+     * noire (pas de « première occurrence »).
+     *
+     * **Rapport consolidé** (docs/convert_to_blacklist_api.md §5) :
+     *
+     *   processed  noms traités **sans erreur** (= succès)
+     *   zapped     lignes clients réellement mises en liste noire
+     *   ignored    noms **sans effet** : introuvable OU déjà blacklisté
+     *   failed     noms en échec → `errors[]`
+     *
+     * Un nom **inexistant n'est pas une erreur** : il compte dans
+     * `not_found`, donc dans `ignored`, et le lot continue. Chaque nom est
+     * traité **dans sa propre transaction** : un item invalide est compté
+     * dans `failed` sans annuler le reste du lot — même contrat que
+     * `bulkUpsertFromScraperPayload()`. Ré-exécutable : un second passage
+     * sur les mêmes noms rend `zapped = 0` et `ignored = received`.
+     *
+     * @param  list<mixed>  $items
+     * @return array{received:int, processed:int, matched:int, zapped:int, ignored:int, not_found:int, already_blacklisted:int, failed:int, zapped_items:list<array{index:int, name:string, matched:int, zapped:int}>, ignored_items:list<array{index:int, name:string, reason:string}>, errors:list<array{index:int, name:?string, error:string}>}
+     */
+    public static function convertToBlacklistFromName(array $items): array
+    {
+        $result = [
+            'received' => count($items),
+            'processed' => 0,
+            'matched' => 0,
+            'zapped' => 0,
+            'ignored' => 0,
+            'not_found' => 0,
+            'already_blacklisted' => 0,
+            'failed' => 0,
+            'zapped_items' => [],
+            'ignored_items' => [],
+            'errors' => [],
+        ];
+
+        foreach (array_values($items) as $index => $item) {
+            $name = self::blacklistNameFromItem($item);
+
+            try {
+                if ($name === null) {
+                    throw new InvalidArgumentException(
+                        'Nom manquant : « name » (ou « enterprise_name »).'
+                    );
+                }
+
+                $step = DB::transaction(fn () => self::blacklistByName($name));
+
+                $result['processed'] += 1;
+                $result['matched'] += $step['matched'];
+                $result['zapped'] += $step['blacklisted'];
+
+                if ($step['matched'] === 0) {
+                    // Nom introuvable : **ignoré**, pas une erreur — le
+                    // lot continue avec le nom suivant.
+                    $result['ignored'] += 1;
+                    $result['not_found'] += 1;
+                    $result['ignored_items'][] = [
+                        'index' => $index,
+                        'name' => $name,
+                        'reason' => 'not_found',
+                    ];
+                } elseif ($step['blacklisted'] > 0) {
+                    $result['zapped_items'][] = [
+                        'index' => $index,
+                        'name' => $name,
+                        'matched' => $step['matched'],
+                        'zapped' => $step['blacklisted'],
+                    ];
+                } else {
+                    // Déjà en liste noire : sans effet (ré-exécution).
+                    $result['ignored'] += 1;
+                    $result['already_blacklisted'] += 1;
+                    $result['ignored_items'][] = [
+                        'index' => $index,
+                        'name' => $name,
+                        'reason' => 'already_blacklisted',
+                    ];
+                }
+            } catch (QueryException $e) {
+                // Le SQL n'est jamais exposé au client du webhook : il est
+                // journalisé côté serveur (contrat des autres bulk publics).
+                Log::warning('Conversion publique en liste noire : conflit de données.', [
+                    'index' => $index,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'name' => $name,
+                    'error' => 'Conflit de données : mise en liste noire impossible.',
+                ];
+            } catch (Throwable $e) {
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'name' => $name,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Passe en liste noire **tous** les clients répondant au nom fourni
+     * (insensible à la casse) — geste métier du cas 6 (RULES §3.4) :
+     * `is_blacklisted = true`, `status = BLACKLISTED`, `returned_at` vidé,
+     * rappels annulés, note `BLACKLISTED` journalisée (émetteur `SYSTEM` :
+     * l'API publique n'a pas d'utilisateur). Les réservations sont
+     * **conservées** (la liste noire ne supprime pas l'historique, §3.4).
+     *
+     * Une ligne déjà en liste noire n'est ni réécrite ni re-journalisée :
+     * elle compte dans `already` (`updated_at` ne bouge pas).
+     *
+     * @return array{matched: int, blacklisted: int, already: int}
+     */
+    private static function blacklistByName(string $name): array
+    {
+       $clients = self::query()
+        ->where(function (Builder $query) use ($name) {
+            $searchTerm = '%' . strtolower($name) . '%';
+            $query->whereRaw('LOWER(enterprise_name) LIKE ?', [$searchTerm])
+                ->orWhereRaw('LOWER(name) LIKE ?', [$searchTerm]);
+        })
+        ->get();
+
+        $matched = $clients->count();
+        $blacklisted = 0;
+        $already = 0;
+
+        foreach ($clients as $client) {
+            if ((bool) $client->is_blacklisted && $client->status === self::STATUS_BLACKLISTED) {
+                $already += 1;
+
+                continue;
+            }
+
+            $client->update([
+                'is_blacklisted' => true,
+                'status' => self::STATUS_BLACKLISTED,
+                'returned_at' => null,
+            ]);
+
+            // Rappels annulés, réservations conservées (§3.4 / §5.2).
+            Rappel::where('client_id', $client->id)->delete();
+
+            Note::create([
+                'client_id' => $client->id,
+                'sender_id' => Note::SENDER_SYSTEM,
+                'type' => Note::TYPE_BLACKLISTED,
+                'description' => 'Liste noire (API publique) : '.$name,
+            ]);
+
+            $blacklisted += 1;
+        }
+
+        return ['matched' => $matched, 'blacklisted' => $blacklisted, 'already' => $already];
+    }
+
+    /**
+     * Nom porté par un item de conversion : chaîne nue → le nom lui-même,
+     * objet → première clé de nom reconnue (`BLACKLIST_NAME_KEYS`).
+     *
+     * La valeur est nettoyée comme à l'import (`cleanText()` : espaces
+     * réduits, quotes de protection retirées) pour viser la forme stockée.
+     */
+    private static function blacklistNameFromItem(mixed $item): ?string
+    {
+        if (is_scalar($item)) {
+            return self::cleanText($item);
+        }
+
+        if (! is_array($item)) {
+            return null;
+        }
+
+        foreach ($item as $key => $value) {
+            if (! in_array(self::normalizePayloadKey((string) $key), self::BLACKLIST_NAME_KEYS, true)) {
+                continue;
+            }
+
+            $name = self::cleanText($value);
+
+            if ($name !== null) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Clé d'identification d'un item de suppression : chaîne nue → numéro de
      * licence, objet payload → `licence_number` puis repli
      * `licence_propre_numero` (mêmes règles que l'import).
@@ -1325,6 +1541,66 @@ class Client extends Model
     }
 
     /**
+     * Recherche « **toutes colonnes** » (docs/RULES.md §8) — commune aux
+     * listes de prospects : `GET /clients` (page Grande liste commerciale +
+     * réservation d'un lot), `GET /commercials/clients` (Grande liste admin)
+     * et l'historique d'un employé.
+     *
+     * **Téléphone indifféremment formaté** : la saisie est ramenée aux
+     * chiffres seuls puis comparée à la colonne `phone` également privée de
+     * sa ponctuation — `9500301807`, `(9500) 301-807`, `9900-0895-49` et
+     * `+1 (9900) 0895-49` se retrouvent donc mutuellement, quel que soit le
+     * côté qui est formaté (et même si les deux le sont, différemment).
+     *
+     * @param  string  $search  Terme saisi par l'utilisateur (tel quel).
+     */
+    public function scopeSearchAll(Builder $query, string $search): Builder
+    {
+        $like = '%'.$search.'%';
+        $digits = preg_replace('/\D+/', '', $search);
+        // `phone` re-mis en forme par `self::digitsOnlySql()` : REPLACE()
+        // imbriqué et non REGEXP, seule écriture portable MySQL / SQLite
+        // (les tests tournent sur SQLite in-memory — AGENTS.md §2).
+        $phone = $query->getQuery()->getGrammar()->wrap('phone');
+
+        return $query->where(function (Builder $q) use ($like, $digits, $phone) {
+            $q->where('name', 'LIKE', $like)
+                ->orWhere('enterprise_name', 'LIKE', $like)
+                ->orWhere('email', 'LIKE', $like)
+                ->orWhere('phone', 'LIKE', $like)
+                ->orWhere('neq', 'LIKE', $like)
+                ->orWhere('municipality', 'LIKE', $like)
+                ->orWhere('licence_number', 'LIKE', $like)
+                ->orWhere('licence_propre_numero', 'LIKE', $like)
+              // Colonnes JSON : sous-chaîne via le scope dédié
+              // (voir Client::scopeOrWhereJsonTextLike).
+                ->orWhereJsonTextLike('respondents', $like)
+                ->orWhereJsonTextLike('categories', $like)
+                ->orWhereJsonTextLike('authorized_categories', $like);
+
+            if ($digits !== '') {
+                $q->orWhereRaw(self::digitsOnlySql($phone).' LIKE ?', ['%'.$digits.'%']);
+            }
+        });
+    }
+
+    /**
+     * Expression SQL « chiffres seuls » d'une expression de colonne :
+     * retire espaces (dont insécable), tirets, parenthèses, points, `+` et
+     * `/` — la ponctuation usuelle des numéros de téléphone.
+     */
+    private static function digitsOnlySql(string $expr): string
+    {
+        $separators = [' ', "\xC2\xA0", '-', '(', ')', '.', '+', '/'];
+
+        foreach ($separators as $separator) {
+            $expr = 'REPLACE('.$expr.", '".$separator."', '')";
+        }
+
+        return $expr;
+    }
+
+    /**
      * Colonnes triables de la page « Prospects » (`GET /clients`) — la même
      * liste sert à la réservation d'un lot (`POST clients/reserver`).
      */
@@ -1367,22 +1643,9 @@ class Client extends Model
         }
 
         if ($search = $input['search'] ?? null) {
-            $like = "%{$search}%";
-            $query->where(function ($q) use ($like) {
-                $q->where('name', 'LIKE', $like)
-                    ->orWhere('enterprise_name', 'LIKE', $like)
-                    ->orWhere('email', 'LIKE', $like)
-                    ->orWhere('phone', 'LIKE', $like)
-                    ->orWhere('neq', 'LIKE', $like)
-                    ->orWhere('municipality', 'LIKE', $like)
-                    ->orWhere('licence_number', 'LIKE', $like)
-                    ->orWhere('licence_propre_numero', 'LIKE', $like)
-                  // Colonnes JSON : sous-chaîne via le scope dédié
-                  // (voir Client::scopeOrWhereJsonTextLike).
-                    ->orWhereJsonTextLike('respondents', $like)
-                    ->orWhereJsonTextLike('categories', $like)
-                    ->orWhereJsonTextLike('authorized_categories', $like);
-            });
+            // Recherche « toutes colonnes » + téléphone indifféremment
+            // formaté — même scope que la Grande liste admin (§8).
+            $query->searchAll($search);
         }
 
         // Exclusions de la page : hors liste noire, réellement disponible,

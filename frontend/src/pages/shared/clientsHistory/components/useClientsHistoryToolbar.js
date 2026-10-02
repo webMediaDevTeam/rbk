@@ -3,7 +3,7 @@ export function useClientsHistoryToolbar({ search, setSearch }) {
     searchInputProps: {
       value: search,
       onChange: (e) => setSearch(e.target.value),
-      placeholder: 'Rechercher clients... (min 3 chars)',
+      placeholder: 'Rechercher : nom, entreprise, téléphone, NEQ, licence, catégorie… (3 car. — 2 pour un numéro)',
       'aria-label': 'Rechercher clients',
     },
   }

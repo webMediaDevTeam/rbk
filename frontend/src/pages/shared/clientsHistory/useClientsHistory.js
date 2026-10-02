@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
+import { isSearchActive } from '@/lib/search.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
-import { listAdminClientsApi } from '@/api/commercial.api.js'
+import { listAdminClientsApi, adminBlacklistClientApi, adminUnblockClientApi } from '@/api/commercial.api.js'
 import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 export function useAdminClientsHistory(params = {}) {
@@ -16,6 +18,7 @@ export function useAdminClientsHistory(params = {}) {
 export function useClientsHistoryPage() {
   const navigate = useNavigate()
   const isDesktop = useIsDesktop()
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   // Sélection **unique** des **badges de la colonne « Statut »** (valeurs
   // affichées, §9) : `null` = « Tous » (aucun filtre), sinon une seule valeur
@@ -32,7 +35,9 @@ export function useClientsHistoryPage() {
   const [sortOrder, setSortOrder] = useState('desc')
 
   const debouncedSearch = useDebouncedValue(search, 400)
-  const searchParam = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined
+  // 3 caractères (texte) ou 2 pour une saisie à dominante numérique —
+  // voir `isSearchActive` (lib/search.js).
+  const searchParam = isSearchActive(debouncedSearch) ? debouncedSearch.trim() : undefined
 
   // Ventilation du badge sélectionné entre les deux dimensions (un seul à
   // la fois : la barre est en sélection unique).
@@ -67,6 +72,35 @@ export function useClientsHistoryPage() {
   }
 
   const handleViewDetail = (c) => navigate(`/prospects/${c.id}`)
+
+  // --- Liste noire : bascule directe depuis la ligne (Grande liste admin) --
+  // **Pas de modale de confirmation** : le bouton bascule blocage /
+  // déblocage en un clic (`POST commercials/clients/{id}/blacklist` pour
+  // bloquer, `POST liste-noire/{id}/debloquer` pour débloquer), avec
+  // spinner sur la ligne en cours et rechargement de la liste.
+  const [blacklistId, setBlacklistId] = useState(null)
+
+  const isBlocked = (c) => Boolean(c?.is_blacklisted) || c?.status === 'BLACKLISTED'
+
+  const toggleBlacklistMutation = useMutation({
+    mutationFn: (c) => (isBlocked(c) ? adminUnblockClientApi(c.id) : adminBlacklistClientApi(c.id, '')),
+    onMutate: (c) => setBlacklistId(c.id),
+    onSettled: () => setBlacklistId(null),
+    // `_res` / `c` = appels successifs de React Query : `c` est le client
+    // **avant** mutation, donc l'état qui décide du libellé du toast.
+    onSuccess: (_res, c) => {
+      toast.success(isBlocked(c) ? 'Client débloqué.' : 'Client mis en liste noire.')
+      qc.invalidateQueries({ queryKey: ['admin-clients-history'] })
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.message || 'Une erreur est survenue.')
+    },
+  })
+
+  const toggleBlacklist = (c) => {
+    if (blacklistId) return // une seule bascule à la fois
+    toggleBlacklistMutation.mutate(c)
+  }
 
   const handleSearchChange = (v) => {
     setSearch(v)
@@ -127,5 +161,7 @@ export function useClientsHistoryPage() {
     handleSort,
     handleViewDetail,
     handleHomeClick,
+    blacklistId,
+    toggleBlacklist,
   }
 }

@@ -153,6 +153,22 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       licence_number, linked:{…}}]` et la boucle passe au client suivant ;
       absent → `missing_items[]`. Tests `PublicClientBulkDeleteTest`
       (10 tests).
+- [x] **Conversion en liste noire par nom** (endpoint public **temporaire**) :
+      `POST /api/v1/clients/convert-to-blacklist` (`PublicClientController`)
+      — corps `{"name": "…"}` / `{"names": [...]}` / `{"clients": [...]}` /
+      liste JSON nue, `Client::convertToBlacklistFromName()` (transaction par
+      nom). Recherche `LOWER(enterprise_name) = LOWER(?)` **OU**
+      `LOWER(name) = LOWER(?)` (insensible à la casse, toutes les lignes
+      converties) ; geste métier §3.4 (`is_blacklisted`, `status =
+      BLACKLISTED`, `returned_at` vidé, rappels annulés, note `BLACKLISTED`
+      par `SYSTEM`, réservations conservées). Réponse `{success, data:
+      {received, processed, matched, zapped, ignored, not_found,
+      already_blacklisted, failed, zapped_items[], ignored_items[],
+      errors[]}}` — **rapport** : `processed` (succès) / `zapped` / `ignored`
+      / `failed` (erreurs) ; **un nom introuvable est ignoré, pas une
+      erreur**, lot ré-exécutable (idempotent).
+      Tests `PublicClientConvertToBlacklistTest` (15 tests).
+      **À retirer** : procédure §7 de `docs/convert_to_blacklist_api.md`.
 
 ## Phase 6bis — Intégration RingCentral (Call Logs) 📞
 

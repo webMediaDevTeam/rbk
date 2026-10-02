@@ -20,6 +20,9 @@ return [
         // Webhook public d'import (RULES §12) : couvert par `api/*`, listé
         // ici pour tracer le endpoint ouvert sans authentification.
         'api/v1/clients/bulk-upsert',
+        // Conversion en liste noire par nom (endpoint public temporaire) :
+        // couvert par `api/*`, listé ici pour tracer la route ouverte.
+        'api/v1/clients/convert-to-blacklist',
         'sanctum/csrf-cookie',
         'login',
         'logout',

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
+import { isSearchActive } from '@/lib/search.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
 import {
   listCommercialProspectsApi,
@@ -23,7 +24,9 @@ export function useCommercialProspectList() {
   const [sortOrder, setSortOrder] = useState('desc')
 
   const debouncedSearch = useDebouncedValue(search, 400)
-  const searchParam = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined
+  // 3 caractères (texte) ou 2 pour une saisie à dominante numérique —
+  // voir `isSearchActive` (lib/search.js).
+  const searchParam = isSearchActive(debouncedSearch) ? debouncedSearch.trim() : undefined
 
   const params = {
     search: searchParam,

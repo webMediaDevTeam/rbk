@@ -31,8 +31,8 @@ export function useMesListes() {
     setCurrentPage(1)
   }
   // Liste courante = la plus récente (première ligne de la première page,
-  // tri `created_at desc`) : c'est elle qui reçoit le fond distinct
-  // (`row-current`, styles/theme.css).
+  // tri `created_at desc`) : c'est la seule qui garde un fond normal ; les
+  // anciennes listes reçoivent le fond gris (`row-dimmed`, styles/theme.css).
   const currentGroupId = currentPage === 1 && groups.length > 0 ? groups[0].id : null
   // Colonne « Liste » : nom de l'employé + date de création (affichés à
   // partir des données, pas le texte `name` sauvegardé du groupe).

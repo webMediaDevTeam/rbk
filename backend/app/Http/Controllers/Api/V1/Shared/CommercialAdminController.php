@@ -63,13 +63,9 @@ class CommercialAdminController extends Controller
                 ->whereHas('notes', fn ($q) => $q->where('sender_id', $id)->calls());
 
             if ($search = $request->input('search')) {
-                $like = "%{$search}%";
-                $query->where(function ($q) use ($like) {
-                    $q->where('name', 'LIKE', $like)
-                        ->orWhere('email', 'LIKE', $like)
-                        ->orWhere('phone', 'LIKE', $like)
-                        ->orWhere('municipality', 'LIKE', $like);
-                });
+                // Même recherche « toutes colonnes » + téléphone normalisé
+                // que les Grande listes (Client::scopeSearchAll).
+                $query->searchAll($search);
             }
 
             return $query;
@@ -195,21 +191,9 @@ class CommercialAdminController extends Controller
             ]);
 
         if ($search = $request->input('search')) {
-            $like = "%{$search}%";
-            $query->where(function ($q) use ($like) {
-                $q->where('name', 'LIKE', $like)
-                    ->orWhere('enterprise_name', 'LIKE', $like)
-                    ->orWhere('email', 'LIKE', $like)
-                    ->orWhere('phone', 'LIKE', $like)
-                    ->orWhere('municipality', 'LIKE', $like)
-                    ->orWhere('neq', 'LIKE', $like)
-                    ->orWhere('licence_number', 'LIKE', $like)
-                  // Colonnes JSON : sous-chaîne via le scope dédié
-                  // (voir Client::scopeOrWhereJsonTextLike).
-                    ->orWhereJsonTextLike('respondents', $like)
-                    ->orWhereJsonTextLike('categories', $like)
-                    ->orWhereJsonTextLike('authorized_categories', $like);
-            });
+            // Recherche « toutes colonnes » (§8) — voir Client::scopeSearchAll :
+            // téléphone indifféremment formaté, licence propre incluse.
+            $query->searchAll($search);
         }
 
         // Aucun filtre de date : les champs « Du / Au » ont été supprimés.

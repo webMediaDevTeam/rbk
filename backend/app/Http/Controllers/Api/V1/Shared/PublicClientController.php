@@ -29,6 +29,15 @@ use Illuminate\Http\Request;
  * rappels) est ignoré** et la boucle passe au client suivant. Réponse
  * `{success, data: {received, processed, deleted, skipped, missing, failed,
  * skipped_items[], missing_items[], errors[]}}`.
+ *
+ * `POST clients/convert-to-blacklist` : conversion en liste noire **par nom**
+ * (endpoint public **temporaire**, spec `docs/convert_to_blacklist_api.md`).
+ * Formes `{"name": "…"}`, `{"names": [...]}` ou liste JSON nue ; le nom est
+ * comparé à `enterprise_name` **ou** `name` sans tenir compte de la casse.
+ * Un nom **introuvable est ignoré** (pas une erreur). Réponse
+ * `{success, data: {received, processed, matched, zapped, ignored,
+ * not_found, already_blacklisted, failed, zapped_items[],
+ * ignored_items[], errors[]}}`.
  */
 class PublicClientController extends Controller
 {
@@ -72,6 +81,72 @@ class PublicClientController extends Controller
             'success' => $result['processed'] > 0,
             'data' => $result,
         ]);
+    }
+
+    /**
+     * Conversion en liste noire **par nom** (`POST
+     * clients/convert-to-blacklist`) — endpoint public **temporaire**
+     * (spec : docs/convert_to_blacklist_api.md).
+     *
+     * Trois formes de corps acceptées :
+     *
+     *   {"name": "Entreprises Richard Forget & Fils Inc."}
+     *   {"names": ["Nom A", "Nom B"]}
+     *   ["Nom A", "Nom B"]
+     *
+     * Le nom visé est comparé à `enterprise_name` **ou** `name`, sans tenir
+     * compte de la casse (`LOWER(colonne) = LOWER(?)`) ; un nom peut
+     * correspondre à plusieurs lignes, toutes passées en liste noire.
+     *
+     * Un nom **inexistant est ignoré** (pas une erreur) : il compte dans
+     * `ignored` / `not_found` et le lot continue. Réponse 200, rapport
+     * consolidé `{success, data: {received, processed, matched, zapped,
+     * ignored, not_found, already_blacklisted, failed, zapped_items[],
+     * ignored_items[], errors[]}}` — corps invalide / lot trop long → 422.
+     */
+    public function convertToBlacklist(Request $request): JsonResponse
+    {
+        $items = $this->nameItems($request);
+
+        if ($items instanceof JsonResponse) {
+            return $items;
+        }
+
+        $result = Client::convertToBlacklistFromName($items);
+
+        return response()->json([
+            // `success = false` uniquement si **aucun** nom n'a pu être
+            // examiné : un lot partiel reste une réponse 200 exploitable.
+            'success' => $result['processed'] > 0,
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * Corps JSON → liste de **noms** pour la conversion en liste noire,
+     * **ou** la réponse 422 si le format est refusé.
+     *
+     * @return list<mixed>|JsonResponse
+     */
+    private function nameItems(Request $request): array|JsonResponse
+    {
+        $decoded = json_decode((string) $request->getContent(), true);
+
+        // Forme simple : {"name": "…"} — un seul nom, pas une liste.
+        if (is_array($decoded) && ! array_is_list($decoded) && array_key_exists('name', $decoded)) {
+            if (! is_string($decoded['name'])) {
+                return $this->invalid('Le champ « name » doit être une chaîne.');
+            }
+
+            if (trim($decoded['name']) === '') {
+                return $this->invalid('Aucun nom à traiter (champ « name » vide).');
+            }
+
+            return [$decoded['name']];
+        }
+
+        // {"names": [...]}, {"clients": [...]} ou liste JSON nue.
+        return $this->items($request, 'mettre en liste noire', ['names', 'clients']);
     }
 
     /**

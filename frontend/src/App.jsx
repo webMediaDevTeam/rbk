@@ -34,7 +34,7 @@ const ROLE_NAV = {
         { title: 'Employés', path: '/commerciaux', icon: List },
         { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
-        { title: 'Test Appels (RingCentral)', path: '/call-logs-test', icon: PhoneCall },
+        //{ title: 'Test Appels (RingCentral)', path: '/call-logs-test', icon: PhoneCall },
       ],
     },
     {

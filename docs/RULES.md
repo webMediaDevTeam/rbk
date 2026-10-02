@@ -502,13 +502,15 @@ traités), `POST clients/reserver` répond **`409`** :
     réservation** (`ReservationStatusBadge`) et non plus le statut client /
     **`Rappel`** — la colonne `Traitement` a été **supprimée** ;
     **`État` affiche `—` (pas de badge) quand la réservation est `PENDING`**,
-    dans le tableau comme dans la carte mobile : la ligne est déjà en gris
-    `row-pending` et le badge « En attente » de la barre porte l'info ;
-  * lignes **« En attente »** (`PENDING`) : fond gris `row-pending`
-    (`--row-highlight` : `#c5c5c5` en clair, `#3f3f46` en sombre) — même
-    traitement que la liste courante de « Mes listes ». Le *trail row* gris
-    des lignes de suivi (`BV_VOICEMAIL` / `CALL_BACK`)
-    reste tel quel.
+    dans le tableau comme dans la carte mobile : la ligne garde un fond
+    normal (le gris est passé sur les lignes traitées) et le badge
+    « En attente » de la barre porte l'info ;
+  * **fond gris inversé** : ce sont les lignes **déjà traitées**
+    (statut ≠ `PENDING`) qui passent en `row-dimmed`
+    (`--row-highlight` : `#c5c5c5` en clair, `#3f3f46` en sombre), y
+    compris le *trail row* gris des lignes de suivi (`BV_VOICEMAIL` /
+    `CALL_BACK`) désormais fusionné dedans ; les lignes **« En attente »**
+    (`PENDING`) gardent un fond normal.
 * **Page « Mes listes » (tableau)** — compteurs et employé calculés par le
   serveur (`GET reservation-groups`), affichés automatiquement. Colonnes
   épurées (badge de statistiques « Listes » et colonnes `Demandé`,
@@ -523,8 +525,9 @@ traités), `POST clients/reserver` répond **`409`** :
     JSON historique `injoinable_count`) / `Blacklist` =
     `reservations as blacklist_count` (réservations dont le client a
     `is_blacklisted = true`) ;
-  * **liste courante** = la plus récente (1re ligne de la 1re page) : classe
-    `row-current` → fond `--row-highlight` (`#c5c5c5` en clair, `#3f3f46` en
+  * **liste courante** = la plus récente (1re ligne de la 1re page) : elle
+    garde un fond normal ; les **anciennes listes** portent la classe
+    `row-dimmed` → fond `--row-highlight` (`#c5c5c5` en clair, `#3f3f46` en
     sombre, `styles/theme.css`), texte par défaut pour rester lisible.
 
 ## 8. Recherche multi-critères (F-22)
@@ -538,7 +541,18 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   colonnes affichées** : nom d'entreprise, NEQ, numéro de licence
   (`licence_number`), licence propre (`licence_propre_numero`), répondants
   (`respondents`), catégorie (`categories`) **et** catégories autorisées
-  (`authorized_categories`) ;
+  (`authorized_categories`) — scope partagé `Client::scopeSearchAll()`,
+  identique pour `GET /clients`, `GET /commercials/clients` et
+  l'historique d'un employé ;
+* **téléphone indifféremment formaté** : la saisie **et** la colonne `phone`
+  sont ramenées aux chiffres seuls avant comparaison (`REPLACE()` imbriqué,
+  portable MySQL / SQLite), donc `9500301807`, `(9500) 301-807`,
+  `9900-0895-49` et `+1 (9500) 301-807` se retrouvent mutuellement, quel que
+  soit le côté qui est formaté — un fragment numérique pur suffit ;
+* **seuil d'envoi de la saisie** (`frontend/src/lib/search.js`,
+  `isSearchActive`) : **3 caractères** pour le texte libre, **2** pour une
+  saisie composée uniquement de chiffres / ponctuation de téléphone (les
+  deux listes, commerciale et admin) ;
 * filtre **catégorie** (commercial) et **statut** (admin) ;
 * **filtres `municipality` / `category`** = **scopes Eloquent** du modèle
   `Client` : `filterByMunicipalities()` (`whereIn` sur le libellé exact) et
@@ -572,6 +586,17 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   à chaque changement de réservation.
 * **Grande liste (admin, `/clients-historique`)** : colonne « Retour » avec compte à rebours concis pour
   `UNAVAILABLE` (`returned_at`) : « 2 mois 3j », « 18j 04h », « 5h 30m ».
+  **Lignes non cliquables** : la ligne ne navigue plus vers la fiche
+  prospect (le bouton « Voir » de la dernière colonne le fait encore) ; une
+  **bascule liste noire / débloquer** s'y ajoute : **action directe, sans
+  modale ni confirmation** — un clic enchaîne
+  `POST commercials/clients/{id}/blacklist` (icône `Ban`, rouge) ou
+  `POST liste-noire/{id}/debloquer` (icône `Unlock`, vert) selon l'état du
+  client (`is_blacklisted` / `status = BLACKLISTED`, §2). Spinner pendant
+  l'appel (une seule bascule à la fois), toast du résultat puis liste
+  rechargée (`admin-clients-history`). Composants : props `rowClickable` /
+  `onToggleBlacklist` / `blacklistId` de `ProspectTable` / `ProspectCard`
+  (la page commerciale `/prospects` garde ses lignes cliquables).
 * Badges statut client : Disponible / Réservé / Confirmé / Indisponible / Liste noire.
 * Badge réservation : En attente / Confirmé / Refusé / BV / **À rappeler**.
 * **Listes (prospects, historique, listes, employés…)** : colonnes `N°`
@@ -722,6 +747,7 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 | POST | `liste-noire/{id}/debloquer` | ADMIN/SUPER_ADMIN |
 | POST | `clients/bulk-upsert` | **public** (aucune auth) — import scraper / n8n, §12 |
 | POST/DELETE | `clients/bulk-delete` | **public** (aucune auth) — suppression en masse, données liées ignorées, §12 |
+| POST | `clients/convert-to-blacklist` | **public temporaire** (aucune auth) — liste noire par nom, §12 |
 | GET | `clients/overview` | tous rôles — cartes KPI globales (prospects / réservés / traités) |
 | GET | `filters` | tous rôles — `{categories, municipalities, administrative_regions}` distincts |
 | GET | `categories` | tous rôles — libellés distincts de `clients.categories` |
@@ -937,6 +963,37 @@ mêmes clés françaises que l'import avec repli `Licence (propre)`).
 * identifiant introuvable → `missing` (compté, détaillé, sans erreur) ;
   corps invalide, tableau vide ou lot trop long → `422` (rien n'est
   supprimé).
+
+**Endpoint public — conversion en liste noire par nom** (`POST
+/api/v1/clients/convert-to-blacklist`, spec **temporaire** :
+`docs/convert_to_blacklist_api.md`) : même surface que les deux endpoints
+ci-dessus (aucune authentification, CORS `api/*`, lot borné par
+`PUBLIC_API_MAX_ITEMS`). Corps acceptés : `{"name": "…"}`, `{"names": [...]}`
+(ou enveloppe `{"clients": [...]}`) et une liste JSON nue de chaînes.
+
+* **recherche** : `LOWER(enterprise_name) = LOWER(?)` **OU**
+  `LOWER(name) = LOWER(?)` — exacte, insensible à la casse des deux côtés,
+  **toutes** les lignes correspondantes converties (pas de « première
+  occurrence ») ;
+* **geste métier** : cas 6 (§3.4) — `is_blacklisted = true`, `status =
+  BLACKLISTED`, `returned_at` vidé, rappels annulés, note `BLACKLISTED`
+  émise par `SYSTEM` (l'API publique n'a pas d'utilisateur) ;
+  `reservations` / `notes` **conservés** ;
+* **transaction par nom** : un item invalide passe en `failed` sans annuler
+  le reste du lot ; une ligne déjà en liste noire est comptée dans
+  `already_blacklisted` et **n'est pas réécrite** (`updated_at` inchangé) ;
+* **un nom introuvable est ignoré** (pas une erreur) : `not_found`, donc
+  `ignored`, et le lot continue — lot **ré-exécutable** (idempotent :
+  2e passage → `zapped = 0`, `ignored = received`, `failed = 0`) ;
+* **réponse `200` — rapport consolidé** : `{success, data: {received,
+  processed, matched, zapped, ignored, not_found, already_blacklisted,
+  failed, zapped_items[], ignored_items[], errors[]}}` avec
+  `processed` = **succès** (`received − failed`), `zapped` = lignes clients
+  zappées, `ignored` = noms sans effet, `failed` = **erreurs** —
+  `success = false` uniquement si aucun nom n'a pu être examiné ; corps
+  invalide ou lot trop long → `422` (rien n'est modifié) ;
+* **temporaire** : route à supprimer (procédure §7 du spec dédié), aucune
+  écriture de masse n'est visée.
 
 ## 13. Téléphonie & Call Logs (RingCentral)
 

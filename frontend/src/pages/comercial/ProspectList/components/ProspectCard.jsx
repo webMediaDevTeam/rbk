@@ -1,23 +1,65 @@
-import { Eye } from 'lucide-react'
+import { Eye, Ban, Loader2, Unlock } from 'lucide-react'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { respondentsText, categoriesText } from './prospectFormat'
 
-export default function ProspectCard({ client, num, onViewDetail, showViewButton = true }) {
+/**
+ * Carte (mobile) d'un prospect.
+ *
+ * @param {boolean} [rowClickable=true]  `false` : la carte ne navigue plus
+ *   (Grande liste admin, `/clients-historique`).
+ * @param {(client: object) => void} [onToggleBlacklist]  bascule **liste
+ *   noire / débloquer**, action directe **sans modale de confirmation**.
+ * @param {number|null} [blacklistId]  id en cours de bascule (spinner).
+ */
+export default function ProspectCard({
+  client,
+  num,
+  onViewDetail,
+  showViewButton = true,
+  rowClickable = true,
+  onToggleBlacklist,
+  blacklistId = null,
+}) {
+  const clickable = rowClickable && typeof onViewDetail === 'function'
+  const blocked = Boolean(client.is_blacklisted) || client.status === 'BLACKLISTED'
+  const busy = blacklistId === client.id
+
   return (
     <div
-      className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
-      onClick={() => onViewDetail?.(client)}
+      className={`relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md${clickable ? ' cursor-pointer' : ''}`}
+      onClick={clickable ? () => onViewDetail?.(client) : undefined}
     >
-      {showViewButton && (
-        <div className="absolute top-3 right-3">
-          <button
-            onClick={(e) => { e.stopPropagation(); onViewDetail?.(client) }}
-            className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-            aria-label="Voir détail"
-          >
-            <Eye className="h-4 w-4 text-muted-foreground" />
-          </button>
+      {(showViewButton || onToggleBlacklist) && (
+        <div className="absolute top-3 right-3 flex items-center gap-1">
+          {showViewButton && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onViewDetail?.(client) }}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              aria-label="Voir détail"
+            >
+              <Eye className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+          {onToggleBlacklist && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleBlacklist(client) }}
+              disabled={busy}
+              className={`p-1.5 rounded-lg transition-colors disabled:opacity-60 ${
+                blocked ? 'hover:bg-emerald-500/10' : 'hover:bg-destructive/10'
+              }`}
+              aria-label={blocked ? 'Débloquer le client' : 'Mettre en liste noire'}
+              title={blocked ? 'Débloquer' : 'Mettre en liste noire'}
+            >
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : blocked ? (
+                <Unlock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <Ban className="h-4 w-4 text-destructive" />
+              )}
+            </button>
+          )}
         </div>
       )}
 

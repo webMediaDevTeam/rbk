@@ -31,6 +31,8 @@ export default function ClientsHistoryPage() {
     handleSort,
     handleViewDetail,
     handleHomeClick,
+    blacklistId,
+    toggleBlacklist,
   } = useClientsHistoryPage()
 
   return (
@@ -65,11 +67,18 @@ export default function ClientsHistoryPage() {
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
       ) : isDesktop ? (
+        /* Ligne non cliquable (panel admin/super admin) : on ne navigue plus
+           vers la fiche depuis la ligne ; la dernière colonne porte « Voir »
+           et la bascule **liste noire / débloquer** (action directe, sans
+           modale de confirmation). */
         <ProspectTable
           clients={clients}
           startIndex={(currentPage - 1) * rowsPerPage}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
           onViewDetail={handleViewDetail}
+          rowClickable={false}
+          onToggleBlacklist={toggleBlacklist}
+          blacklistId={blacklistId}
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -79,6 +88,9 @@ export default function ClientsHistoryPage() {
               num={(currentPage - 1) * rowsPerPage + i + 1}
               client={c}
               onViewDetail={handleViewDetail}
+              rowClickable={false}
+              onToggleBlacklist={toggleBlacklist}
+              blacklistId={blacklistId}
             />
           ))}
         </div>
