@@ -86,6 +86,39 @@ class ReservationWorkflowApiTest extends TestCase
             ->assertJsonPath('data.count', 1);
     }
 
+    /**
+     * Garde « traitement en cours » (docs/RULES.md §7.1) : `can_reserve` ne
+     * passe à `true` que lorsque **toutes** les réservations de l'employé sont
+     * sorties de `PENDING` (« en attente ») — le bouton « Réserver » de la
+     * page Prospects suit ce champ, et l'API refuse aussi (`409`).
+     */
+    public function test_can_reserve_is_true_only_when_no_reservation_is_pending(): void
+    {
+        $commercial = $this->makeCommercial();
+        $client = $this->makeClient(['status' => 'RESERVED']);
+        $reservation = $this->makeReservation($client, $commercial);
+
+        Sanctum::actingAs($commercial);
+
+        // Liste encore « en attente » → réserver bloqué (UI désactivée + 409).
+        $this->getJson('/api/v1/reservations/active-count')
+            ->assertOk()
+            ->assertJsonPath('data.pending', 1)
+            ->assertJsonPath('data.can_reserve', false);
+
+        $this->postJson('/api/v1/clients/reserver', ['count' => 200])
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'unfinished_treatment');
+
+        // Issue d'appel enregistrée → plus aucune « en attente » → ouvert.
+        $reservation->update(['status' => Reservation::STATUS_YES]);
+
+        $this->getJson('/api/v1/reservations/active-count')
+            ->assertOk()
+            ->assertJsonPath('data.pending', 0)
+            ->assertJsonPath('data.can_reserve', true);
+    }
+
     // ------------------------------------------------------------- Outcome API
 
     public function test_outcome_requires_reservation_for_yes(): void

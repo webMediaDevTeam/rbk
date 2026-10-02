@@ -5,7 +5,6 @@ import ProspectCard from './components/ProspectCard.jsx'
 import ProspectToolbar from './components/ProspectToolbar.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ReservationModal from './components/ReservationModal.jsx'
-import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 import Button from '@/components/ui/button.jsx'
 
 export default function ProspectListPage() {
@@ -46,28 +45,35 @@ export default function ProspectListPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Garde de traitement : tant qu'il reste des réservations
-              `PENDING` (prospects non traités), le serveur refuse un nouveau
-              lot — le bouton est désactivé et la raison est affichée. */}
+              `PENDING` (prospects « en attente ») dans ses listes, le
+              serveur refuse un nouveau lot — le bouton reste désactivé et
+              la raison est affichée. */}
           {!canReserve && (
             <p className="text-xs text-muted-foreground text-right max-w-[17rem] leading-snug">
-              {pendingReservations} prospect(s) à traiter dans vos listes : terminez-les avant de réserver.
+              {typeof pendingReservations === 'number'
+                ? `${pendingReservations} prospect(s) à traiter dans vos listes : terminez-les avant de réserver.`
+                : 'Vérification de vos listes en cours…'}
             </p>
           )}
           <Button
             variant="default"
             onClick={openReserve}
             disabled={!canReserve}
-            title={canReserve ? undefined : 'Terminez les prospects non traités de vos listes pour réserver.'}
+            title={
+              canReserve
+                ? undefined
+                : typeof pendingReservations === 'number'
+                  ? 'Terminez les prospects non traités de vos listes pour réserver.'
+                  : 'Vérification de vos listes en cours…'
+            }
           >
             Réserver
           </Button>
         </div>
       </div>
 
-      {/* Filtre de statut **figé** sur le panel commercial : la liste ne
-          contient que des prospects disponibles, l'employé ne peut pas
-          changer la sélection (badges non cliquables, Disponible actif). */}
-      <ProspectKpis statusFilters={['AVAILABLE']} />
+      {/* Barre de badges de statut (ProspectKpis) supprimée à la demande :
+          la liste commerciale ne contient que des prospects disponibles. */}
 
       <ProspectToolbar
         search={search} setSearch={setSearch}

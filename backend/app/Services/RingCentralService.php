@@ -105,4 +105,297 @@ class RingCentralService
 
         return $response->json()->records ?? [];
     }
+
+    // ── Contrôle d'appel (phase de test Super Admin) ──────────────────────
+    // Pass-through vers RingCentral : aucune écriture en base pour
+    // l'instant (docs/TODOS.md « Phase 6bis »). Toutes ces méthodes
+    // retournent des **tableaux PHP** (JSON décodé) pour être directement
+    // ré-encodés dans la réponse de l'API.
+
+    /**
+     * Compte / entreprise RingCentral : `id` = **account_id**, `company` =
+     * raison sociale (à stocker lors du passage au réel).
+     *
+     * GET /restapi/v1.0/account/~
+     *
+     * @throws Exception
+     */
+    public function getAccount(): array
+    {
+        $this->authenticate();
+
+        return $this->decode($this->platform->get('/account/~'));
+    }
+
+    /**
+     * Appareils de l'account (deskphone / softphone) — source du « from »
+     * d'un appel sortant.
+     *
+     * GET /restapi/v1.0/account/~/device
+     *
+     * @throws Exception
+     */
+    public function getDevices(int $perPage = 100): array
+    {
+        $this->authenticate();
+
+        $data = $this->decode($this->platform->get('/account/~/device', [
+            'perPage' => $perPage,
+        ]));
+
+        return $data['records'] ?? [];
+    }
+
+    /**
+     * Extension liée à la session d'authentification (`~`) — **c'est elle
+     * qui doit figurer dans `from.extensionId`** d'un call-out :
+     *
+     *   - `from.extensionId` = autre extension → `400 CMN-101 « value !=
+     *     from.extensionId »` ;
+     *   - `from.extensionId` = `~`            → `400 CMN-103 « must be
+     *     uint64: ~ »` (pas d'alias `~` dans le corps JSON).
+     *
+     * GET /restapi/v1.0/account/~/extension/~
+     *
+     * @throws Exception
+     */
+    public function getMyExtension(): array
+    {
+        $this->authenticate();
+
+        return $this->decode($this->platform->get('/account/~/extension/~'));
+    }
+
+    /**
+     * Appel sortant (CallOut) : depuis l'extension de la session (et/ou un
+     * appareil, et/ou un caller ID) vers `$to`.
+     *
+     * POST /restapi/v1.0/account/~/telephony/call-out
+     *   { from: {extensionId, phoneNumber?, deviceId?}, to: {phoneNumber} }
+     *
+     * ⚠️ Deux pièges vérifiés le 2026-10-02 contre l'API réelle :
+     *   1. `to` est un **objet** et non un tableau — sinon `400 CMN-103
+     *      « JSON can't be parsed: must be object: to »` ;
+     *   2. `from.deviceId` renvoie `404 CMN-102 « Resource for parameter
+     *      [deviceId] is not found »` sur un compte dont les softphones
+     *      n'ont **aucune ligne** (`phoneLines: []`) — d'où la priorité à
+     *      `from.extensionId`.
+     *
+     * @param  string  $to  destination — normalisée en E.164 avec « + »
+     * @param  ?string  $fromPhoneNumber  caller ID (doit appartenir à l'extension)
+     * @param  ?string  $deviceId  appareil — **seul recours** si aucune extension
+     * @param  ?string  $extensionId  extension source (résolue sinon)
+     * @return array  réponse brute : `session` (`id` + `parties`)
+     *
+     * @throws Exception  source illisible, ou réponse vide
+     */
+    public function makeCallOut(
+        string $to,
+        ?string $fromPhoneNumber = null,
+        ?string $deviceId = null,
+        ?string $extensionId = null
+    ): array {
+        $this->authenticate();
+
+        $extensionId = ($extensionId !== null && $extensionId !== '')
+            ? (string) $extensionId
+            : (string) ($this->getMyExtension()['id'] ?? '');
+
+        $from = [];
+
+        if ($extensionId !== '') {
+            $from['extensionId'] = $extensionId;
+
+            if ($fromPhoneNumber) {
+                $from['phoneNumber'] = self::e164($fromPhoneNumber);
+            }
+        } elseif ($deviceId) {
+            // Aucune extension résoluable : on tente l'appareil seul.
+            $from['deviceId'] = $deviceId;
+        }
+
+        if ($from === []) {
+            throw new Exception("Appel impossible : impossible de résoudre l'extension source (`from.extensionId`).");
+        }
+
+        $session = $this->decode($this->platform->post('/account/~/telephony/call-out', [
+            'from' => $from,
+            'to' => ['phoneNumber' => self::e164($to)],
+        ]));
+
+        if ($session === []) {
+            throw new Exception('Réponse vide de RingCentral pour telephony/call-out.');
+        }
+
+        return $session;
+    }
+
+    /**
+     * Statut d'une session d'appel (parties, statuts) — suivi de l'appel
+     * en cours.
+     *
+     * GET /restapi/v1.0/account/~/telephony/sessions/{sessionId}
+     *
+     * @throws Exception
+     */
+    public function getCallSession(string $sessionId): array
+    {
+        $this->authenticate();
+
+        return $this->decode($this->platform->get('/account/~/telephony/sessions/'.$sessionId));
+    }
+
+    /**
+     * Démarre l'enregistrement d'une partie de la session.
+     *
+     * POST /restapi/v1.0/account/~/telephony/sessions/{sessionId}/parties/{partyId}/recordings
+     *
+     * @throws Exception
+     */
+    public function startRecording(string $sessionId, string $partyId): array
+    {
+        $this->authenticate();
+
+        return $this->decode($this->platform->post(
+            "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings",
+            []
+        ));
+    }
+
+    /**
+     * Enregistrements déjà produits pour une partie (id, durée, URI…).
+     *
+     * GET /restapi/v1.0/account/~/telephony/sessions/{sessionId}/parties/{partyId}/recordings
+     *
+     * @throws Exception
+     */
+    public function getRecordings(string $sessionId, string $partyId): array
+    {
+        $this->authenticate();
+
+        $data = $this->decode($this->platform->get(
+            "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings"
+        ));
+
+        return $data['records'] ?? $data;
+    }
+
+    /**
+     * Termine (raccroche) une session d'appel.
+     *
+     * DELETE /restapi/v1.0/account/~/telephony/sessions/{sessionId}
+     *
+     * @return array  réponse brute (`[]` si corps vide — 204)
+     *
+     * @throws Exception
+     */
+    public function hangUpSession(string $sessionId): array
+    {
+        $this->authenticate();
+
+        return $this->decode($this->platform->delete('/account/~/telephony/sessions/'.$sessionId));
+    }
+
+    // ── Utilitaires ──────────────────────────────────────────────────────
+
+    /**
+     * Normalise un numéro au format E.164 **avec** le « + » : c'est la
+     * forme attendue par `telephony/call-out`
+     * (`{ "to": { "phoneNumber": "+79817891689" } }`).
+     *
+     *   5145594545    → +15145594545   (10 chiffres : plan nord-américain)
+     *   1 514 559-4545 → +15145594545
+     *   0033 1 23…    → +33123…
+     *   +33 1 23…     → +33123…
+     */
+    public static function e164(string $phone): string
+    {
+        $raw = trim($phone);
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+
+        if (str_starts_with($raw, '00')) {
+            $digits = substr($digits, 2);
+        } elseif (strlen($digits) === 10) {
+            $digits = '1'.$digits; // ex. québécois : 5145594545 → 15145594545
+        }
+
+        return '+'.$digits;
+    }
+
+    /**
+     * Identifiant de session d'une réponse RingCentral : `sessionId`,
+     * `session_id`, `id`, sinon dernier segment de `uri`.
+     *
+     * Le call-out enveloppe la session sous `{"session": {...}}` : on
+     * déballe avant de lire (sinon `null` alors que l'appel a réussi).
+     */
+    public static function sessionIdFrom(array $session): ?string
+    {
+        $session = self::unwrapSession($session);
+
+        foreach (['sessionId', 'session_id', 'id'] as $key) {
+            if (! empty($session[$key]) && is_string($session[$key])) {
+                return $session[$key];
+            }
+        }
+
+        return self::lastUriSegment($session['uri'] ?? null);
+    }
+
+    /**
+     * Première `partyId` d'une session (statut ou réponse de call-out) :
+     * c'est elle qui reçoit l'enregistrement.
+     */
+    public static function partyIdFrom(array $session): ?string
+    {
+        $session = self::unwrapSession($session);
+
+        if (! empty($session['partyId']) && is_string($session['partyId'])) {
+            return $session['partyId'];
+        }
+
+        foreach (($session['parties'] ?? []) as $party) {
+            if (is_array($party) && ! empty($party['id'])) {
+                return (string) $party['id'];
+            }
+        }
+
+        return null;
+    }
+
+    /** `{"session": {...}}` → `{...}` ; sinon la réponse est déjà déballée. */
+    public static function unwrapSession(array $session): array
+    {
+        return is_array($session['session'] ?? null) ? $session['session'] : $session;
+    }
+
+    /** Dernier segment d'une URI (`.../telephony/session/{sessionId}`). */
+    private static function lastUriSegment($uri): ?string
+    {
+        if (! is_string($uri) || $uri === '') {
+            return null;
+        }
+
+        $path = parse_url($uri, PHP_URL_PATH);
+        $segment = $path ? basename($path) : '';
+
+        return $segment === '' ? null : $segment;
+    }
+
+    /**
+     * Décode la réponse HTTP en tableau PHP ; `[]` si le corps est vide
+     * (204 No Content, typique d'un DELETE).
+     */
+    private function decode($response): array
+    {
+        $text = trim((string) $response->text());
+
+        if ($text === '') {
+            return [];
+        }
+
+        $data = json_decode($text, true);
+
+        return is_array($data) ? $data : [];
+    }
 }

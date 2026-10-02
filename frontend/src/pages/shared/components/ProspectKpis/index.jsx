@@ -8,8 +8,8 @@ const fmt = formatCount
  * Barre de filtres de la colonne « Statut » (docs/RULES.md §9) — **c'est LE
  * filtre de statut** : le menu déroulant « Statut » a été supprimé.
  *
- * **Ordre imposé, identique sur les listes** (Grande liste — panels
- * commercial et admin, À rappeler, BV, détail d'un employé) :
+ * **Ordre imposé, identique sur les listes** (Grande liste — panel
+ * admin, À rappeler, BV, détail d'un employé) :
  * `Tous` → `Disponible` → `Oui` → `Non` → `BV` → `À rappeler` → `Blacklist`.
  *
  * Chaque badge compte une **valeur affichée** (`by_display_status` de
@@ -24,7 +24,8 @@ const fmt = formatCount
  *    côté requête ;
  *  - **détail d'un employé** (onglet Historique) : mêmes badges en sélection
  *    unique, mais compteurs **propres à l'employé** (props `counts`) ;
- *  - **panel commercial** (Prospects) : filtre **figé** sur Disponible ;
+ *  - **panel commercial** (Prospects) : **barre retirée** à la demande
+ *    (plus aucun badge de statut sur la « Grande liste » commerciale) ;
  *  - **listes de rappels** : barre consultative, aucun badge cliquable.
  *
  * Couleur pleine à la sélection, sans bordure : chaque badge garde **sa**
@@ -99,8 +100,9 @@ export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED']
  *                                        **une seule** en sélection unique
  *                                        (panel admin, détail employé) ;
  *                                        tableau vide = aucun filtre =
- *                                        « Tous ». Sur Prospects
- *                                        (commercial), figé sur `['AVAILABLE']`.
+ *                                        « Tous ». La barre n'est plus du
+ *                                        tout rendue sur Prospects
+ *                                        (commercial).
  * @param {Function} onStatusFilterChange reçoit la valeur cliquée (bascule
  *                                        exclusive) ou `null` pour repasser à
  *                                        « Tous » ; omis = barre non

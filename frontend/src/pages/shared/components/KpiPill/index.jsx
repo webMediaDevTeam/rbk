@@ -39,8 +39,8 @@ export default function KpiPill({
     'inline-flex items-center gap-2 rounded-full border py-1.5 pl-2 pr-3.5 text-sm shadow-sm transition-colors',
     active ? activeClass : 'border-border/60 bg-card hover:border-primary/40',
     onClick && !active ? 'cursor-pointer hover:bg-muted' : '',
-    // Badge non cliquable du panel commercial (filtre figé sur Disponible) :
-    // on signale visuellement que la sélection ne peut pas être changée.
+    // Badge non cliquable (barre consultative : listes de rappels, sélection
+    // figée) : on signale visuellement que la sélection ne peut pas changer.
     locked && !onClick ? 'cursor-not-allowed select-none' : '',
   ].filter(Boolean).join(' ')
 

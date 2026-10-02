@@ -639,14 +639,16 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
     badge (`ReservationStatusBadge` rend `null` sans `status`).
 * **Filtres par statut** — barre de
   **badges compacts** (une ligne, `flex-wrap`, hauteur ~32 px) juste au-dessus
-  des filtres, sur **les 4 listes** : Grande liste (commercial), Grande liste
-  (admin), À rappeler, BV, **et** sur l'onglet *Historique* du détail d'un
-  employé. Alimentée par `GET clients/overview` (tous rôles,
+  des filtres, sur **Grande liste (admin)**, **À rappeler**, BV, **et** sur
+  l'onglet *Historique* du détail d'un
+  employé — la barre a été **retirée de Grande liste (commercial)**
+  (panel Prospects) à la demande (voir plus bas). Elle est
+  alimentée par `GET clients/overview` (tous rôles,
   chiffres **globaux**, recalculés à chaque appel) — sauf au détail d'un
   employé, où les compteurs sont produits par `GET commercials/{id}`
   (`historique.badges`, même forme que `clients/overview`
   `{prospects, by_display_status}`), sur le périmètre de ses seuls appels. Elle contient
-  **exactement 7 badges**, dans **cet ordre, identique sur les quatre pages** :
+  **exactement 7 badges**, dans **cet ordre, identique sur ces pages** :
   1. *Tous* = `prospects.system` (total des clients) ;
   2. *Disponible* (statut client), 3. *Oui*, 4. *Non*, 5. *BV*,
      6. *À rappeler* (statut de la réservation courante),
@@ -690,11 +692,10 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
     (`by_display_status` ↔ `Client::scopeFilterByStatuses()` /
     `scopeFilterByReservationStatuses()`) : le chiffre affiché vaut le nombre
     de lignes renvoyées après clic ;
-  * sur **Grande liste (commercial)**, le filtre reste **figé sur *Disponible***
-    : les 7 badges s'affichent dans le même ordre, *Disponible* est sélectionné
-    et **aucun n'est cliquable** (`locked`, curseur interdit, infobulle
-    « filtre figé ») — cette liste ne contient que des prospects disponibles
-    et n'accepte pas le paramètre `status` ;
+  * sur **Grande liste (commercial)**, la barre est **supprimée** (à la
+    demande) : cette liste ne contient que des prospects disponibles et
+    n'accepte pas le paramètre `status`, l'écran n'affiche donc plus aucun
+    badge de statut — la colonne « Statut » du tableau reste en place.
   * sur **À rappeler** et **BV**, la barre est en **lecture seule**
     (`locked`, *Tous* actif) : la page ne liste qu'un type de réservation, le
     badge ne sert qu'à donner les chiffres globaux.
@@ -1050,8 +1051,29 @@ Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/exteran
   - `GET /api/v1/call-logs/users` : liste des utilisateurs / extensions
   - `GET /api/v1/call-logs/users/{extensionId}` : historique d'appels d'une extension
   - `GET /api/v1/call-logs/by-phone/{phone}` : historique d'appels vers un numéro cible
-* **Gestion des erreurs** : exception SDK / API injoignable → réponse HTTP `502` avec `{success: false, error: "..."}`.
-* **Test Interface (Super Admin)** : `/call-logs-test` (visualisation brute des données pour validation).
+* **Contrôle d'appel** (`RingCentralController`, **SUPER_ADMIN** — phase de
+  test, **aucune écriture en base**) :
+  - `GET /api/v1/call-logs/account` : compte / entreprise (`id` = `account_id`)
+  - `GET /api/v1/call-logs/devices` : appareils (source d'un appel sortant)
+  - `POST /api/v1/call-logs/call` : `to` + une source (`device_id`, `from`
+    ou `user_id`) → `{session_id, party_id, …}` ;
+    `user_id` **résout** l'extension RingCentral (correspondance d'e-mail
+    avec le compte local) puis son premier appareil, faute de quoi un
+    `device_id` / `from` explicite est exigé (422)
+  - `GET /api/v1/call-logs/calls/{sessionId}` : statut + `parties`
+    (le `party_id` sert de cible d'enregistrement)
+  - `POST /api/v1/call-logs/calls/{sessionId}/parties/{partyId}/record`
+  - `GET /api/v1/call-logs/calls/{sessionId}/parties/{partyId}/recordings`
+  - `DELETE /api/v1/call-logs/calls/{sessionId}` : raccroché
+  Les identifiants de route sont validés (`[A-Za-z0-9._-]+`, sinon 422)
+  avant d'être injectés dans l'URL d'appel RingCentral.
+* **Différé au passage au réel** (pas encore implémenté) : persistance —
+  `account_id` + infos société, extensions synchronisées dans des **colonnes
+  `ringcentral_*` de `users` (seuls les `COMERCIAL`)**, call logs
+  dé-doublonnés (pagination + filtres de date), sessions / événements /
+  enregistrements.
+* **Gestion des erreurs** : exception SDK / API injoignable → réponse HTTP `502` avec `{success: false, error: "..."}` ; validation → `422`.
+* **Test Interface (Super Admin)** : `/call-logs-test` (visualisation brute des données, appareils, appel sortant, statut / enregistrement / raccroché).
 
 
 **Conservés inchangés** (existaient avant l'alignement) :

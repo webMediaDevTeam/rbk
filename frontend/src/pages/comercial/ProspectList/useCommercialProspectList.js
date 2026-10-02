@@ -79,11 +79,22 @@ export function useCommercialProspectList() {
   const closeReserve = () => setShowReserve(false)
 
   // Garde « traitement en cours » : tant que l'employé a des réservations
-  // encore `PENDING` (prospects non traités), le serveur refuse un nouveau
-  // lot (409) — le bouton « Réserver » suit la même règle (`can_reserve`).
-  const { data: reservationCounts } = useActiveReservationsCount()
-  const pendingReservations = reservationCounts?.data?.pending ?? 0
-  const canReserve = reservationCounts?.data?.can_reserve ?? true
+  // encore `PENDING` (« en attente ») dans ses listes, le serveur refuse un
+  // nouveau lot (409) — le bouton « Réserver » suit la même règle
+  // (`can_reserve` = `pending === 0`) et ne s'ouvre qu'une fois que **toutes**
+  // les réservations de ses listes sont sorties de « en attente ».
+  //
+  // Tant que le compteur n'est pas chargé, `canReserve` reste `false` : on ne
+  // connaît pas encore l'état des listes, le bouton ne s'active donc qu'après
+  // la vérification. En cas d'erreur de l'endpoint on repasse à `true` (le
+  // garde-fou réel reste le 409 serveur).
+  const { data: reservationCounts, isLoading: isLoadingCounts } = useActiveReservationsCount()
+  const pendingReservations = reservationCounts?.data?.pending
+  const canReserve = isLoadingCounts
+    ? false
+    : reservationCounts
+      ? Boolean(reservationCounts.data.can_reserve)
+      : true
   const openReserve = () => {
     if (canReserve) setShowReserve(true)
   }

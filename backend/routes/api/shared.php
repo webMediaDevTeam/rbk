@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Shared\DashboardController;
 use App\Http\Controllers\Api\V1\Shared\ProspectFilterController;
 use App\Http\Controllers\Api\V1\Shared\ProspectOverviewController;
 use App\Http\Controllers\Api\V1\Shared\PublicClientController;
+use App\Http\Controllers\Api\V1\Shared\RingCentralController;
 use App\Http\Controllers\Api\V1\Shared\UserController;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
@@ -73,6 +74,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('call-logs/users', [CallLogController::class, 'users']);
     Route::get('call-logs/users/{extensionId}', [CallLogController::class, 'userCalls']);
     Route::get('call-logs/by-phone/{phone}', [CallLogController::class, 'callsToNumber']);
+});
+
+// ── RingCentral — contrôle d'appel (PHASE DE TEST, Super Admin) ────────
+// Pass-through vers RingCentral, **aucune écriture en base** pour l'instant :
+// la synchronisation (account_id, colonnes `ringcentral_*` de `users` pour
+// les seuls COMERCIAL, call logs dé-doublonnés) viendra au passage au réel —
+// docs/TODOS.md « Phase 6bis ». Visible depuis `/call-logs-test`.
+Route::middleware(['auth:sanctum', CheckRole::class.':SUPER_ADMIN'])->group(function () {
+    Route::get('call-logs/account', [RingCentralController::class, 'account']);
+    Route::get('call-logs/devices', [RingCentralController::class, 'devices']);
+    Route::post('call-logs/call', [RingCentralController::class, 'makeCall']);
+    Route::get('call-logs/calls/{sessionId}', [RingCentralController::class, 'callStatus']);
+    Route::post('call-logs/calls/{sessionId}/parties/{partyId}/record', [RingCentralController::class, 'record']);
+    Route::get('call-logs/calls/{sessionId}/parties/{partyId}/recordings', [RingCentralController::class, 'recordings']);
+    Route::delete('call-logs/calls/{sessionId}', [RingCentralController::class, 'hangUp']);
 });
 
 // ── User Management ─────────────────────────────────────────

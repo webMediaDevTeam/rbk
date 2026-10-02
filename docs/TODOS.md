@@ -178,6 +178,38 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
 - [x] Contrôleur : `CallLogController` (`/api/v1/call-logs/*`) avec gestion d'erreurs HTTP 502.
 - [x] Tests : `CallLogApiTest` (5 tests validés).
 - [x] Vue de test Super Admin : `/call-logs-test` dans la navigation Super Admin.
+- [x] **Contrôle d'appel (pass-through, SUPER_ADMIN, sans écriture en base)**
+      — `RingCentralController` + méthodes `RingCentralService::getAccount`,
+      `getDevices`, `makeCallOut`, `getCallSession`, `startRecording`,
+      `getRecordings`, `hangUpSession` :
+      * `GET /call-logs/account` — compte / entreprise (`account_id`) ;
+      * `GET /call-logs/devices` — appareils (source du « from ») ;
+      * `POST /call-logs/call` — `to` + (`device_id` | `from` | `user_id`),
+        retourne `session_id` / `party_id` ; `user_id` résout l'extension
+        (correspondance d'e-mail) puis son appareil ;
+      * `GET /call-logs/calls/{sessionId}` — statut + `parties` ;
+      * `POST /call-logs/calls/{sessionId}/parties/{partyId}/record` ;
+      * `GET /call-logs/calls/{sessionId}/parties/{partyId}/recordings` ;
+      * `DELETE /call-logs/calls/{sessionId}` — raccroché.
+- [x] Tests : `RingCentralApiTest` (15 tests validés — RBAC 401/403,
+      validation 422, résolution `user_id`, 502 sur panne du service).
+- [x] Vue de test : sections 4 à 6 de `/call-logs-test` (compte, appareils +
+      appel sortant, statut / enregistrement / raccroché), entrée de nav
+      réactivée.
+
+### ⏳ À faire — passage au réel (stockage)
+
+- [ ] **Compte** : persister `account_id` + infos société.
+- [ ] **Sync Users** : colonnes `ringcentral_*` sur `users`
+      (**seuls les `COMERCIAL`**) — `ringcentral_id` (extension),
+      `extension_number`, `phone_numbers` (json), `status`, `synced_at` +
+      logique sync/update (`GET /restapi/v1.0/account/~/extension?type=User&status=Enabled`).
+- [ ] **Sync Call Logs** : table dédiée, dé-doublonnage sur l'id RingCentral,
+      pagination + filtres `dateFrom` / `dateTo`
+      (`GET /restapi/v1.0/account/~/extension/{extensionId}/call-log`).
+- [ ] **Suivi d'appel** : tables sessions / événements / enregistrements
+      (`sessionId`, statuts, `partyId`, métadonnées d'enregistrement).
+- [ ] Étendre le contrôle d'appel aux `COMERCIAL` (aujourd'hui SUPER_ADMIN).
 
 
 ## Phase 7 — Écarts API (audit du 2026-09-29) ⏳
