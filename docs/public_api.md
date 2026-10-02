@@ -305,3 +305,32 @@ lot bounded by `PUBLIC_API_MAX_ITEMS`):
 Report keys: `processed` (success) / `zapped` / `ignored` (unknown name =
 ignored, never an error) / `failed` (errors) — rerun-safe (idempotent).
 Tests: `backend/tests/Feature/PublicClientConvertToBlacklistTest.php` (15 tests).
+
+---
+
+# Public Convert-To-Unavailable API
+
+Fourth public route on the same surface (no authentication, CORS `api/*`,
+lot bounded by `PUBLIC_API_MAX_ITEMS`):
+
+* `POST /api/v1/clients/convert-to-unavailable` — mark clients
+  **`UNAVAILABLE` by phone number**, `returned_at = now + 3 months` (the
+  "NO" call outcome, `CallWorkflowService::NON_BLOCK_MONTHS`).
+
+**Phone number is detected in any format on both sides**
+(`Client::normalizePhone()`): `819-418-6550`, `8194186550`,
+`(819) 418 6550`, `+1819-418-6550`, `+18194186550`, `+1-819-418-6550`,
+`1 819 418 6550`, `819-418-6550 ext. 5417` all collapse to the same
+10-digit key; every matching row is blocked (SQL digits-only pre-filter +
+exact PHP check, portable MySQL / SQLite).
+
+**Endpoint is temporary** — full spec (request bodies, phone-format
+table, business gesture §3, success **and** failure responses, removal
+procedure): [`docs/convert_to_unavailable_api.md`](convert_to_unavailable_api.md).
+Report keys: `processed` (success) / `blocked` (rows written) / `ignored`
+(unknown number = `not_found`, never an error; already blocked;
+blacklisted rows are never demoted) / `failed` (errors) — rerun-safe
+(idempotent). `422` only for an invalid body or an oversized lot; `200`
+with `success: false` when every item failed.
+Tests: `backend/tests/Feature/PublicClientConvertToUnavailableTest.php` (15 tests)
++ `backend/tests/Feature/ClientBulkUnavailableFromPhoneTest.php` (11 model tests).

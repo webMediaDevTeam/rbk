@@ -38,6 +38,18 @@ use Illuminate\Http\Request;
  * `{success, data: {received, processed, matched, zapped, ignored,
  * not_found, already_blacklisted, failed, zapped_items[],
  * ignored_items[], errors[]}}`.
+ *
+ * `POST clients/convert-to-unavailable` : indisponibilité **par numéro de
+ * téléphone** (endpoint public **temporaire**, spec
+ * `docs/convert_to_unavailable_api.md`). Formes `{"phone": "…"}`,
+ * `{"phones": [...]}` ou liste JSON nue ; le numéro est **détecté quel que
+ * soit son format** (`819-418-6550`, `+1-819-418-6550`… via
+ * `Client::normalizePhone()`) et toutes les lignes correspondantes passent
+ * en `UNAVAILABLE` avec `returned_at = now + 3 mois`. Un numéro
+ * **introuvable est ignoré** (pas une erreur). Réponse `{success, data:
+ * {received, processed, matched, blocked, ignored, not_found,
+ * already_unavailable, blacklisted, failed, blocked_items[],
+ * ignored_items[], errors[]}}`.
  */
 class PublicClientController extends Controller
 {
@@ -147,6 +159,75 @@ class PublicClientController extends Controller
 
         // {"names": [...]}, {"clients": [...]} ou liste JSON nue.
         return $this->items($request, 'mettre en liste noire', ['names', 'clients']);
+    }
+
+    /**
+     * Indisponibilité **par numéro de téléphone** (`POST
+     * clients/convert-to-unavailable`) — endpoint public **temporaire**
+     * (spec : docs/convert_to_unavailable_api.md).
+     *
+     * Trois formes de corps acceptées :
+     *
+     *   {"phone": "819-418-6550"}
+     *   {"phones": ["819-418-6550", "+1-418-555-1212"]}
+     *   ["819-418-6550", "418-555-1212"]
+     *
+     * Le numéro est **détecté quel que soit son format** des deux côtés
+     * (`Client::normalizePhone()` : `8194186550`, `+1819-418-6550`,
+     * `+1-819-418-6550`… désignent tous le même numéro) ; toutes les
+     * lignes correspondantes passent en `UNAVAILABLE` avec
+     * `returned_at = now + 3 mois` (geste NO, RULES §3).
+     *
+     * Un numéro **inexistant est ignoré** (pas une erreur) : il compte dans
+     * `ignored` / `not_found` et le lot continue. Réponse 200, rapport
+     * consolidé `{success, data: {received, processed, matched, blocked,
+     * ignored, not_found, already_unavailable, blacklisted, failed,
+     * blocked_items[], ignored_items[], errors[]}}` — corps invalide / lot
+     * trop long → 422.
+     */
+    public function convertToUnavailable(Request $request): JsonResponse
+    {
+        $items = $this->phoneItems($request);
+
+        if ($items instanceof JsonResponse) {
+            return $items;
+        }
+
+        $result = Client::bulkUnavailableFromPhone($items);
+
+        return response()->json([
+            // `success = false` uniquement si **aucun** numéro n'a pu être
+            // examiné : un lot partiel reste une réponse 200 exploitable.
+            'success' => $result['processed'] > 0,
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * Corps JSON → liste de **numéros** pour l'indisponibilité en masse,
+     * **ou** la réponse 422 si le format est refusé.
+     *
+     * @return list<mixed>|JsonResponse
+     */
+    private function phoneItems(Request $request): array|JsonResponse
+    {
+        $decoded = json_decode((string) $request->getContent(), true);
+
+        // Forme simple : {"phone": "…"} — un seul numéro, pas une liste.
+        if (is_array($decoded) && ! array_is_list($decoded) && array_key_exists('phone', $decoded)) {
+            if (! is_string($decoded['phone'])) {
+                return $this->invalid('Le champ « phone » doit être une chaîne.');
+            }
+
+            if (trim($decoded['phone']) === '') {
+                return $this->invalid('Aucun numéro à traiter (champ « phone » vide).');
+            }
+
+            return [$decoded['phone']];
+        }
+
+        // {"phones": [...]}, {"clients": [...]} ou liste JSON nue.
+        return $this->items($request, 'rendre indisponible', ['phones', 'clients']);
     }
 
     /**

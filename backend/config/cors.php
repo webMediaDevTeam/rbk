@@ -23,6 +23,10 @@ return [
         // Conversion en liste noire par nom (endpoint public temporaire) :
         // couvert par `api/*`, listé ici pour tracer la route ouverte.
         'api/v1/clients/convert-to-blacklist',
+        // Indisponibilité en masse par numéro de téléphone (endpoint public
+        // temporaire) : couvert par `api/*`, listé ici pour tracer la
+        // route ouverte.
+        'api/v1/clients/convert-to-unavailable',
         'sanctum/csrf-cookie',
         'login',
         'logout',

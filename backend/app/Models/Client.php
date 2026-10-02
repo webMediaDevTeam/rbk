@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CallWorkflowService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -678,6 +679,299 @@ class Client extends Model
     }
 
     /**
+     * Clés d'item acceptées pour un numéro de téléphone — forme normalisée
+     * (`Client::normalizePayloadKey()`), donc insensible à la casse et à la
+     * ponctuation : `phone`, `telephone`, `Téléphone` → `tlphone`, `tel`,
+     * `cell` / `cellulaire`, `numero` / `numéro` → `numro`.
+     */
+    private const PHONE_ITEM_KEYS = [
+        'phone',
+        'telephone',
+        'tlphone',
+        'tel',
+        'cell',
+        'cellulaire',
+        'cellnumber',
+        'mobileno',
+        'numero',
+        'numro',
+    ];
+
+    /**
+     * Indisponibilité **en masse par numéro de téléphone** : chaque numéro
+     * du lot fait basculer **tous** les clients qui le portent en
+     * `UNAVAILABLE` avec `returned_at = now + 3 mois` — le geste métier du
+     * « NON » (docs/RULES.md §3), durée portée par la constante unique
+     * `CallWorkflowService::NON_BLOCK_MONTHS`.
+     *
+     * **Détection du numéro** (`normalizePhone()`) : les formats
+     * `819-418-6550`, `8194186550`, `(819) 418 6550`, `+1819-418-6550`,
+     * `+18194186550`, `+1-819-418-6550`… visent tous le même numéro, des
+     * deux côtés (numéro saisi **et** colonne `phone` stockée, y compris
+     * avec extension). Un même numéro peut viser plusieurs lignes :
+     * **toutes** sont passées en indisponible.
+     *
+     * **Rapport consolidé** :
+     *
+     *   processed         numéros traités **sans erreur** (= succès)
+     *   matched           lignes clients trouvées
+     *   blocked           lignes réellement passées en UNAVAILABLE 3 mois
+     *   ignored           numéros **sans effet** → `ignored_items[]`
+     *   not_found         numéros introuvables (dans `ignored`)
+     *   already_unavailable lignes déjà indisponibles (compteur de lignes)
+     *   blacklisted       lignes en liste noire non rétrogradées (compteur de lignes)
+     *   failed            numéros en échec → `errors[]`
+     *
+     * Contrats (mêmes mots que `convertToBlacklistFromName()`) :
+     *
+     *  - un numéro **inconnu n'est pas une erreur** : `not_found`, le lot
+     *    continue ;
+     *  - une ligne **déjà `UNAVAILABLE`** avec un `returned_at` futur n'est
+     *    ni réécrite ni re-journalisée (`already_unavailable` :
+     *    `updated_at` figé) — le lot est **ré-exécutable** ;
+     *  - une ligne **en liste noire n'est jamais rétrogradée** en
+     *    indisponibilité temporaire (`blacklisted`) ;
+     *  - les **réservations sont conservées** (l'historique ne disparaît
+     *    pas) mais les **rappels sont annulés** : sans cela, le cron des
+     *    rappels expirés ré-appliquerait son propre blocage et écraserait
+     *    le retour à 3 mois ;
+     *  - chaque changement est journalisé par une note `NOTE` émise par
+     *    `SYSTEM` (l'API n'a pas d'utilisateur).
+     *
+     * Chaque numéro est traité **dans sa propre transaction** : un item
+     * invalide est compté dans `failed` sans annuler le reste du lot — même
+     * contrat que `bulkUpsertFromScraperPayload()`.
+     *
+     * @param  list<mixed>  $items  chaîne nue (`"819-418-6550"`) ou objet
+     *                              (`{"phone": "…"}`, cf. `PHONE_ITEM_KEYS`)
+     * @return array{received:int, processed:int, matched:int, blocked:int, ignored:int, not_found:int, already_unavailable:int, blacklisted:int, failed:int, blocked_items:list<array{index:int, phone:string, matched:int, blocked:int, returned_at:string}>, ignored_items:list<array{index:int, phone:string, reason:string}>, errors:list<array{index:int, phone:?string, error:string}>}
+     */
+    public static function bulkUnavailableFromPhone(array $items): array
+    {
+        $result = [
+            'received' => count($items),
+            'processed' => 0,
+            'matched' => 0,
+            'blocked' => 0,
+            'ignored' => 0,
+            'not_found' => 0,
+            'already_unavailable' => 0,
+            'blacklisted' => 0,
+            'failed' => 0,
+            'blocked_items' => [],
+            'ignored_items' => [],
+            'errors' => [],
+        ];
+
+        foreach (array_values($items) as $index => $item) {
+            $phone = self::phoneFromItem($item);
+
+            try {
+                if ($phone === null) {
+                    throw new InvalidArgumentException(
+                        'Numéro manquant : « phone » (ou item fourni en chaîne nue).'
+                    );
+                }
+
+                $normalized = self::normalizePhone($phone);
+
+                if ($normalized === null) {
+                    throw new InvalidArgumentException(
+                        'Numéro illisible : aucun chiffre détecté (ex. « 819-418-6550 »).'
+                    );
+                }
+
+                $step = DB::transaction(fn () => self::unavailableByPhone($normalized, $phone));
+
+                $result['processed'] += 1;
+                $result['matched'] += $step['matched'];
+                $result['blocked'] += $step['blocked'];
+                $result['already_unavailable'] += $step['already'];
+                $result['blacklisted'] += $step['blacklisted'];
+
+                if ($step['matched'] === 0) {
+                    // Numéro introuvable : **ignoré**, pas une erreur — le
+                    // lot continue avec le numéro suivant.
+                    $result['ignored'] += 1;
+                    $result['not_found'] += 1;
+                    $result['ignored_items'][] = [
+                        'index' => $index,
+                        'phone' => $phone,
+                        'reason' => 'not_found',
+                    ];
+                } elseif ($step['blocked'] === 0) {
+                    // Trouvé mais sans effet : déjà indisponible (prioritaire)
+                    // ou en liste noire (ré-exécution / non rétrogradation).
+                    $result['ignored'] += 1;
+                    $result['ignored_items'][] = [
+                        'index' => $index,
+                        'phone' => $phone,
+                        'reason' => $step['already'] > 0 ? 'already_unavailable' : 'blacklisted',
+                    ];
+                } else {
+                    $result['blocked_items'][] = [
+                        'index' => $index,
+                        'phone' => $phone,
+                        'matched' => $step['matched'],
+                        'blocked' => $step['blocked'],
+                        'returned_at' => $step['returned_at'],
+                    ];
+                }
+            } catch (QueryException $e) {
+                // Le SQL n'est jamais exposé au client : il est journalisé
+                // côté serveur (contrat des autres bulk publics).
+                Log::warning('Indisponibilité publique par téléphone : conflit de données.', [
+                    'index' => $index,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'phone' => $phone,
+                    'error' => 'Conflit de données : indisponibilité impossible.',
+                ];
+            } catch (Throwable $e) {
+                $result['failed'] += 1;
+                $result['errors'][] = [
+                    'index' => $index,
+                    'phone' => $phone,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Passe en `UNAVAILABLE` **tous** les clients portant le numéro fourni
+     * (comparaison sur la clé normalisée) : `status = UNAVAILABLE`,
+     * `returned_at = now + 3 mois` (règle NO), rappels annulés, réservations
+     * conservées, note `NOTE` émise par `SYSTEM`.
+     *
+     * Une ligne **déjà indisponible** (retour futur) ou **en liste noire**
+     * n'est ni réécrite ni re-journalisée : elle compte dans `already` /
+     * `blacklisted`.
+     *
+     * @return array{matched: int, blocked: int, already: int, blacklisted: int, returned_at: ?string}
+     */
+    private static function unavailableByPhone(string $normalized, string $phone): array
+    {
+        $clients = self::clientsByPhone($normalized);
+
+        $step = [
+            'matched' => $clients->count(),
+            'blocked' => 0,
+            'already' => 0,
+            'blacklisted' => 0,
+            'returned_at' => null,
+        ];
+
+        if ($clients->isEmpty()) {
+            return $step;
+        }
+
+        // Règle NO : retour dans 3 mois (durée unique portée par le
+        // workflow d'appel — CallWorkflowService::NON_BLOCK_MONTHS).
+        $returnedAt = Carbon::now()->addMonths(CallWorkflowService::NON_BLOCK_MONTHS);
+        $step['returned_at'] = $returnedAt->toDateTimeString();
+
+        foreach ($clients as $client) {
+            if ((bool) $client->is_blacklisted || $client->status === self::STATUS_BLACKLISTED) {
+                // Une liste noire n'est jamais rétrogradée en simple
+                // indisponibilité temporaire.
+                $step['blacklisted'] += 1;
+
+                continue;
+            }
+
+            if ($client->status === self::STATUS_UNAVAILABLE
+                && $client->returned_at !== null
+                && $client->returned_at->isFuture()) {
+                $step['already'] += 1;
+
+                continue;
+            }
+
+            $client->update([
+                'status' => self::STATUS_UNAVAILABLE,
+                'returned_at' => $returnedAt,
+            ]);
+
+            // Rappels annulés : le cron des rappels expirés ré-appliquerait
+            // son propre blocage (21 j) et écraserait le retour à 3 mois.
+            // Réservations conservées (la liste noire / l'indisponibilité ne
+            // suppriment jamais l'historique, §3.4).
+            Rappel::where('client_id', $client->id)->delete();
+
+            Note::create([
+                'client_id' => $client->id,
+                'sender_id' => Note::SENDER_SYSTEM,
+                'type' => Note::TYPE_NOTE,
+                'description' => 'Indisponible 3 mois (import téléphone) : '.$phone,
+            ]);
+
+            $step['blocked'] += 1;
+        }
+
+        return $step;
+    }
+
+    /**
+     * Clients dont le numéro correspond **exactement** à la clé normalisée
+     * fournie — deux passages, portable MySQL / SQLite (AGENTS.md §2) :
+     *
+     *  1. pré-filtre SQL sur `phone` privée de sa ponctuation
+     *     (`digitsOnlySql()`, `LIKE`) pour ne jamais charger la table ;
+     *  2. vérification exacte en PHP par `normalizePhone()` (extension,
+     *     indicatif 1, formes non couvertes par les REPLACE SQL).
+     *
+     * @return \Illuminate\Support\Collection<int, self>
+     */
+    private static function clientsByPhone(string $normalized)
+    {
+        $query = self::query()->whereNotNull('phone');
+        $phone = $query->getQuery()->getGrammar()->wrap('phone');
+
+        return $query
+            ->whereRaw(self::digitsOnlySql($phone).' LIKE ?', ['%'.$normalized.'%'])
+            ->get()
+            ->filter(fn (self $client) => self::normalizePhone($client->phone) === $normalized)
+            ->values();
+    }
+
+    /**
+     * Numéro porté par un item : chaîne nue → le numéro lui-même, objet →
+     * première clé de téléphone reconnue (`PHONE_ITEM_KEYS`, forme
+     * normalisée, donc insensible à la casse et à la ponctuation).
+     */
+    private static function phoneFromItem(mixed $item): ?string
+    {
+        if (is_scalar($item)) {
+            return self::cleanText($item);
+        }
+
+        if (! is_array($item)) {
+            return null;
+        }
+
+        foreach ($item as $key => $value) {
+            if (! in_array(self::normalizePayloadKey((string) $key), self::PHONE_ITEM_KEYS, true)) {
+                continue;
+            }
+
+            $phone = self::cleanText($value);
+
+            if ($phone !== null) {
+                return $phone;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Clé d'identification d'un item de suppression : chaîne nue → numéro de
      * licence, objet payload → `licence_number` puis repli
      * `licence_propre_numero` (mêmes règles que l'import).
@@ -931,6 +1225,59 @@ class Client extends Model
         return $extension === null || $extension === ''
             ? ($text === '' ? null : $text)
             : sprintf('%s ext. %s', $text, $extension);
+    }
+
+    /**
+     * Numéro de téléphone **détecté** : toutes les écritures d'un même
+     * numéro sont ramenées à une clé unique de chiffres nationaux, si bien
+     * que les formes ci-dessous sont reconnues comme un seul et même
+     * numéro :
+     *
+     *   819-418-6550 · 8194186550 · (819) 418 6550 · 819.418.6550
+     *   +1819-418-6550 · +18194186550 · +1-819-418-6550 · 1 819 418 6550
+     *   → tous → `8194186550`
+     *
+     *  - l'**extension** est retirée (`819-418-6550 ext. 5417` → le numéro
+     *    seul) : elle ne fait pas partie de l'identité du numéro ;
+     *  - ponctuation, espaces (dont insécables) et `+` supprimés : chiffres
+     *    seuls ;
+     *  - l'indicatif nord-américain `1` (11 chiffres) retiré : la comparaison
+     *    se fait sur le numéro **national**, la forme que stocke
+     *    `cleanPhone()`.
+     *
+     * @return ?string clé de chiffres (`8194186550`), null si le champ ne
+     *                 contient aucun chiffre (champ vide / illisible)
+     */
+    public static function normalizePhone(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null; // NULL ou liste placée dans un champ téléphone
+        }
+
+        $text = self::cleanText($value);
+
+        if ($text === null) {
+            return null;
+        }
+
+        // Extension postérieure (`… Ext.: 5417`, `… poste 3`) : non retenue.
+        if (preg_match('/^(.*?)\s*(?:ext(?:ension)?\.?|poste|#)\s*[:.]?\s*(\d{1,8})\s*$/iu', $text, $m)) {
+            $text = trim($m[1]);
+        }
+
+        $digits = preg_replace('/\D+/', '', $text) ?? '';
+
+        if ($digits === '') {
+            return null;
+        }
+
+        // Indicatif pays nord-américain : `+1 819…` et `819…` sont le même
+        // numéro (les codes région NANP ne commencent jamais par 1).
+        if (strlen($digits) === 11 && $digits[0] === '1') {
+            $digits = substr($digits, 1);
+        }
+
+        return $digits;
     }
 
     /** Courriel validé : minuscules, 1re adresse valide, sinon NULL. */

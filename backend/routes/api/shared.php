@@ -40,6 +40,14 @@ Route::match(['post', 'delete'], 'clients/bulk-delete', [PublicClientController:
 // insensible à la casse.
 Route::post('clients/convert-to-blacklist', [PublicClientController::class, 'convertToBlacklist']);
 
+// Indisponibilité en masse **par numéro de téléphone** — endpoint public
+// **temporaire** (spec docs/convert_to_unavailable_api.md) : même surface
+// que les routes ci-dessus, aucune authentification, lot borné par
+// `PUBLIC_API_MAX_ITEMS`. Numéro détecté quel que soit son format
+// (`819-418-6550` / `+1-819-418-6550` / `8194186550`…), chaque ligne
+// visée → `UNAVAILABLE` + `returned_at = now + 3 mois` (geste NO).
+Route::post('clients/convert-to-unavailable', [PublicClientController::class, 'convertToUnavailable']);
+
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);

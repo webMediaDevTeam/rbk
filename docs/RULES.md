@@ -748,6 +748,7 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 | POST | `clients/bulk-upsert` | **public** (aucune auth) — import scraper / n8n, §12 |
 | POST/DELETE | `clients/bulk-delete` | **public** (aucune auth) — suppression en masse, données liées ignorées, §12 |
 | POST | `clients/convert-to-blacklist` | **public temporaire** (aucune auth) — liste noire par nom, §12 |
+| POST | `clients/convert-to-unavailable` | **public temporaire** (aucune auth) — indisponible 3 mois par téléphone, §12 |
 | GET | `clients/overview` | tous rôles — cartes KPI globales (prospects / réservés / traités) |
 | GET | `filters` | tous rôles — `{categories, municipalities, administrative_regions}` distincts |
 | GET | `categories` | tous rôles — libellés distincts de `clients.categories` |
@@ -994,6 +995,46 @@ ci-dessus (aucune authentification, CORS `api/*`, lot borné par
   invalide ou lot trop long → `422` (rien n'est modifié) ;
 * **temporaire** : route à supprimer (procédure §7 du spec dédié), aucune
   écriture de masse n'est visée.
+
+**Endpoint public — indisponibilité en masse par numéro de téléphone**
+(`POST /api/v1/clients/convert-to-unavailable`, spec **temporaire** :
+`docs/convert_to_unavailable_api.md`) : même surface que les endpoints
+ci-dessus (aucune authentification, CORS `api/*`, lot borné par
+`PUBLIC_API_MAX_ITEMS`). Corps acceptés : `{"phone": "…"}`,
+`{"phones": [...]}` (ou enveloppe `{"clients": [...]}`) et une liste JSON
+nue de chaînes.
+
+* **détection du numéro** (`Client::normalizePhone()`) : la forme n'a
+  aucune importance, des deux côtés — `819-418-6550`, `8194186550`,
+  `(819) 418 6550`, `+1819-418-6550`, `+18194186550`, `+1-819-418-6550`,
+  `1 819 418 6550`… → clé nationale `8194186550` (extension retirée,
+  ponctuation/`+` supprimés, indicatif `1` retiré) ; recherche par
+  pré-filtre SQL `LIKE` sur la colonne privée de ponctuation puis égalité
+  exacte en PHP ;
+* **geste métier** : issue NO (§3) — `status = UNAVAILABLE`,
+  `returned_at = now + 3 mois` (`CallWorkflowService::NON_BLOCK_MONTHS`),
+  rappels **annulés** (sinon le cron des rappels expirés écraserait le
+  blocage), `reservations` / `notes` **conservés**, note `NOTE` émise par
+  `SYSTEM` (l'API publique n'a pas d'utilisateur) ;
+* **toutes les lignes** portant le numéro sont traitées ; une ligne
+  **déjà indisponible** (retour futur) n'est pas réécrite
+  (`already_unavailable`) ; une ligne **en liste noire n'est jamais
+  rétrogradée** (`blacklisted`) ;
+* **transaction par numéro** : un item invalide (sans clé de téléphone ou
+  sans aucun chiffre) passe en `failed` sans annuler le reste du lot ;
+* **un numéro introuvable est ignoré** (pas une erreur) : `not_found`, donc
+  `ignored`, et le lot continue — lot **ré-exécutable** (idempotent :
+  2e passage → `blocked = 0`, `ignored = received`, `failed = 0`) ;
+* **réponse `200` — rapport consolidé** : `{success, data: {received,
+  processed, matched, blocked, ignored, not_found, already_unavailable,
+  blacklisted, failed, blocked_items[], ignored_items[], errors[]}}` avec
+  `processed` = **succès** (`received − failed`), `blocked` = lignes
+  réellement passées en `UNAVAILABLE`, `ignored` = numéros sans effet,
+  `failed` = **erreurs** — `success = false` uniquement si aucun numéro
+  n'a pu être examiné ; corps invalide ou lot trop long → `422` (rien
+  n'est modifié) ;
+* **temporaire** : route à supprimer (procédure §7 du spec dédié), aucune
+  écriture massive n'est visée.
 
 ## 13. Téléphonie & Call Logs (RingCentral)
 
