@@ -296,15 +296,25 @@ invalidation, CORS preflight.
 Third public route on the same surface (no authentication, CORS `api/*`,
 lot bounded by `PUBLIC_API_MAX_ITEMS`):
 
-* `POST /api/v1/clients/convert-to-blacklist` — blacklist clients **by
-  name** (`LOWER(enterprise_name) = LOWER(?) OR LOWER(name) = LOWER(?)`,
-  case-insensitive, every matching row converted).
+* `POST /api/v1/clients/convert-to-blacklist` — blacklist clients **by name
+  or by licence** (the envelope picks the mode: `{"name(s)": …}` → name,
+  `{"licence(s)": …}` → licence, `{"clients": […]}` / bare JSON list →
+  auto).
+  * name → `LOWER(enterprise_name) LIKE '%name%' OR LOWER(name) LIKE
+    '%name%'` — **partial** (substring) and case-insensitive, every matching
+    row converted (historical behaviour of the name mode) ;
+  * licence → **exact equality**: numeric value hits `licence_propre_numero`
+    **and** `licence_number`, textual value (`5747-5089-01`) hits
+    `licence_number` only (no `RB-…` false positive).
 
-**Endpoint is temporary** — full spec (request bodies, business gesture
-§3.4, consolidated report, removal procedure): [`docs/convert_to_blacklist_api.md`](convert_to_blacklist_api.md).
-Report keys: `processed` (success) / `zapped` / `ignored` (unknown name =
-ignored, never an error) / `failed` (errors) — rerun-safe (idempotent).
-Tests: `backend/tests/Feature/PublicClientConvertToBlacklistTest.php` (15 tests).
+**Endpoint is temporary** — full spec (request bodies, licence-search rules,
+business gesture §3.4, consolidated report, removal procedure): [`docs/convert_to_blacklist_api.md`](convert_to_blacklist_api.md).
+Report keys: `processed` (success) / `zapped` / `ignored` (unknown target =
+ignored, never an error) / `failed` (errors) — every report row carries
+`type` (`name` / `licence`), `key` and `name` **or** `licence` — rerun-safe
+(idempotent).
+Tests: `backend/tests/Feature/PublicClientConvertToBlacklistTest.php` (23 tests).
+Campaign script: `../blacklist/upload_blacklist_licences.py` (500 per batch).
 
 ---
 
@@ -334,3 +344,42 @@ blacklisted rows are never demoted) / `failed` (errors) — rerun-safe
 with `success: false` when every item failed.
 Tests: `backend/tests/Feature/PublicClientConvertToUnavailableTest.php` (15 tests)
 + `backend/tests/Feature/ClientBulkUnavailableFromPhoneTest.php` (11 model tests).
+
+---
+
+# Public Create-NO-Reservations API
+
+Fifth public route on the same surface (no authentication, CORS `api/*`,
+lot bounded by `PUBLIC_API_MAX_ITEMS`; the `{"status": …}` perimeter mode is
+bounded by `PUBLIC_API_NO_RESERVATIONS_STATUS_LIMIT`, default 20 000, and
+paginated with the `{"after": "<uuid>"}` cursor + `next_after` in the
+response):
+
+* `POST /api/v1/clients/create-no-reservations` — write **one
+  `reservations` row with `status = NO`** per targeted client, attributed to a
+  **single employee** (`public_api.no_reservations_comercial_email`,
+  resolved by email — the stock is *not* spread over all commercials).
+  `reservation_group_id` stays `NULL`: no employee list appears in
+  « Mes listes ».
+* Targets: `{"status": "UNAVAILABLE"}` (whole perimeter, cursor-paginated),
+  `{"licence": …}` / `{"licences": […]}` (same licence resolution as
+  `convert-to-blacklist`), `{"client_id": …}` / `{"client_ids": […]}` (uuid),
+  `{"clients": […]}` or a bare JSON list (uuid **or** licence).
+
+**This is preparation data, not the call workflow**: it writes the
+reservation row and **nothing else** — no `NO` note, no `returned_at`
+(+3 months), no client status change, no auto-blacklist (§3.4 case 6). The
+real gesture is still produced exclusively by `CallWorkflowService::apply()`.
+The client status stays strictly unchanged.
+
+**Endpoint is temporary** — full spec (request bodies, what is / is not
+written, ignored reasons, consolidated report, removal procedure **and what
+to do about rows already written**): [`docs/create_no_reservations_api.md`](create_no_reservations_api.md).
+Report keys: `processed` (success) / `created` (reservations written) /
+`already` (`already_no`) / `skipped` (`blacklisted`) / `not_found` / `failed`
+— rerun-safe (idempotent): at most one `NO` reservation per (client,
+employee). `422` for an invalid body, an unknown status, a body mixing
+`status` and a list, or an oversized lot.
+Tests: `backend/tests/Feature/PublicClientNoReservationsTest.php` (16 tests).
+Campaign scripts: `../blacklist/upload_no_reservations.py` +
+`../blacklist/generer_rapport_no_reservations.py`.

@@ -748,8 +748,9 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 | POST | `liste-noire/{id}/debloquer` | ADMIN/SUPER_ADMIN |
 | POST | `clients/bulk-upsert` | **public** (aucune auth) — import scraper / n8n, §12 |
 | POST/DELETE | `clients/bulk-delete` | **public** (aucune auth) — suppression en masse, données liées ignorées, §12 |
-| POST | `clients/convert-to-blacklist` | **public temporaire** (aucune auth) — liste noire par nom, §12 |
+| POST | `clients/convert-to-blacklist` | **public temporaire** (aucune auth) — liste noire par **nom ou licence**, §12 |
 | POST | `clients/convert-to-unavailable` | **public temporaire** (aucune auth) — indisponible 3 mois par téléphone, §12 |
+| POST | `clients/create-no-reservations` | **public temporaire** (aucune auth) — fausses réservations `NO` (1 employé attributaire), §12 |
 | GET | `clients/overview` | tous rôles — cartes KPI globales (prospects / réservés / traités) |
 | GET | `filters` | tous rôles — `{categories, municipalities, administrative_regions}` distincts |
 | GET | `categories` | tous rôles — libellés distincts de `clients.categories` |
@@ -966,34 +967,43 @@ mêmes clés françaises que l'import avec repli `Licence (propre)`).
   corps invalide, tableau vide ou lot trop long → `422` (rien n'est
   supprimé).
 
-**Endpoint public — conversion en liste noire par nom** (`POST
-/api/v1/clients/convert-to-blacklist`, spec **temporaire** :
+**Endpoint public — conversion en liste noire (par nom ou par licence)**
+(`POST /api/v1/clients/convert-to-blacklist`, spec **temporaire** :
 `docs/convert_to_blacklist_api.md`) : même surface que les deux endpoints
 ci-dessus (aucune authentification, CORS `api/*`, lot borné par
-`PUBLIC_API_MAX_ITEMS`). Corps acceptés : `{"name": "…"}`, `{"names": [...]}`
-(ou enveloppe `{"clients": [...]}`) et une liste JSON nue de chaînes.
+`PUBLIC_API_MAX_ITEMS`). **L'enveloppe choisit le mode** : `{"licence": "…"}`
+/ `{"licences": [...]}` → licence, `{"name": "…"}` / `{"names": [...]}` →
+nom, `{"clients": [...]}` ou liste JSON nue → **auto** (licence si l'item en
+porte une, sinon nom).
 
-* **recherche** : `LOWER(enterprise_name) = LOWER(?)` **OU**
-  `LOWER(name) = LOWER(?)` — exacte, insensible à la casse des deux côtés,
-  **toutes** les lignes correspondantes converties (pas de « première
-  occurrence ») ;
+* **recherche par nom** : `LOWER(enterprise_name) LIKE '%nom%'` **OU**
+  `LOWER(name) LIKE '%nom%'` — **partielle** (sous-chaîne) et insensible à la
+  casse des deux côtés, **toutes** les lignes correspondantes converties (pas
+  de « première occurrence ») ;
+* **recherche par licence** : égalité **exacte** — valeur **numérique pure** →
+  `licence_propre_numero` (entier) **et** `licence_number` ; valeur
+  **textuelle** (`5747-5089-01`) → `licence_number` seulement (jamais de
+  faux positif `RB-…` → numéro RBQ) ;
 * **geste métier** : cas 6 (§3.4) — `is_blacklisted = true`, `status =
   BLACKLISTED`, `returned_at` vidé, rappels annulés, note `BLACKLISTED`
-  émise par `SYSTEM` (l'API publique n'a pas d'utilisateur) ;
+  émise par `SYSTEM` (l'API publique n'a pas d'utilisateur) ; le libellé de
+  la note reprend la cible (`… : <nom>` / `… : licence <licence>`) ;
   `reservations` / `notes` **conservés** ;
-* **transaction par nom** : un item invalide passe en `failed` sans annuler
+* **transaction par cible** : un item invalide passe en `failed` sans annuler
   le reste du lot ; une ligne déjà en liste noire est comptée dans
   `already_blacklisted` et **n'est pas réécrite** (`updated_at` inchangé) ;
-* **un nom introuvable est ignoré** (pas une erreur) : `not_found`, donc
+* **une cible introuvable est ignorée** (pas une erreur) : `not_found`, donc
   `ignored`, et le lot continue — lot **ré-exécutable** (idempotent :
   2e passage → `zapped = 0`, `ignored = received`, `failed = 0`) ;
 * **réponse `200` — rapport consolidé** : `{success, data: {received,
   processed, matched, zapped, ignored, not_found, already_blacklisted,
   failed, zapped_items[], ignored_items[], errors[]}}` avec
   `processed` = **succès** (`received − failed`), `zapped` = lignes clients
-  zappées, `ignored` = noms sans effet, `failed` = **erreurs** —
-  `success = false` uniquement si aucun nom n'a pu être examiné ; corps
-  invalide ou lot trop long → `422` (rien n'est modifié) ;
+  zappées, `ignored` = cibles sans effet, `failed` = **erreurs** — chaque
+  ligne de rapport porte `type` (`name` / `licence`), `key`, puis `name`
+  **ou** `licence` (l'autre `null`) ; `success = false` uniquement si aucune
+  cible n'a pu être examinée ; corps invalide ou lot trop long → `422` (rien
+  n'est modifié) ;
 * **temporaire** : route à supprimer (procédure §7 du spec dédié), aucune
   écriture de masse n'est visée.
 
@@ -1036,6 +1046,53 @@ nue de chaînes.
   n'est modifié) ;
 * **temporaire** : route à supprimer (procédure §7 du spec dédié), aucune
   écriture massive n'est visée.
+
+**Endpoint public — fausses réservations « NON »** (`POST
+/api/v1/clients/create-no-reservations`, spec **temporaire** :
+`docs/create_no_reservations_api.md`) : même surface que les endpoints
+ci-dessus (aucune authentification, CORS `api/*`). Il écrit **une ligne
+`reservations` au statut `NO` par client visé**, attribuée à **un seul
+employé** — une donnée de préparation, **pas** le workflow d'appel.
+
+* **cibles** : `{"status": "UNAVAILABLE"}` (tout un périmètre, **avec** le
+  curseur `{"after": "<uuid>"}` pour dérouler un périmètre plus grand que le
+  plafond `PUBLIC_API_NO_RESERVATIONS_STATUS_LIMIT`, défaut 20 000 — la
+  réponse rend `next_after`, `null` quand tout est passé), `{"licence": "…"}`
+  / `{"licences": [...]}`, `{"client_id": "…"}` / `{"client_ids": [...]}`
+  (uuid), `{"clients": [...]}` ou liste JSON nue (uuid **ou** licence, même
+  résolution de licence que `convert-to-blacklist`) ;
+* **ce qui est écrit** : `reservations (client_id, comercial_id, status = NO,
+  reservation_group_id = NULL)` — l'employé est résolu **par son adresse**
+  (`public_api.no_reservations_comercial_email`, défaut
+  `mohamed.khemir@apex-structures.tn` ; absent → `422` nommé). Le stock n'est
+  **pas** réparti entre tous les commerciaux : c'est le but de l'endpoint ;
+* **ce qui n'est PAS fait** : **aucun** effet de bord métier — pas de note
+  `NO`, pas de `returned_at` (+3 mois), pas de passage en `UNAVAILABLE`, pas
+  d'auto-liste-noire (§3.4 cas 6), pas de rappel. Le **statut du client reste
+  inchangé** : seul l'historique de réservation est enrichi (le pointeur
+  `current_reservation_id` suit, comme après une issue d'appel réelle). Le
+  geste métier complet reste produit **exclusivement** par
+  `CallWorkflowService::apply()` ;
+* **une cible sans effet est ignorée** (jamais une erreur) : `not_found`
+  (introuvable), `already_no` (le client a déjà un `NO` de cet employé),
+  `blacklisted` (un « NON » n'a pas de sens sur un client en liste noire) —
+  toutes dans `ignored_items[]` avec leur `reason` ; seule une cible
+  **inexploitable** (aucune clé) est une `failed` ;
+* **transaction par cible** : une cible qui désigne plusieurs lignes (licence
+  en doublon) compte 1 dans `processed` et N dans `matched` / `created` ;
+  **une seule réservation `NO` par (client, employé)** — un `NO` d'un autre
+  commercial ne bloque pas ;
+* **lot ré-exécutable** (idempotent) : 2ᵉ passage → `created = 0`,
+  `already = received` ;
+* **réponse `200` — rapport consolidé** : `{success, data: {received,
+  processed, matched, created, already, skipped, not_found, failed,
+  comercial_email, truncated, next_after, created_items[], ignored_items[],
+  errors[]}}` — `success = false` uniquement si aucune cible n'a pu être
+  examinée ; corps invalide, statut inconnu, `status` **et** liste dans le
+  même corps, ou lot trop long → `422` (rien n'est écrit) ;
+* **temporaire** : route à supprimer (procédure §8 du spec dédié). Le retrait
+  **ne supprime pas** les fausses réservations déjà écrites : les effacer
+  explicitement si la campagne doit être annulée.
 
 ## 13. Téléphonie & Call Logs (RingCentral)
 
