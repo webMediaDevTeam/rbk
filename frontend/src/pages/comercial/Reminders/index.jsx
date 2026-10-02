@@ -68,10 +68,7 @@ export default function RemindersPage({
         )}
       </div>
 
-      {/* Badges de la colonne « Statut » : identiques aux autres listes, en
-          lecture seule ici (aucun filtre cliquable sur une liste déjà
-          restreinte à un type de réservation). */}
-      <ProspectKpis />
+   
 
       <ReminderToolbar
         search={search}
