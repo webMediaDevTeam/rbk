@@ -1,0 +1,541 @@
+{
+  "info": {
+    "_postman_id": "b7f0a2c4-6d1e-4a83-9c55-2f8e1d0b4a97",
+    "name": "RBK — API publique clients (upsert / delete)",
+    "description": "Endpoints **publics** (aucune authentification, CORS ouvert sur `api/*`) du webhook scraper / n8n.\n\n- `POST /api/v1/clients/bulk-upsert` — import / mise à jour par lots\n- `POST` · `DELETE` `/api/v1/clients/bulk-delete` — suppression, **données liées jamais supprimées**\n\nLimite de lot : `PUBLIC_API_MAX_ITEMS` (défaut 1000) → `422` au-delà.\n\n**Variables**\n- `base_url` : `http://localhost:8000` par défaut. Passer à `http://zdigia.com` (ou l'hôte de prod) pour cibler l'API déployée.\n- `licence_1`, `licence_2`, `licence_absente` : licences à utiliser dans les requêtes.\n\nChaque requête porte des tests (`pm.test`) sur le code HTTP et les compteurs du rapport.\n\nSpec : `docs/public_api.md` — Règles métier : `docs/RULES.md` §12.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "licence_1",
+      "value": "5747-5089-01",
+      "type": "string"
+    },
+    {
+      "key": "licence_2",
+      "value": "1100-3571-01",
+      "type": "string"
+    },
+    {
+      "key": "licence_absente",
+      "value": "9999-0000-01",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// ── Assertions communes à toute la surface publique ──────────────",
+          "pm.test('Content-Type JSON', function () {",
+          "    pm.response.to.be.json;",
+          "});",
+          "",
+          "const body = pm.response.json();",
+          "",
+          "// ── 422 : le corps est refusé AVANT toute écriture (rien n'est",
+          "// écrit / supprimé) ────────────────────────────────────────────",
+          "if (pm.response.code === 422) {",
+          "    pm.test('422 → {success:false, error}, pas de data', function () {",
+          "        pm.expect(body.success).to.eql(false);",
+          "        pm.expect(body.error, 'error message').to.be.a('string').and.not.empty;",
+          "        pm.expect(body).to.not.have.property('data');",
+          "    });",
+          "    return;",
+          "}",
+          "",
+          "if (pm.response.code !== 200) {",
+          "    return; // préflight / autre statut : assertions ci-dessous sans objet",
+          "}",
+          "",
+          "pm.test('200 → enveloppe {success, data}', function () {",
+          "    pm.expect(body).to.have.property('success');",
+          "    pm.expect(body).to.have.property('data');",
+          "});",
+          "",
+          "pm.test('data : rapport consolidé complet', function () {",
+          "    const d = body.data;",
+          "    ['received', 'processed', 'failed'].forEach(function (k) {",
+          "        pm.expect(d, 'counter ' + k).to.have.property(k);",
+          "        pm.expect(d[k], k + ' numeric').to.be.a('number');",
+          "    });",
+          "    pm.expect(d.errors, 'errors[] is an array').to.be.an('array');",
+          "});",
+          "",
+          "pm.test('received === processed + failed', function () {",
+          "    const d = body.data;",
+          "    pm.expect(d.received).to.eql(d.processed + d.failed);",
+          "});",
+          "",
+          "pm.test('success === (processed > 0)', function () {",
+          "    pm.expect(body.success).to.eql(body.data.processed > 0);",
+          "});",
+          "",
+          "// Invariant du modèle : chaque incrément de `failed` pousse",
+          "// exactement une ligne dans errors[] (transaction par ligne,",
+          "// aucun item n'annule le lot).",
+          "pm.test('failed === errors.length', function () {",
+          "    pm.expect(body.data.failed).to.eql(body.data.errors.length);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Bulk upsert (import)",
+      "description": "`POST /api/v1/clients/bulk-upsert` — crée ou met à jour un prospect, clé d'upsert `licence_number` (repli `licence_propre_numero`).\n\nRéponse : `data = {received, processed, created, updated, unchanged, failed, errors[]}`.\n- transaction **par ligne** : un item invalide tombe en `failed` sans annuler le lot ;\n- ligne **identique** → `unchanged` (`updated_at` ne bouge pas) ;\n- `status` / `is_blacklisted` / `returned_at` sont **exclus** du payload.",
+      "item": [
+        {
+          "name": "Enveloppe clients",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const d = body.data;",
+                  "",
+                  "pm.test('200 — import traité', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "pm.test('2 items reçus et traités', function () {",
+                  "    pm.expect(d.received).to.eql(2);",
+                  "    pm.expect(d.processed).to.eql(2);",
+                  "    pm.expect(d.failed).to.eql(0);",
+                  "});",
+                  "",
+                  "pm.test('created + updated + unchanged === processed', function () {",
+                  "    pm.expect(d.created + d.updated + d.unchanged).to.eql(d.processed);",
+                  "});",
+                  "",
+                  "pm.test('aucune erreur', function () {",
+                  "    pm.expect(d.errors).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clients\": [\n    {\n      \"Licence\": \"{{licence_1}}\",\n      \"Licence (propre)\": 5747508901,\n      \"Nom de l'intervenant / Entreprise\": \"10095800 Canada Inc.\",\n      \"Municipalité\": \"Québec\",\n      \"Région administrative\": \"Capitale-Nationale\",\n      \"Téléphone\": \"418-555-0101\",\n      \"Courriel\": \"INFO@Exemple.CA\",\n      \"Nombre de répondants\": 3,\n      \"Catégories et sous-catégories autorisées\": \"Béton|Excavation\",\n      \"Montant de la caution ($)\": \"20 000 $\",\n      \"Date de début / délivrance\": \"2026-01-15\",\n      \"Date de fin / paiement annuel\": \"2027-01-15\"\n    },\n    {\n      \"licence_number\": \"{{licence_2}}\",\n      \"enterprise_name\": \"Bâtiment Plus Ltée\",\n      \"email\": \"contact@batiplus.ca\",\n      \"phone\": \"(418) 555-0102\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-upsert"]
+            },
+            "description": "Forme recommandée. Mélange accepté : clés françaises **et** colonnes `snake_case` (casse / ponctuation ignorées).\n\nÀ rejouer : la 2e exécution bascule les 2 lignes en `unchanged`."
+          }
+        },
+        {
+          "name": "Liste JSON nue",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "",
+                  "pm.test('200 — liste nue acceptée', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "pm.test('3 items reçus et traités', function () {",
+                  "    pm.expect(d.received).to.eql(3);",
+                  "    pm.expect(d.processed).to.eql(3);",
+                  "});",
+                  "",
+                  "pm.test('created + updated + unchanged === processed', function () {",
+                  "    pm.expect(d.created + d.updated + d.unchanged).to.eql(d.processed);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"Licence\": \"{{licence_1}}\", \"Nom de l'intervenant / Entreprise\": \"10095800 Canada Inc.\" },\n  { \"Licence\": \"{{licence_2}}\", \"enterprise_name\": \"Bâtiment Plus Ltée\" },\n  { \"Licence (propre)\": 5747508901, \"enterprise_name\": \"10095800 Canada Inc.\" }\n]"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-upsert"]
+            },
+            "description": "Tableau d'objets nu, sans enveloppe `clients`. Le 3e item n'a que la clé de repli `Licence (propre)`."
+          }
+        },
+        {
+          "name": "422 — lot trop gros",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('422 — refusé avant toute écriture', function () {",
+                  "    pm.expect(pm.response.code).to.eql(422);",
+                  "    pm.expect(body.success).to.eql(false);",
+                  "    pm.expect(body.error, 'error message').to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('aucun data — rien n\\'a été écrit', function () {",
+                  "    pm.expect(body).to.not.have.property('data');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clients\": [\n    {{#repeat:1001}}\n    { \"Licence\": \"LOT-{{$index}}\" }{{^$last}},{{/$last}}\n    {{/repeat}}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-upsert"]
+            },
+            "description": "1001 items > `PUBLIC_API_MAX_ITEMS` (1000) → `422 {success:false, error}`.\n\nLe corps est généré par `repeat` (1001 lignes) : Postman doit résoudre 1001 interpolations, c'est un peu lent mais reste jouable — 1001 items suffisent à dépasser la limite."
+          }
+        },
+        {
+          "name": "422 — corps vide",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('422 — aucun client à importer', function () {",
+                  "    pm.expect(pm.response.code).to.eql(422);",
+                  "    pm.expect(body.success).to.eql(false);",
+                  "    pm.expect(body.error).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"clients\": [] }"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-upsert"]
+            },
+            "description": "Tableau vide → `422 « Aucun client à importer (tableau vide). »`."
+          }
+        },
+        {
+          "name": "Préflight CORS (OPTIONS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 ou 200 — préflight traité', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "pm.test('Access-Control-Allow-Origin présent', function () {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test('POST autorisé', function () {",
+                  "    const allow = pm.response.headers.get('Access-Control-Allow-Methods');",
+                  "    if (allow) {",
+                  "        pm.expect(allow.toUpperCase()).to.include('POST');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              { "key": "Origin", "value": "http://localhost:5173" },
+              { "key": "Access-Control-Request-Method", "value": "POST" },
+              { "key": "Access-Control-Request-Headers", "value": "content-type" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-upsert"]
+            },
+            "description": "Preflight navigateur (CORS ouvert sur `api/*`, `config/cors.php`). Sans corps."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Bulk delete (suppression)",
+      "description": "`POST` · `DELETE` `/api/v1/clients/bulk-delete` — les deux verbes pointent sur la **même action**.\n\nRéponse : `data = {received, processed, deleted, skipped, missing, failed, skipped_items[], missing_items[], errors[]}`.\n\n**Garde-fou** : `reservations`, `notes` et `rappels` sont tous `cascadeOnDelete()`. Un client qui en porte est **`skipped`** (avec le compte par table) et la boucle passe au suivant — son historique n'est jamais détruit. Licence inexistante → `missing` (**pas** une erreur).",
+      "item": [
+        {
+          "name": "Enveloppe licences (POST)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "",
+                  "pm.test('200 — lot examiné', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "pm.test('3 items reçus et traités', function () {",
+                  "    pm.expect(d.received).to.eql(3);",
+                  "    pm.expect(d.processed).to.eql(3);",
+                  "});",
+                  "",
+                  "pm.test('deleted + skipped + missing === processed', function () {",
+                  "    pm.expect(d.deleted + d.skipped + d.missing).to.eql(d.processed);",
+                  "});",
+                  "",
+                  "pm.test('licence absente → missing (pas une erreur)', function () {",
+                  "    pm.expect(d.missing).to.be.at.least(1);",
+                  "    pm.expect(d.missing_items).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(d.missing_items[0]).to.have.property('licence_number');",
+                  "});",
+                  "",
+                  "pm.test('chaque skipped_item expose ses liens', function () {",
+                  "    pm.expect(d.skipped_items).to.be.an('array');",
+                  "    d.skipped_items.forEach(function (s) {",
+                  "        pm.expect(s.linked, 'linked').to.be.an('object');",
+                  "        ['reservations', 'notes', 'rappels'].forEach(function (t) {",
+                  "            pm.expect(s.linked[t], 'linked.' + t).to.be.a('number');",
+                  "        });",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licences\": [\"{{licence_1}}\", \"{{licence_2}}\", \"{{licence_absente}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-delete"]
+            },
+            "description": "Le 3e item est volontairement absent → `missing`.\n\nÀ tester dans l'ordre : importer d'abord (dossier ci-dessus), puis supprimer — un client tout juste importé est *vierge* et sera réellement `deleted`."
+          }
+        },
+        {
+          "name": "Enveloppe clients (DELETE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "",
+                  "pm.test('200 — verbe DELETE, même action', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "pm.test('2 items reçus et traités', function () {",
+                  "    pm.expect(d.received).to.eql(2);",
+                  "    pm.expect(d.processed).to.eql(2);",
+                  "});",
+                  "",
+                  "pm.test('deleted + skipped + missing === processed', function () {",
+                  "    pm.expect(d.deleted + d.skipped + d.missing).to.eql(d.processed);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clients\": [\n    { \"Licence\": \"{{licence_1}}\" },\n    { \"Licence (propre)\": 5747508901 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-delete"]
+            },
+            "description": "Objets : `Licence` → `licence_number`, sinon `Licence (propre)` → `licence_propre_numero`.\n\nUn corps JSON sur `DELETE` est accepté par cette route (`Route::match`)."
+          }
+        },
+        {
+          "name": "Liste JSON nue (POST)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json().data;",
+                  "",
+                  "pm.test('200 — liste nue acceptée', function () {",
+                  "    pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "",
+                  "pm.test('2 items reçus et traités', function () {",
+                  "    pm.expect(d.received).to.eql(2);",
+                  "    pm.expect(d.processed).to.eql(2);",
+                  "});",
+                  "",
+                  "pm.test('deleted + skipped + missing === processed', function () {",
+                  "    pm.expect(d.deleted + d.skipped + d.missing).to.eql(d.processed);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\"{{licence_1}}\", \"{{licence_absente}}\"]"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-delete"]
+            },
+            "description": "Chaînes nues → lues comme `licence_number`."
+          }
+        },
+        {
+          "name": "422 — lot trop gros",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('422 — refusé avant toute suppression', function () {",
+                  "    pm.expect(pm.response.code).to.eql(422);",
+                  "    pm.expect(body.success).to.eql(false);",
+                  "    pm.expect(body.error, 'error message').to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "pm.test('aucun data — rien n\\'a été supprimé', function () {",
+                  "    pm.expect(body).to.not.have.property('data');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"licences\": [\n    {{#repeat:1001}}\n    \"LOT-{{$index}}\"{{^$last}},{{/$last}}\n    {{/repeat}}\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-delete"]
+            },
+            "description": "1001 licences > `PUBLIC_API_MAX_ITEMS` (1000) → `422`, **aucun client supprimé**."
+          }
+        },
+        {
+          "name": "Préflight CORS (OPTIONS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 ou 200 — préflight traité', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "pm.test('Access-Control-Allow-Origin présent', function () {",
+                  "    pm.expect(pm.response.headers.get('Access-Control-Allow-Origin')).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              { "key": "Origin", "value": "http://localhost:5173" },
+              { "key": "Access-Control-Request-Method", "value": "DELETE" },
+              { "key": "Access-Control-Request-Headers", "value": "content-type" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/clients/bulk-delete",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "clients", "bulk-delete"]
+            },
+            "description": "Preflight navigateur sur la route de suppression."
+          }
+        }
+      ]
+    }
+  ]
+}
