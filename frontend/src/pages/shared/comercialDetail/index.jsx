@@ -4,6 +4,7 @@ import PageHeader from './components/PageHeader.jsx'
 import StatCards from './components/StatCards.jsx'
 import Tabs from './components/Tabs.jsx'
 import CommercialInfoCard from './components/CommercialInfoCard.jsx'
+import CallLogsCard from './components/CallLogsCard.jsx'
 import HistoryList from './components/HistoryList.jsx'
 import HistoryToolbar from './components/HistoryToolbar.jsx'
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
@@ -11,6 +12,7 @@ import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 export default function ComercialDetailPage() {
   const {
     TABS,
+    id,
     activeTab,
     setActiveTab,
     page,
@@ -55,6 +57,10 @@ export default function ComercialDetailPage() {
           avatarUrl={avatarUrl}
           companyName={companyName}
         />
+      ) : activeTab === 'appels' ? (
+        // Journal RingCentral de l'employé (ADMIN / SUPER_ADMIN) —
+        // extension résolue via son appareil, enregistrements jouables.
+        <CallLogsCard id={id} />
       ) : (
         <div className="space-y-6">
           {/* Badges de la colonne « Statut » = filtre (sélection unique),

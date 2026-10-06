@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { api } from '@/api/client.js'
+import { useAuth } from '@/context/AuthContext.jsx'
 import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
 
-const TABS = [
+const BASE_TABS = [
   { value: 'details', label: 'Détails employé' },
   { value: 'historique', label: 'Historique' },
 ]
@@ -31,6 +32,13 @@ export function useComercialDetail(id, { page = 1, search, status, reservationSt
 export function useComercialDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { role } = useAuth()
+  // Onglet « Appels » (journal RingCentral + enregistrements) : réservé aux
+  // mêmes rôles que les modales / routes d'appel (ADMIN, SUPER_ADMIN).
+  const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN'
+  const TABS = isAdmin
+    ? [...BASE_TABS, { value: 'appels', label: 'Appels' }]
+    : BASE_TABS
   const [activeTab, setActiveTab] = useState('details')
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
@@ -93,6 +101,7 @@ export function useComercialDetailPage() {
 
   return {
     TABS,
+    id,
     activeTab,
     setActiveTab,
     page,

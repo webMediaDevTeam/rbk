@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\RingCentralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -36,6 +37,10 @@ use Throwable;
  *          (COMERCIAL, ADMIN, SUPER_ADMIN — démarrage d'enregistrement)
  *   GET    /call-logs/calls/{sessionId}/parties/{partyId}/recordings
  *   DELETE /call-logs/calls/{sessionId}                     (raccroché)
+ *   GET    /call-logs/employees/{id}/logs                   (ADMIN,
+ *          SUPER_ADMIN — journal d'appels d'un employé, via son appareil)
+ *   GET    /call-logs/recordings/{recordingId}/content      (ADMIN,
+ *          SUPER_ADMIN — proxy audio d'un enregistrement)
  */
 class RingCentralController extends Controller
 {
@@ -328,6 +333,93 @@ class RingCentralController extends Controller
         }
     }
 
+    /**
+     * Journal d'appels RingCentral d'un employé — onglet « Appels » de la
+     * fiche `/comercialDetail/:id` (ADMIN / SUPER_ADMIN).
+     *
+     * Résolution de l'extension **via l'appareil de l'employé**
+     * (`employees.ringcentral_device_id` → appareil → `extension.id`),
+     * repli sur la correspondance d'e-mail ; sans correspondance → 422
+     * explicite. Call log lu en `view=Detailed` : les métadonnées
+     * `recording` (id + `contentUri`) viennent avec.
+     */
+    public function employeeLogs(Request $request, string $userId): JsonResponse
+    {
+        $user = User::query()->findOrFail($userId);
+        $employee = $user->employee;
+
+        if ($employee === null) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Aucune fiche employé rattachée à cet utilisateur.',
+            ], 422);
+        }
+
+        $filters = array_merge(
+            ['view' => 'Detailed', 'perPage' => 100],
+            $request->only(['dateFrom', 'dateTo', 'direction', 'page'])
+        );
+
+        try {
+            $resolved = $this->resolveEmployeeExtension($employee, (string) $user->email);
+        } catch (Throwable $e) {
+            return $this->failed($e); // API injoignable pendant la résolution
+        }
+
+        [$extensionId, $extensionNumber, $resolvedBy] = $resolved ?? [null, null, null];
+
+        if ($extensionId === null) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Aucune extension RingCentral rattachée à cet employé (appareil « '
+                    .($employee->ringcentral_device_id ?? '—').' » introuvable, e-mail « '.$user->email
+                    .' » sans correspondance). Choisissez son appareil source dans sa fiche.',
+            ], 422);
+        }
+
+        return $this->pass(function () use ($employee, $extensionId, $extensionNumber, $resolvedBy, $filters) {
+            $records = $this->ringCentral->getCallHistoryByUser($extensionId, $filters);
+
+            [$records, $filteredByDevice] = $this->filterByDevice(
+                $records,
+                (string) ($employee->ringcentral_device_id ?? '')
+            );
+
+            return [
+                'extension_id'       => $extensionId,
+                'extension_number'   => $extensionNumber,
+                'resolved_by'        => $resolvedBy,
+                'device_id'          => $employee->ringcentral_device_id,
+                'from_number'        => $employee->ringcentral_from_number,
+                'filtered_by_device' => $filteredByDevice,
+                'records'            => $records,
+            ];
+        });
+    }
+
+    /**
+     * Proxy audio d'un enregistrement (onglet « Appels ») : le `contentUri`
+     * de RingCentral exige l'en-tête `Authorization`, qu'un `<audio>` du
+     * navigateur ne peut pas envoyer — le flux est donc relayé ici.
+     */
+    public function recordingContent(string $recordingId): Response|JsonResponse
+    {
+        $this->assertIdentifier($recordingId, 'recordingId');
+
+        try {
+            $content = $this->ringCentral->getRecordingContent($recordingId);
+        } catch (Throwable $e) {
+            return $this->failed($e);
+        }
+
+        return response($content['body'], 200, [
+            'Content-Type'        => $content['content_type'],
+            'Content-Length'      => (string) strlen($content['body']),
+            'Cache-Control'       => 'private, max-age=3600',
+            'Content-Disposition' => 'inline; filename="recording-'.$recordingId.'.mp3"',
+        ]);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     /**
@@ -437,6 +529,89 @@ class RingCentralController extends Controller
 
             if ($match && ! empty($device->id)) {
                 return (string) $device->id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Extension RingCentral de l'employé : **l'appareil configuré sur sa
+     * fiche** (`ringcentral_device_id`) donne son extension, sinon la
+     * correspondance d'e-mail ; sinon `null` (422 côté contrôleur).
+     *
+     * @return array{string, ?string, string}|null  [extension id, numéro d'extension, résolu via]
+     */
+    private function resolveEmployeeExtension(Employee $employee, string $email): ?array
+    {
+        $deviceId = (string) ($employee->ringcentral_device_id ?? '');
+
+        if ($deviceId !== '') {
+            foreach ($this->ringCentral->getDevices(250) as $device) {
+                if ((string) data_get($device, 'id') !== $deviceId) {
+                    continue;
+                }
+
+                $extensionId = (string) (data_get($device, 'extension.id') ?? '');
+
+                if ($extensionId !== '') {
+                    $number = (string) (data_get($device, 'extensionNumber') ?? '');
+
+                    return [$extensionId, $number === '' ? null : $number, 'device'];
+                }
+            }
+        }
+
+        $extension = $this->findExtensionByEmail($email);
+
+        if ($extension !== null) {
+            $extensionId = (string) ($extension->id ?? $extension->extensionNumber ?? '');
+
+            if ($extensionId !== '') {
+                $number = (string) ($extension->extensionNumber ?? '');
+
+                return [$extensionId, $number === '' ? null : $number, 'email'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Ne garde que les appels passés par l'appareil de l'employé — **si
+     * RingCentral en renvoie l'identifiant** (sinon rien n'est filtré :
+     * filtrer à l'aveugle viderait le journal).
+     *
+     * @return array{array, bool}  [enregistrements, filtré oui/non]
+     */
+    private function filterByDevice(array $records, string $deviceId): array
+    {
+        if ($deviceId === '' || $records === []) {
+            return [$records, false];
+        }
+
+        $known = array_filter($records, fn ($record) => $this->recordDeviceId($record) !== null);
+
+        if ($known === []) {
+            return [$records, false];
+        }
+
+        $kept = array_values(array_filter(
+            $records,
+            fn ($record) => in_array($this->recordDeviceId($record), [null, $deviceId], true)
+        ));
+
+        return [$kept, true];
+    }
+
+    /** `deviceId` d'un appel (record ou sa première jambe), sinon `null`. */
+    private function recordDeviceId(mixed $record): ?string
+    {
+        foreach (['deviceId', 'device.id', 'legs.0.deviceId'] as $path) {
+            $value = data_get($record, $path);
+
+            if ($value !== null && $value !== '') {
+                return (string) $value;
             }
         }
 

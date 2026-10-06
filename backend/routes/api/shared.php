@@ -91,6 +91,17 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])
     ->get('call-logs/devices', [RingCentralController::class, 'devices']);
 
+// ── Journal d'appels d'un employé + lecture d'enregistrement ────────────
+// Onglet « Appels » de la fiche `/comercialDetail/:id` (ADMIN + SUPER_ADMIN,
+// même périmètre que les modales employé) : le journal est résolu **via
+// l'appareil de l'employé** (`employees.ringcentral_device_id`), et
+// l'enregistrement est relayé par un proxy car le `contentUri` RingCentral
+// exige l'en-tête `Authorization` qu'un `<audio>` ne peut pas envoyer.
+Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->group(function () {
+    Route::get('call-logs/employees/{id}/logs', [RingCentralController::class, 'employeeLogs']);
+    Route::get('call-logs/recordings/{recordingId}/content', [RingCentralController::class, 'recordingContent']);
+});
+
 // ── RingCentral — contrôle d'appel (PHASE DE TEST, Super Admin) ────────
 // Pass-through vers RingCentral, **aucune écriture en base** pour l'instant :
 // la synchronisation (account_id, colonnes `ringcentral_*` de `users` pour

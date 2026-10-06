@@ -262,6 +262,41 @@ l'employé connecté.
       destinataire final n'a **pas** pu être vérifié (aucun appel
       complété).
 
+### 📋 Onglet « Appels » — fiche employé (ADMIN / SUPER_ADMIN)
+
+Nouvel onglet **« Appels »** de `/comercialDetail/:id` : journal d'appels
+RingCentral de l'employé, résolu **via son `ringcentral_device_id`** (repli
+: correspondance d'e-mail), avec lecture de l'**enregistrement quand il
+existe**.
+
+- [x] **1. Bugfix enregistrement** : `RingCentralService::startRecording()`
+      poste un corps `[]` → le SDK le transmet tel quel à Guzzle
+      (`Utils::streamFor([])`) et plante : `Invalid resource type: array`
+      (constaté live sur `POST …/parties/{partyId}/record` → 502 ; **tout
+      POST sans corps** est concerné). Poster sans corps (`null`) ✅ fait.
+- [x] **2. Backend — journaux** : `GET /api/v1/call-logs/employees/{id}/logs`
+      (`RingCentralController::employeeLogs`, route `ADMIN,SUPER_ADMIN`) :
+      `employees.ringcentral_device_id` → appareil → `extension.id`
+      (repli e-mail), call log `view=Detailed` (`recording` inclus),
+      filtrage par `deviceId` quand RingCentral le renvoie ✅ fait.
+- [x] **3. Backend — lecture d'un enregistrement** :
+      `GET /api/v1/call-logs/recordings/{recordingId}/content`
+      (`RingCentralController::recordingContent` + service
+      `RingCentralService::getRecordingContent`) : métadonnées →
+      `contentUri` → **proxy du flux audio** (le `contentUri` exige
+      l'en-tête `Authorization`, qu'un `<audio>` ne peut pas envoyer) ✅ fait.
+- [x] **4. Frontend** : onglet « Appels » (masqué hors ADMIN/SUPER_ADMIN) +
+      `CallLogsCard` / `useCallLogs` (table date · sens · numéro · durée ·
+      résultat · enregistrement, états chargement / vide / erreur) +
+      `RecordingPlayer` (fetch blob → `<audio>`) ✅ fait.
+- [x] **5. Tests + build** : `EmployeeCallLogsTest` (**10 tests verts**,
+      RBAC 401/403, résolution par appareil puis e-mail, 422 sans
+      correspondance, 502, proxy 200/502/422) ; suite complète
+      **233 passed / 2 failed** (2 échecs préexistants non liés) ;
+      `vite build` vert ✅ fait.
+- [ ] **6. Vérification live** : **par vos soins** (aucun appel réel de mon
+      côté — test manuel de l'onglet et d'un enregistrement existant).
+
 ### ⏳ À faire — passage au réel (stockage)
 
 - [ ] **Compte** : persister `account_id` + infos société.

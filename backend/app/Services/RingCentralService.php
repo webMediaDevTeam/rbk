@@ -279,10 +279,46 @@ class RingCentralService
     {
         $this->authenticate();
 
+        // ⚠️ Aucun corps : le SDK n'encode qu'un tableau **non vide**
+        // (`parseProperties()` teste `!empty($body)`), Guzzle recevrait donc
+        // `[]` et planterait avec `Invalid resource type: array`.
         return $this->decode($this->platform->post(
-            "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings",
-            []
+            "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings"
         ));
+    }
+
+    /**
+     * Contenu audio d'un enregistrement — **proxy** : le `contentUri` renvoyé
+     * par RingCentral n'est lisible qu'avec l'en-tête `Authorization`, qu'un
+     * `<audio>` du navigateur ne peut pas envoyer.
+     *
+     * GET /restapi/v1.0/account/~/recording/{recordingId}  →  contentUri
+     * GET {contentUri}                                     →  audio/mpeg
+     *
+     * @return array{content_type: string, body: string}
+     *
+     * @throws Exception
+     */
+    public function getRecordingContent(string $recordingId): array
+    {
+        $this->authenticate();
+
+        $meta = $this->decode($this->platform->get('/account/~/recording/'.$recordingId));
+        $contentUri = trim((string) ($meta['contentUri'] ?? ''));
+
+        if ($contentUri === '') {
+            throw new Exception("Enregistrement {$recordingId} introuvable (contentUri absent).");
+        }
+
+        // URL absolue : le SDK ne préfixe que les chemins (le préfixe serveur
+        // n'est ajouté que si le chemin ne commence pas par `http(s)://`),
+        // l'en-tête d'authentification reste ajouté.
+        $response = $this->platform->get($contentUri)->response();
+
+        return [
+            'content_type' => $response->getHeaderLine('Content-Type') ?: 'audio/mpeg',
+            'body'         => (string) $response->getBody(),
+        ];
     }
 
     /**
