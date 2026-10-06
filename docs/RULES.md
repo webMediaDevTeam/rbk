@@ -69,6 +69,15 @@ que si le connecté a le droit de le voir.
 | `UNAVAILABLE` | Indisponible temporairement pour **tous** les employés ; `returned_at` porte la date de retour |
 | `BLACKLISTED` | Liste noire (`is_blacklisted = true`) |
 
+**Statut dérivé « Sans téléphone »** (`SANS_TELEPHONE`, **jamais stocké**,
+comme `IN_PROGRESS`) : le client n'a **aucun numéro** (`phone` NULL ou vide).
+Il ne change pas le cycle de vie — un client sans numéro reste `AVAILABLE` /
+`RESERVED` etc. — il entre **en plus** dans le seau `SANS_TELEPHONE` des
+badges (`Client::STATUS_SANS_TELEPHONE` + `scopeWithoutPhone()`). Un client
+dans ce seau **n'apparaît pas dans l'accès Commercial** (`scopeProspectList`
+exige `scopeWithPhone()`), et l'admin peut lui ajouter un numéro
+(`PATCH commercials/clients/{id}/phone`).
+
 `scopeAvailable()` : `status = AVAILABLE` **et** (`returned_at` null ou passé).
 
 **Invariant badge ⇄ lignes** : un client **ne peut pas** être `AVAILABLE` avec
@@ -450,8 +459,9 @@ scope **partagé** par la page et la réservation — le lot réservé est
 exactement ce que l'employé voit à l'écran, dans le même ordre (défaut :
 `created_at desc`). Le modal frontend envoie les filtres/tris courants de la
 page. S'y ajoutent les règles métier : pas de liste noire, client réellement
-disponible, aucune réservation active, et pas de prospect déjà traité en
-`NO` / `BV` par cet employé.
+disponible, **au moins un numéro de téléphone** (les clients « Sans
+téléphone » sont invisibles côté Commercial), aucune réservation active, et
+pas de prospect déjà traité en `NO` / `BV` par cet employé.
 
 **Garde de traitement** (« finir ses listes avant d'en ouvrir une autre ») :
 tant que l'employé a au moins **une réservation `PENDING`** (prospects non
@@ -468,7 +478,18 @@ traités), `POST clients/reserver` répond **`409`** :
 * `GET reservations/active-count` renvoie en plus `pending` (réservations
   encore `PENDING`) et `can_reserve` (`pending === 0`) ; la page Grande liste
   désactive le bouton « Réserver » tant que `can_reserve` est `false` et
-  affiche « N prospect(s) à traiter dans vos listes » à côté.
+  affiche « N prospect(s) à traiter dans vos listes » à côté ;
+* **Libérer la liste** — `POST reservations/release-pending` (COMERCIAL,
+  connecté) : **tous** les prospects de l'employé encore `PENDING` (« en
+  attente ») redeviennent `AVAILABLE` — client remis en `AVAILABLE` +
+  `returned_at` vidé, rappels de la réservation supprimés, réservation
+  supprimée (le pointeur `current_reservation_id` est resynchronisé par
+  l'événement Eloquent), note `RETURNED_TO_AVAILABLE` écrite. Les
+  réservations **déjà traitées** (Oui / Non / BV / À rappeler) sont
+  conservées. Réponse `{success, released, pending, can_reserve, message}` :
+  `pending` retombe à `0`, l'employé peut donc réserver un nouveau lot.
+  La modale « Réserver des prospects » propose ce bouton quand
+  `pending > 0` (le 409 n'est plus une impasse).
 
 ### 7.2 Groupes
 
@@ -476,8 +497,9 @@ traités), `POST clients/reserver` répond **`409`** :
   « Nom de la liste » a été retiré du modal ; `group_name` reste accepté en
   optionnel (généré côté serveur : « Liste du JJ/MM/AAAA HH:MM » s'il est vide).
   (durée/expiration supprimées).
-* `count` : **200 / 250 / 300 uniquement** (`in:200,250,300`), plus de nombre
-  libre ; le modal propose seulement ces 3 boutons.
+* `count` : **50 / 80 / 100 / 120 uniquement** (`in:50,80,100,120`), plus de
+  nombre libre ; le modal propose seulement ces 4 boutons (anciennes valeurs
+  200 / 250 / 300 retirées).
 * Renommage : `PATCH reservation-groups/{id}` `{name}` — propriétaire ou admin.
 * **Page liste de réservation (détail)** :
   * édition inline du nom de la liste ;
@@ -648,13 +670,20 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   employé, où les compteurs sont produits par `GET commercials/{id}`
   (`historique.badges`, même forme que `clients/overview`
   `{prospects, by_display_status}`), sur le périmètre de ses seuls appels. Elle contient
-  **exactement 7 badges**, dans **cet ordre, identique sur ces pages** :
+  **exactement 8 badges**, dans **cet ordre, identique sur ces pages** :
   1. *Tous* = `prospects.system` (total des clients) ;
   2. *Disponible* (statut client), 3. *Oui*, 4. *Non*, 5. *BV*,
      6. *À rappeler* (statut de la réservation courante),
-     7. *Blacklist* (drapeau `is_blacklisted`) = compteurs
-     `by_display_status`, **toujours affichés, même avec un compte à 0**.
+     7. *Blacklist* (drapeau `is_blacklisted`),
+     8. *Sans téléphone* (`phone` vide, seau **dérivé**
+     `Client::STATUS_SANS_TELEPHONE`) = compteurs `by_display_status`,
+     **toujours affichés, même avec un compte à 0**.
   Le survol d'un badge rappelle sa définition (`title`).
+
+  ⚠️ *Sans téléphone* **recoupe** les autres seaux client (un prospect sans
+  numéro est aussi `AVAILABLE` ou blacklisté) : ses compteurs ne sont donc
+  **pas** additionnables avec les autres. La sélection **unique** de l'UI
+  conserve l'invariant « compteur du badge = lignes rendues après clic ».
 
   Ce sont ces badges qui sont **LE filtre de statut** de « Grande liste
   (admin) » et de l'onglet *Historique* du détail d'un employé (le menu
@@ -665,25 +694,27 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
     un second clic sur le même badge repasse à *Tous*, et *Tous* retire
     l'unique filtre actif (`aria-pressed`) ;
   * **deux paramètres serveur** : `status` (badges *Disponible* /
-    *Blacklist*) et `reservation_status` (les 4 autres), sur
+    *Blacklist* / *Sans téléphone*) et `reservation_status` (les 4 autres),
+    sur
     `GET commercials/clients` (grande liste admin) **et** sur
     `GET commercials/{id}` (détail d'un employé). Les
     deux jeux sont **disjoints** (un client `AVAILABLE` ou blacklisté n'entre
     jamais dans la dimension réservation) et combinés en **union `OR`** :
-    la somme des compteurs correspond aux lignes rendues ;
+    la somme des compteurs correspond aux lignes rendues (hors le seau
+    dérivé *Sans téléphone*, cf. ci-dessus) ;
   * **périmètre de « Grande liste » (admin)** : **tous** les prospects de la
     base — plus de condition « déjà appelé par un employé » ni de filtrage
     lié à une réservation : le badge *Tous* (`prospects.system`) et les
     lignes rendues couvrent donc le même ensemble ;
   * au **détail d'un employé** (onglet *Historique*), la base est l'historique
-    de **ses** appels et les 7 compteurs sont renvoyés par
+    de **ses** appels et les 8 compteurs sont renvoyés par
     `GET commercials/{id}` (`historique.badges`) — la requête
     `clients/overview` n'est **pas** appelée sur cette page ;
   * **couleur pleine à la sélection, sans bordure** : chaque badge
     garde **sa** couleur de fond — *Tous* `blue-600`, *Disponible*
     `emerald-700`, *Oui* `teal-600`, *Non* `destructive`, *BV* `amber-600`,
     *À rappeler* `indigo-600`, *Blacklist* `--status-badge` (noir en clair /
-    gris en sombre) — texte et
+    gris en sombre), *Sans téléphone* `rose-600` — texte et
     icône passés en contraste (`activeFg`) ; à l'inactif, pastille neutre
     `bg-card` avec pastille d'icône teintée ;
   * *Tous* repasse à **aucun** filtre de statut en un clic (état actif =
@@ -693,8 +724,10 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
     `scopeFilterByReservationStatuses()`) : le chiffre affiché vaut le nombre
     de lignes renvoyées après clic ;
   * sur **Grande liste (commercial)**, la barre est **supprimée** (à la
-    demande) : cette liste ne contient que des prospects disponibles et
-    n'accepte pas le paramètre `status`, l'écran n'affiche donc plus aucun
+    demande) : cette liste ne contient que des prospects **disponibles et
+    munis d'un numéro** (les clients « Sans téléphone » en sont exclus par
+    `scopeProspectList`), elle n'accepte pas le paramètre `status`, l'écran
+    n'affiche donc plus aucun
     badge de statut — la colonne « Statut » du tableau reste en place.
   * sur **À rappeler** et **BV**, la barre est en **lecture seule**
     (`locked`, *Tous* actif) : la page ne liste qu'un type de réservation, le
@@ -731,6 +764,37 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   (distinct de `List` utilisé par « Employés »).
 * **Lignes par page : 50 / 100 / 200 / 300** (défaut 50) — plafond serveur
   `per_page` relevé de 100 à **300** sur tous les endpoints paginés.
+* **Saisie / modification du numéro (ADMIN / SUPER_ADMIN)** — bouton
+  « Modifier le numéro » (icône `SquarePen`) en fin de ligne de la **Grande
+  liste** (tableau **et** carte mobile) et dans le bandeau de la **fiche
+  client**, avec pastille **« Sans téléphone »** (`rose-600`) dans le bandeau
+  quand le numéro manque. Une seule modale partagée
+  (`pages/shared/components/PhoneEditModal`) appelle
+  `PATCH commercials/clients/{id}/phone` : champ **vide = numéro retiré**
+  (le client repasse donc dans le seau dérivé `SANS_TELEPHONE`), saisie
+  nettoyée et reformattée côté serveur (`Client::cleanPhone()`). Après
+  enregistrement : invalidation `admin-clients-history`, `prospect-kpis`,
+  `commercial-prospects`, `admin-client` / `commercial-prospect` et
+  `dashboard-stats`. Côté import, un payload n8n **sans `phone` (ou vide)
+  n'efface plus** un numéro déjà saisi
+  (`Client::upsertFromScraperPayload()`).
+* **Fiche client — « Contact » en tête** : le bandeau affiche les
+  **répondants** (sous le nom d'entreprise) et l'onglet *Détails* s'ouvre sur
+  un bloc **Contact** où **téléphone**, **e-mail**, **représentant** et
+  **répondants** sont rendus en **badges info** colorés
+  (`Badge variant="info"`) : ce sont les deux premières informations
+  recherchées sur une fiche. Suivent *Identification* (NEQ / municipalité /
+  région / adresse) puis *Licence* — e-mail et téléphone n'ont plus de
+  `DetailRow` dupliquée.
+* **Page entreprise `/entreprises/:id`** (ADMIN / SUPER_ADMIN) : même
+  grammaire que le détail d'un employé — `StatCards` (listes, appels,
+  réussite, échecs), onglets **Détails entreprise / Employés / Historique**.
+  L'onglet *Employés* liste les `COMERCIAL` de l'entreprise (listes,
+  réservations, en attente, appels, OUI, taux de réussite) et ouvre
+  `/comercialDetail/{id}` ; l'onglet *Historique* réutilise les 8 badges de
+  statut (sélection unique) + `HistoryList` sur le périmètre **commun** de
+  l'entreprise (`GET entreprises/{id}/stats`, §10). Entrée depuis la liste
+  des entreprises (nom cliquable + « Voir »).
 
 ## 10. Endpoints clés
 
@@ -738,6 +802,7 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 |---|---|---|
 | GET | `reservations/active-count` | COMERCIAL |
 | POST | `clients/reserver` | COMERCIAL |
+| POST | `reservations/release-pending` — **Libérer la liste** (§7.1) | COMERCIAL |
 | PATCH | `reservation-groups/{id}` | propriétaire ou ADMIN/SUPER_ADMIN |
 | GET | `reservation-groups` (compteurs par statut + `employe`) | COMERCIAL |
 | GET | `reservation-groups/{id}` (détail + `clients_count` / `traites_count` / `restant_count` / `oui_count` / `non_count` / `bv_count` / `injoinable_count`) | COMERCIAL |
@@ -745,6 +810,8 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 | POST | `clients/{clientId}/outcome` (`recall_at` requis si `CALL_BACK`) | COMERCIAL |
 | POST | `clients/{id}/blacklist` | COMERCIAL |
 | POST | `commercials/clients/{id}/blacklist` | ADMIN/SUPER_ADMIN |
+| PATCH | `commercials/clients/{id}/phone` — saisie / correction du numéro (§2) | ADMIN/SUPER_ADMIN |
+| GET | `entreprises/{id}/stats` — analytics + employés + historique (§9) | ADMIN/SUPER_ADMIN |
 | POST | `liste-noire/{id}/debloquer` | ADMIN/SUPER_ADMIN |
 | POST | `clients/bulk-upsert` | **public** (aucune auth) — import scraper / n8n, §12 |
 | POST/DELETE | `clients/bulk-delete` | **public** (aucune auth) — suppression en masse, données liées ignorées, §12 |
@@ -775,9 +842,11 @@ issue d'appel.
   n'en dépendent plus**. Les statuts historiques hors `Client::STATUSES`
   sortent des badges : leur somme peut rester inférieure à
   `prospects.system` (total affiché par le badge *Tous*).
-* `by_display_status` — les **7 badges de la colonne « Statut »** (§9) :
-  `AVAILABLE` / `BLACKLISTED` (statut client) + `YES` / `NO` / `BV_VOICEMAIL`
-  / `CALL_BACK` / `PENDING` (réservation courante ; `PENDING` = badge « - »).
+* `by_display_status` — les **8 badges de la colonne « Statut »** (§9) :
+  `AVAILABLE` / `BLACKLISTED` / `SANS_TELEPHONE` (statut client, ce dernier
+  étant **dérivé** d'un `phone` vide et en recoupant les autres) + `YES` /
+  `NO` / `BV_VOICEMAIL` / `CALL_BACK` / `PENDING` (réservation courante ;
+  `PENDING` = badge « - »).
   Chaque compteur est produit **par le scope qui pilote le filtre**
   (`Client::scopeFilterByStatuses()` /
   `scopeFilterByReservationStatuses()`) → le chiffre affiché vaut le nombre
@@ -787,7 +856,7 @@ issue d'appel.
 (détail d'un employé, historique) acceptent donc deux dimensions de statut :
 
 * `status=A,B` (ou `status[]`) — statut **client**, valeurs validées contre
-  `Client::STATUSES` ;
+  `Client::STATUSES` **+ `SANS_TELEPHONE`** (seau dérivé `phone` vide) ;
 * `reservation_status=A,B` — statut de la **réservation courante**
   (`clients.current_reservation_id`), valeurs validées contre
   `Reservation::STATUSES`, avec `is_blacklisted = false` **et**
@@ -806,8 +875,11 @@ vaut le nombre de lignes rendues après clic.
 Toutes ces routes sont derrière `auth:sanctum` (**tous les rôles**, sans
 `CheckRole`).
 
-Routes supprimées : `release`, `release-pending` (×2), `pending-count`,
-`commercials/clients/{id}/unblock`.
+Routes supprimées : `release`, l'ancien `release-pending` de la liste des
+groupes (×2), `pending-count`, `commercials/clients/{id}/unblock`. Le
+`release-pending` **réintroduit** (`reservations/release-pending`) n'a pas le
+même périmètre : il libère **toutes** les réservations encore `PENDING` du
+connecté (§7.1), pas un groupe donné.
 
 ## 11. Cron
 

@@ -1,4 +1,4 @@
-import { ChevronRight, Copy, Home, ArrowLeft, Phone, Ban, Loader2, AlertCircle, X, Unlock } from 'lucide-react'
+import { ChevronRight, Copy, Home, ArrowLeft, Phone, Ban, Loader2, AlertCircle, SquarePen, X, Unlock } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs.jsx'
 import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
@@ -6,6 +6,8 @@ import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/Re
 import ClientDetailsTab from './components/ClientDetailsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
+import PhoneEditModal from '@/pages/shared/components/PhoneEditModal/index.jsx'
+import { respondentsText } from '@/pages/comercial/ProspectList/components/prospectFormat'
 import { cn } from '@/lib/utils.js'
 import { useClientDetail } from './useClientDetail.js'
 
@@ -38,6 +40,9 @@ export default function ClientDetailPage() {
     handleProspectsClick,
     handleBack,
     handleCopyPhone,
+    phoneOpen,
+    openPhoneEdit,
+    closePhoneEdit,
   } = useClientDetail()
 
   return (
@@ -86,12 +91,23 @@ export default function ClientDetailPage() {
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground">{client.enterprise_name ?? '—'}</p>
+                {/* Répondants **remontés dans le bandeau** : la première
+                    information recherchée sur une fiche, avec le téléphone. */}
+                {respondentsText(client) && (
+                  <p
+                    className="text-sm text-muted-foreground"
+                    title={respondentsText(client)}
+                  >
+                    <span className="font-medium text-foreground">Répondant(s)</span>{' '}
+                    : {respondentsText(client)}
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
                   <span>{client.representative_name ?? '—'}</span>
                   {client.email && (
                     <a href={`mailto:${client.email}`} className="hover:text-foreground transition-colors">{client.email}</a>
                   )}
-                  {client.phone && (
+                  {client.phone ? (
                     <span className="inline-flex items-center gap-1">
                       {client.phone}
                       <button
@@ -102,8 +118,35 @@ export default function ClientDetailPage() {
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </button>
+                      {/* Saisie / modification réservée à l'accès Admin. */}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={openPhoneEdit}
+                          className="p-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
+                          aria-label="Modifier le numéro"
+                          title="Modifier le numéro"
+                        >
+                          <SquarePen className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </span>
-                  )}
+                  ) : isAdmin ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-flex items-center rounded-full border border-transparent bg-rose-500/10 px-2.5 py-0.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                        Sans téléphone
+                      </span>
+                      <button
+                        type="button"
+                        onClick={openPhoneEdit}
+                        className="p-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
+                        aria-label="Ajouter un numéro"
+                        title="Ajouter un numéro"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -140,7 +183,14 @@ export default function ClientDetailPage() {
             </TabsContent>
           </Tabs>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {/* Saisie du numéro (Admin / Super Admin) — voir PhoneEditModal. */}
+            {isAdmin && (
+              <Button variant="outline" onClick={openPhoneEdit}>
+                <SquarePen className="h-4 w-4 mr-1.5" />
+                {client.phone ? 'Modifier le numéro' : 'Ajouter un numéro'}
+              </Button>
+            )}
             {isAdmin ? (
               client.is_blacklisted ? (
                 <Button
@@ -168,6 +218,8 @@ export default function ClientDetailPage() {
           </div>
         </>
       )}
+
+      <PhoneEditModal open={phoneOpen} client={client ?? null} onClose={closePhoneEdit} />
 
       <ActionModal
         open={actionOpen}

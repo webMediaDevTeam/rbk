@@ -5,6 +5,12 @@ export function listEntreprisesApi(params = {}) {
   return api.get('/enterprises', { params })
 }
 
+// Statistiques d'une entreprise — page `/entreprises/:id`
+// (`analytics` + tableau des employés + historique commun paginé).
+export function getEntrepriseStatsApi(id, params = {}) {
+  return api.get(`/entreprises/${id}/stats`, { params })
+}
+
 export function createEntrepriseApi(payload) {
   return api.post('/enterprises', payload)
 }

@@ -35,6 +35,13 @@ export function activeReservationsCountApi() {
   return api.get('/reservations/active-count')
 }
 
+// **Libérer la liste** (§7.1 de docs/RULES.md) : tous les prospects encore
+// « en attente » du connecté redeviennent `AVAILABLE` — débloque un nouveau
+// lot quand le serveur refuse (`409 unfinished_treatment`).
+export function releasePendingReservationApi() {
+  return api.post('/reservations/release-pending')
+}
+
 // Admin/Super Admin client view (read-only + blacklist management)
 export function listAdminClientsApi(params = {}) {
   return api.get('/commercials/clients', { params })
@@ -51,6 +58,13 @@ export function adminBlacklistClientApi(id, note) {
 // Unic endpoint d'unblock (réservé Admin / Super Admin)
 export function adminUnblockClientApi(id) {
   return api.post(`/liste-noire/${id}/debloquer`)
+}
+
+// Saisie / correction du **numéro de téléphone** depuis l'accès Admin
+// (`PATCH commercials/clients/{id}/phone`) — un client « Sans téléphone »
+// retrouve alors son seau « Disponible » / « Blacklist ».
+export function adminUpdateClientPhoneApi(id, phone) {
+  return api.patch(`/commercials/clients/${id}/phone`, { phone })
 }
 
 // Appel sortant de l'employé (bouton « Appeler » : Mes listes, Rappels, BV).

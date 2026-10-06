@@ -1,4 +1,4 @@
-import { Eye, Ban, Loader2, Unlock } from 'lucide-react'
+import { Eye, Ban, Loader2, Unlock, SquarePen } from 'lucide-react'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import { respondentsText, categoriesText } from './prospectFormat'
@@ -10,6 +10,9 @@ import { respondentsText, categoriesText } from './prospectFormat'
  *   (Grande liste admin, `/clients-historique`).
  * @param {(client: object) => void} [onToggleBlacklist]  bascule **liste
  *   noire / débloquer**, action directe **sans modale de confirmation**.
+ * @param {(client: object) => void} [onEditPhone]  bouton « Modifier le
+ *   numéro » (Admin / Super Admin) — saisie du téléphone d'un prospect
+ *   « Sans téléphone ».
  * @param {number|null} [blacklistId]  id en cours de bascule (spinner).
  */
 export default function ProspectCard({
@@ -19,6 +22,7 @@ export default function ProspectCard({
   showViewButton = true,
   rowClickable = true,
   onToggleBlacklist,
+  onEditPhone,
   blacklistId = null,
 }) {
   const clickable = rowClickable && typeof onViewDetail === 'function'
@@ -30,7 +34,7 @@ export default function ProspectCard({
       className={`relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md${clickable ? ' cursor-pointer' : ''}`}
       onClick={clickable ? () => onViewDetail?.(client) : undefined}
     >
-      {(showViewButton || onToggleBlacklist) && (
+      {(showViewButton || onToggleBlacklist || onEditPhone) && (
         <div className="absolute top-3 right-3 flex items-center gap-1">
           {showViewButton && (
             <button
@@ -39,6 +43,16 @@ export default function ProspectCard({
               aria-label="Voir détail"
             >
               <Eye className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+          {onEditPhone && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEditPhone(client) }}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+              aria-label={client.phone ? 'Modifier le numéro de téléphone' : 'Ajouter un numéro de téléphone'}
+              title={client.phone ? 'Modifier le numéro' : 'Ajouter un numéro'}
+            >
+              <SquarePen className="h-4 w-4 text-muted-foreground" />
             </button>
           )}
           {onToggleBlacklist && (

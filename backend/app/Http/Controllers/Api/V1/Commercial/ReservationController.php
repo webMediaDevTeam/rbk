@@ -10,6 +10,7 @@ use App\Models\ReservationGroup;
 use App\Services\ReservationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ReservationController extends Controller
 {
@@ -67,8 +68,9 @@ class ReservationController extends Controller
             // Anciennes entrées inchangées : réservation sans nom (le champ
             // n'est plus demandé à l'utilisateur).
             'group_name' => 'nullable|string|max:255',
-            // Nombre de prospects : 200 / 250 / 300 uniquement, pas de nombre libre.
-            'count' => 'required|integer|in:200,250,300',
+            // Nombre de prospects : 50 / 80 / 100 / 120 uniquement, pas de
+            // nombre libre (COUNT_OPTIONS du modal côté client).
+            'count' => 'required|integer|in:50,80,100,120',
             // Nouvelles entrées optionnelles — identiques à `GET /clients` :
             // le lot doit suivre les filtres et le tri de la page.
             'search' => 'nullable|string|max:255',
@@ -187,5 +189,85 @@ class ReservationController extends Controller
                 'notes' => $notes,
             ],
         ], 201);
+    }
+
+    /**
+     * **Libérer la liste** — tous les prospects encore `PENDING`
+     * (« en attente ») du commercial connecté redeviennent `AVAILABLE`.
+     *
+     * Déclenché depuis la modale « Réserver des prospects » quand le
+     * serveur refuse un nouveau lot (`409 unfinished_treatment`) : plutôt
+     * que de devoir finir une liste commencée, l'employé peut la rendre
+     * disponible à nouveau pour tout le monde.
+     *
+     * Par réservation, dans une transaction :
+     *   1. client `RESERVED` / `CONFIRMED` toujours tenu par lui
+     *      (`Reservation::active()`) → `AVAILABLE`, `returned_at` vidé ;
+     *   2. rappels éventuels de la réservation supprimés ;
+     *   3. réservation supprimée → le pointeur « réservation courante »
+     *      est recalculé par l'événement Eloquent `deleted` ;
+     *   4. note `RETURNED_TO_AVAILABLE` (historise la libération).
+     *
+     * Les réservations déjà traitées (Oui / Non / BV / À rappeler) sont
+     * **conservées** : seul le non traité retourne en disponible.
+     *
+     * Réponse `{success, released, pending}` — `pending` = 0 => l'employé
+     * peut de nouveau réserver.
+     */
+    public function releasePending(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return DB::transaction(function () use ($user) {
+            $reservations = Reservation::active()
+                ->where('comercial_id', $user->id)
+                ->where('status', Reservation::STATUS_PENDING)
+                ->with('client')
+                ->get();
+
+            $released = 0;
+
+            foreach ($reservations as $reservation) {
+                $client = $reservation->client;
+
+                if ($client) {
+                    // Clients non traités : retour en disponible pour tous.
+                    $client->update([
+                        'status' => Client::STATUS_AVAILABLE,
+                        'returned_at' => null,
+                    ]);
+
+                    // Rappels rattachés à la réservation libérée.
+                    $client->rappels()->where('reservation_id', $reservation->id)->delete();
+
+                    Note::create([
+                        'client_id' => $client->id,
+                        'sender_id' => $user->id,
+                        'type' => Note::TYPE_RETURNED_TO_AVAILABLE,
+                        'description' => 'Disponible après libération de liste.',
+                    ]);
+                }
+
+                // Suppression unitaire : l'événement `deleted` resynchronise
+                // `clients.current_reservation_id` / `current_comercial_id`.
+                $reservation->delete();
+                $released++;
+            }
+
+            $pending = Reservation::active()
+                ->where('comercial_id', $user->id)
+                ->where('status', Reservation::STATUS_PENDING)
+                ->count();
+
+            return response()->json([
+                'success' => true,
+                'released' => $released,
+                'pending' => $pending,
+                'can_reserve' => $pending === 0,
+                'message' => $released > 0
+                    ? "{$released} prospect(s) remis en disponible."
+                    : 'Aucun prospect en attente à libérer.',
+            ]);
+        });
     }
 }

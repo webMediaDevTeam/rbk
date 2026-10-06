@@ -703,6 +703,14 @@ class RingCentralController extends Controller
         if ($upstream !== null) {
             $message .= ' — RingCentral '.$upstream['status'].' '.$upstream['reason']
                 .($upstream['detail'] !== '' ? ' : '.$upstream['detail'] : '');
+
+            // CMN-301 : quota dépassé (rafales d'ouverture d'onglet / échanges
+            // `/oauth/token`). Le navigateur réessaie tout seul sous 30 s
+            // (`useCallLogs`), on lui dit donc clairement ce qui se passe.
+            if ($upstream['status'] === 429) {
+                $message = 'Limite de requêtes RingCentral atteinte (429 CMN-301) : patientez une '
+                    .'minute, la page réessaie automatiquement. — '.$message;
+            }
         }
 
         return response()->json([

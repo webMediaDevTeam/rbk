@@ -1,4 +1,5 @@
-import { Pencil, Power, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import StatusBadge from './StatusBadge'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
@@ -34,7 +35,13 @@ export default function EntrepriseTable(props) {
               <TableCell>
                 <div className="flex items-center gap-2.5">
                   <UserAvatar user={row.ent} size="sm" onEdit={row.handleAvatarClick} />
-                  <span className="font-medium">{row.name}</span>
+                  <Link
+                    to={`/entreprises/${row.ent.id}`}
+                    className="font-medium hover:text-foreground hover:underline transition-colors"
+                    title="Voir le détail de l'entreprise"
+                  >
+                    {row.name}
+                  </Link>
                 </div>
               </TableCell>
               <TableCell className="text-muted-foreground">{row.email}</TableCell>
@@ -45,6 +52,13 @@ export default function EntrepriseTable(props) {
                 <RowMenu>
                   {(closeMenu) => (
                     <>
+                      <Link
+                        to={`/entreprises/${row.ent.id}`}
+                        onClick={closeMenu}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Voir
+                      </Link>
                       <button
                         onClick={() => row.handleEdit(closeMenu)}
                         className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"

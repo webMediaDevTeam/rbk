@@ -5,6 +5,7 @@ import ProspectCard from '@/pages/comercial/ProspectList/components/ProspectCard
 import ClientsHistoryToolbar from './components/ClientsHistoryToolbar.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
+import PhoneEditModal from '@/pages/shared/components/PhoneEditModal/index.jsx'
 
 export default function ClientsHistoryPage() {
   const {
@@ -33,6 +34,9 @@ export default function ClientsHistoryPage() {
     handleHomeClick,
     blacklistId,
     toggleBlacklist,
+    phoneClient,
+    openPhoneEdit,
+    closePhoneEdit,
   } = useClientsHistoryPage()
 
   return (
@@ -78,6 +82,7 @@ export default function ClientsHistoryPage() {
           onViewDetail={handleViewDetail}
           rowClickable={false}
           onToggleBlacklist={toggleBlacklist}
+          onEditPhone={openPhoneEdit}
           blacklistId={blacklistId}
         />
       ) : (
@@ -90,6 +95,7 @@ export default function ClientsHistoryPage() {
               onViewDetail={handleViewDetail}
               rowClickable={false}
               onToggleBlacklist={toggleBlacklist}
+              onEditPhone={openPhoneEdit}
               blacklistId={blacklistId}
             />
           ))}
@@ -103,6 +109,8 @@ export default function ClientsHistoryPage() {
         onPageChange={setCurrentPage}
         onRowsPerPageChange={handleRowsPerPageChange}
       />
+
+      <PhoneEditModal open={Boolean(phoneClient)} client={phoneClient} onClose={closePhoneEdit} />
     </div>
   )
 }

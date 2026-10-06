@@ -22,6 +22,13 @@ export function useStoreOutcome() {
       qc.invalidateQueries({ queryKey: ['reminders'] })
       qc.invalidateQueries({ queryKey: ['reminders-count'] })
       qc.invalidateQueries({ queryKey: ['active-reservations-count'] })
+      // Issue d'appel = client qui sort du seau « Disponible » (ou y
+      // revient) : badges de la colonne « Statut », liste admin et détail
+      // de la liste doivent être recalculés.
+      qc.invalidateQueries({ queryKey: ['prospect-kpis'] })
+      qc.invalidateQueries({ queryKey: ['admin-clients-history'] })
+      qc.invalidateQueries({ queryKey: ['reservation-group'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
     },
   })
 }

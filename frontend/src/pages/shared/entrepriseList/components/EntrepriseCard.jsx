@@ -1,4 +1,5 @@
-import { Pencil, Power, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
@@ -25,6 +26,13 @@ export default function EntrepriseCard(props) {
         <RowMenu>
           {(closeMenu) => (
             <>
+              <Link
+                to={`/entreprises/${entreprise.id}`}
+                onClick={closeMenu}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+              >
+                <Eye className="h-3.5 w-3.5" /> Voir
+              </Link>
               <button
                 onClick={() => handleEdit(closeMenu)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
@@ -53,7 +61,13 @@ export default function EntrepriseCard(props) {
       <div className="flex items-center gap-3 mb-4">
         <UserAvatar user={entreprise} size="md" onEdit={handleAvatarClick} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate">{name}</p>
+          <Link
+            to={`/entreprises/${entreprise.id}`}
+            className="text-sm font-semibold truncate hover:underline transition-colors"
+            title="Voir le détail de l'entreprise"
+          >
+            {name}
+          </Link>
           <p className="text-xs text-muted-foreground truncate">{email}</p>
         </div>
       </div>

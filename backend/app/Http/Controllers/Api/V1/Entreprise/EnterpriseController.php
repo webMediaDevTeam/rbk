@@ -3,7 +3,12 @@
 namespace App\Http\Controllers\Api\V1\Entreprise;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
 use App\Models\Enterprise;
+use App\Models\Note;
+use App\Models\Reservation;
+use App\Models\ReservationGroup;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -251,6 +256,215 @@ class EnterpriseController extends Controller
                 'logo_url'   => $url,
                 'avatar_url' => $url,
                 'entreprise' => $this->formatEnterprise($enterprise->fresh()),
+            ],
+        ]);
+    }
+
+    /**
+     * Statistiques d'une entreprise **et de ses employés** — même principe
+     * que la page de détails d'un employé (`GET /commercials/{id}`) :
+     *
+     *  - `analytics` : agrégats de l'entreprise (cartes KPI en haut) ;
+     *  - `employees` : une ligne par employé avec **ses** chiffres ;
+     *  - `historique` : clients appelés par un employé de l'entreprise,
+     *    paginés, avec les **8 badges** de statut (`badges.by_display_status`)
+     *    qui servent de filtre — exactement la forme de `historique` du
+     *    détail employé, réutilisée par `<ProspectKpis>` / `<HistoryList>`.
+     *
+     * GET /entreprises/{id}/stats — ADMIN / SUPER_ADMIN.
+     *
+     * L'association client → entreprise n'existe plus en base
+     * (`clients.enterprise_id` supprimé) : le périmètre est donc celui des
+     * **employés** de l'entreprise (réservations + appels).
+     */
+    public function stats(Request $request, string $id): JsonResponse
+    {
+        $enterprise = Enterprise::withCount('employees')->find($id);
+
+        if (! $enterprise) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Entreprise introuvable.',
+            ], 404);
+        }
+
+        // Employés = utilisateurs COMERCIAL rattachés via `employees.enterprise_id`.
+        $userIds = User::where('role', 'COMERCIAL')
+            ->whereHas('employee', fn ($q) => $q->where('enterprise_id', $enterprise->id))
+            ->pluck('id')
+            ->all();
+
+        // ── Agrégats « par employé » : 5 requêtes groupées, jamais une
+        //    requête par employé (une entreprise peut en avoir beaucoup).
+        $callsByUser = Note::whereIn('sender_id', $userIds)->calls()
+            ->selectRaw('sender_id, COUNT(*) AS total')
+            ->groupBy('sender_id')
+            ->pluck('total', 'sender_id');
+
+        $ouiByUser = Note::whereIn('sender_id', $userIds)
+            ->where('type', Note::TYPE_YES)
+            ->selectRaw('sender_id, COUNT(*) AS total')
+            ->groupBy('sender_id')
+            ->pluck('total', 'sender_id');
+
+        $ouiClientsByUser = Note::whereIn('sender_id', $userIds)
+            ->where('type', Note::TYPE_YES)
+            ->selectRaw('sender_id, COUNT(DISTINCT client_id) AS total')
+            ->groupBy('sender_id')
+            ->pluck('total', 'sender_id');
+
+        $calledByUser = Note::whereIn('sender_id', $userIds)->calls()
+            ->selectRaw('sender_id, COUNT(DISTINCT client_id) AS total')
+            ->groupBy('sender_id')
+            ->pluck('total', 'sender_id');
+
+        $reservationsByUser = Reservation::whereIn('comercial_id', $userIds)
+            ->selectRaw('comercial_id, COUNT(*) AS total')
+            ->groupBy('comercial_id')
+            ->pluck('total', 'comercial_id');
+
+        $pendingByUser = Reservation::whereIn('comercial_id', $userIds)
+            ->where('status', Reservation::STATUS_PENDING)
+            ->selectRaw('comercial_id, COUNT(*) AS total')
+            ->groupBy('comercial_id')
+            ->pluck('total', 'comercial_id');
+
+        $groupsByUser = ReservationGroup::whereIn('comercial_id', $userIds)
+            ->selectRaw('comercial_id, COUNT(*) AS total')
+            ->groupBy('comercial_id')
+            ->pluck('total', 'comercial_id');
+
+        // ── Agrégats « entreprise » : distincts sur tout le périmètre (un
+        //    client appelé par deux employés n'est compté qu'une fois).
+        $analytics = [
+            'employees' => count($userIds),
+            'groups' => (int) ReservationGroup::whereIn('comercial_id', $userIds)->count(),
+            'reservations' => (int) Reservation::whereIn('comercial_id', $userIds)->count(),
+            'pending' => (int) Reservation::whereIn('comercial_id', $userIds)
+                ->where('status', Reservation::STATUS_PENDING)
+                ->count(),
+            'calls' => (int) Note::whereIn('sender_id', $userIds)->calls()->count(),
+            'calls_oui' => (int) Note::whereIn('sender_id', $userIds)
+                ->where('type', Note::TYPE_YES)
+                ->count(),
+            'clients_called' => (int) Note::whereIn('sender_id', $userIds)->calls()
+                ->distinct()
+                ->count('client_id'),
+            'clients_oui' => (int) Note::whereIn('sender_id', $userIds)
+                ->where('type', Note::TYPE_YES)
+                ->distinct()
+                ->count('client_id'),
+        ];
+
+        $employees = User::where('role', 'COMERCIAL')
+            ->whereIn('id', $userIds)
+            ->with('employee')
+            ->orderBy('email')
+            ->get()
+            ->map(function (User $u) use ($callsByUser, $ouiByUser, $ouiClientsByUser, $calledByUser, $reservationsByUser, $pendingByUser, $groupsByUser) {
+                $employee = $u->employee;
+                $name = trim(($employee?->first_name ?? $u->first_name ?? '').' '.($employee?->last_name ?? $u->last_name ?? ''));
+
+                return [
+                    'id' => $u->id,
+                    'name' => $name !== '' ? $name : $u->email,
+                    'email' => $u->email,
+                    'phone' => $employee?->phone ?? $u->phone,
+                    'status' => $u->status,
+                    'avatar_url' => $employee?->image_dp
+                        ? request()->getSchemeAndHttpHost()."/storage/avatars/{$employee->image_dp}"
+                        : null,
+                    'groups' => (int) ($groupsByUser[$u->id] ?? 0),
+                    'reservations' => (int) ($reservationsByUser[$u->id] ?? 0),
+                    'pending' => (int) ($pendingByUser[$u->id] ?? 0),
+                    'calls' => (int) ($callsByUser[$u->id] ?? 0),
+                    'calls_oui' => (int) ($ouiByUser[$u->id] ?? 0),
+                    'clients_called' => (int) ($calledByUser[$u->id] ?? 0),
+                    'clients_oui' => (int) ($ouiClientsByUser[$u->id] ?? 0),
+                ];
+            })
+            ->values();
+
+        // ── Historique commun : mêmes filtres, badges et forme de lignes que
+        //    l'onglet « Historique » du détail d'un employé.
+        $perPage = min((int) $request->input('per_page', 10), 300);
+        $page = max((int) $request->input('page', 1), 1);
+
+        $historyBase = function () use ($userIds, $request) {
+            $query = Client::query()
+                ->whereHas('notes', fn ($q) => $q->whereIn('sender_id', $userIds)->calls());
+
+            if ($search = $request->input('search')) {
+                $query->searchAll($search);
+            }
+
+            return $query;
+        };
+
+        $historyQuery = $historyBase()->with([
+            'notes' => fn ($q) => $q->whereIn('sender_id', $userIds)
+                ->with('sender:id,first_name,last_name')
+                ->orderByDesc('created_at'),
+            'currentReservation:id,status',
+        ]);
+
+        Client::applyDisplayStatusFilters(
+            $historyQuery,
+            $request->input('status'),
+            $request->input('reservation_status')
+        );
+
+        $clientsPage = $historyQuery->paginate($perPage, ['*'], 'page', $page);
+
+        $badges = [
+            'prospects' => ['system' => $historyBase()->count()],
+            'by_display_status' => Client::displayStatusCounts($historyBase),
+        ];
+
+        Client::loadLatestReservations($clientsPage->getCollection());
+
+        $historique = $clientsPage->getCollection()->map(function ($c) {
+            $last = $c->notes->first();
+
+            return [
+                'id' => $c->id,
+                'name' => $c->name ?? '—',
+                'email' => $c->email,
+                'phone' => $c->phone,
+                'status' => $c->status,
+                'display_status' => $c->displayStatus(),
+                'reservation_status' => $c->currentReservation?->status,
+                'is_blacklisted' => $c->is_blacklisted,
+                'returned_at' => $c->returned_at,
+                'municipality' => $c->municipality,
+                'enterprise_name' => $c->enterprise_name ?? '—',
+                'licence_end_date' => $c->licence_end_date,
+                'created_at' => $c->created_at,
+                'updated_at' => $c->updated_at,
+                'last_call' => $last ? [
+                    'type' => $last->type,
+                    'description' => $last->description,
+                    'created_at' => $last->created_at,
+                ] : null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'entreprise' => $this->formatEnterprise($enterprise),
+                'analytics' => $analytics,
+                'employees' => $employees,
+                'historique' => [
+                    'clients' => $historique,
+                    'badges' => $badges,
+                    'pagination' => [
+                        'current_page' => $clientsPage->currentPage(),
+                        'last_page' => $clientsPage->lastPage(),
+                        'per_page' => $clientsPage->perPage(),
+                        'total' => $clientsPage->total(),
+                    ],
+                ],
             ],
         ]);
     }

@@ -32,6 +32,9 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
 
     // Compteur header : réservations actives du commercial connecté
     Route::get('reservations/active-count', [ReservationController::class, 'activeCount']);
+    // « Libérer la liste » : les prospects encore « en attente »
+    // redeviennent AVAILABLE (modale « Réserver » d'un nouveau lot).
+    Route::post('reservations/release-pending', [ReservationController::class, 'releasePending']);
 
     // Appel sortant de l'employé (bouton « Appeler » Mes listes / Rappels / BV) :
     // `from` est résolu côté API dans `employees.ringcentral_from_number`,

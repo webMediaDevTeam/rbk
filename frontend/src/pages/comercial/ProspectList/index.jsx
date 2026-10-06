@@ -23,7 +23,7 @@ export default function ProspectListPage() {
     clients, isLoading,
     total, totalPages,
     showReserve, openReserve, closeReserve,
-    pendingReservations, canReserve,
+    pendingReservations, canReserve, isLoadingCounts,
     handleViewDetail,
     filters,
   } = useCommercialProspectList()
@@ -46,26 +46,22 @@ export default function ProspectListPage() {
         <div className="flex items-center gap-3">
           {/* Garde de traitement : tant qu'il reste des réservations
               `PENDING` (prospects « en attente ») dans ses listes, le
-              serveur refuse un nouveau lot — le bouton reste désactivé et
-              la raison est affichée. */}
+              serveur refuse un nouveau lot — la raison est affichée et la
+              modale propose le bouton « Libérer la liste ». */}
           {!canReserve && (
             <p className="text-xs text-muted-foreground text-right max-w-[17rem] leading-snug">
-              {typeof pendingReservations === 'number'
-                ? `${pendingReservations} prospect(s) à traiter dans vos listes : terminez-les avant de réserver.`
-                : 'Vérification de vos listes en cours…'}
+              {isLoadingCounts
+                ? 'Vérification de vos listes en cours…'
+                : typeof pendingReservations === 'number'
+                  ? `${pendingReservations} prospect(s) à traiter dans vos listes : terminez-les ou libérez votre liste.`
+                  : 'Vérification de vos listes en cours…'}
             </p>
           )}
           <Button
             variant="default"
             onClick={openReserve}
-            disabled={!canReserve}
-            title={
-              canReserve
-                ? undefined
-                : typeof pendingReservations === 'number'
-                  ? 'Terminez les prospects non traités de vos listes pour réserver.'
-                  : 'Vérification de vos listes en cours…'
-            }
+            disabled={isLoadingCounts}
+            title={isLoadingCounts ? 'Vérification de vos listes en cours…' : undefined}
           >
             Réserver
           </Button>
@@ -111,7 +107,13 @@ export default function ProspectListPage() {
         onPageChange={setCurrentPage}
         onRowsPerPageChange={handleRowsPerPageChange}
       />
-      <ReservationModal open={showReserve} onClose={closeReserve} filters={filters} />
+      <ReservationModal
+        open={showReserve}
+        onClose={closeReserve}
+        filters={filters}
+        canReserve={canReserve}
+        pendingReservations={pendingReservations}
+      />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { Mail, Phone } from 'lucide-react'
 import Badge from '@/components/ui/badge.jsx'
 import { useClientDetailsTab } from './useClientDetailsTab.js'
 
@@ -43,11 +44,56 @@ export default function ClientDetailsTab({ client }) {
 
   return (
     <div className="space-y-6">
+      {/* Contact — **en tête de fiche** : le téléphone et les répondants sont
+          les deux infos qu'on cherche en premier, rendus en **badges info**
+          colorés (même traitement que les catégories). Le numéro n'apparaît
+          que si l'API l'a envoyé (admin, ou employé qui détient la
+          réservation en cours — `hasPhone`). */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Contact</h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {hasPhone && (
+            <Badge variant="info" title={client.phone}>
+              <Phone className="h-3.5 w-3.5 mr-1" />
+              {client.phone}
+            </Badge>
+          )}
+          {client.email && (
+            <a href={`mailto:${client.email}`} title={client.email}>
+              <Badge variant="info">
+                <Mail className="h-3.5 w-3.5 mr-1" />
+                {client.email}
+              </Badge>
+            </a>
+          )}
+          {!hasPhone && !client.email && (
+            <span className="text-sm text-muted-foreground">Aucune coordonnée.</span>
+          )}
+        </div>
+
+        {hasRepresentative && (
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="info" title="Représentant">Représentant : {representativeName}</Badge>
+          </div>
+        )}
+
+        {hasRespondents && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Répondants ({respondentsCount})</p>
+            <div className="flex flex-wrap gap-1.5">
+              {respondentList.map((r, i) => (
+                <Badge key={i} variant="info" title={r.role ?? undefined}>
+                  Répondant : {r.name}
+                  {r.role ? ` — ${r.role}` : ''}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       <DetailSection title="Identification">
-        <DetailRow label="E-mail" value={client.email} />
-        {/* Numéro masqué (absent de la réponse) sauf pour un admin ou le
-            commercial qui détient la réservation en cours du client. */}
-        {hasPhone && <DetailRow label="Téléphone" value={client.phone} />}
+        {/* E-mail et téléphone remontés en badges « Contact » ci-dessus. */}
         <DetailRow label="NEQ" value={client.neq} />
         <DetailRow label="Municipalité" value={client.municipality} />
         <DetailRow label="Région administrative" value={client.administrative_region} />
@@ -95,32 +141,8 @@ export default function ClientDetailsTab({ client }) {
         </div>
       )}
 
-      {/* Le représentant est aussi un répondant : il est affiché ici, sous son
-          propre libellé, et retiré de la liste « Répondants » (pas de doublon,
-          pas de « Répondants (0) »). Le bloc « Répondants » ne reste que s'il
-          reste des répondants autres que le représentant. */}
-      {hasRepresentative && (
-        <DetailSection title="Représentant">
-          <p className="text-sm text-foreground">{representativeName}</p>
-        </DetailSection>
-      )}
-
-      {hasRespondents && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">
-            Répondants ({respondentsCount})
-          </h3>
-          <div className="space-y-2">
-            {respondentList.map((r, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <span className="font-medium">{r.name}</span>
-                {r.role && <span className="text-xs text-muted-foreground">({r.role})</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* Le représentant et les répondants ont leur bloc « Contact » en tête
+          de fiche (badges info) : plus de doublon en bas. */}
       {hasActivity && (
         <DetailSection title="Activité">
           <DetailRow label="Réservations" value={client.reservations_count} />

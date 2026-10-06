@@ -29,6 +29,8 @@ class ProspectFiltersApiTest extends TestCase
         return Client::create(array_merge([
             'name' => 'ACME Construction',
             'status' => 'AVAILABLE',
+            // La liste commerciale exclut les prospects sans numéro.
+            'phone' => '514-555-0100',
         ], $attrs));
     }
 

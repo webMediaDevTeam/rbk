@@ -81,8 +81,9 @@ export function useCommercialProspectList() {
   // Garde « traitement en cours » : tant que l'employé a des réservations
   // encore `PENDING` (« en attente ») dans ses listes, le serveur refuse un
   // nouveau lot (409) — le bouton « Réserver » suit la même règle
-  // (`can_reserve` = `pending === 0`) et ne s'ouvre qu'une fois que **toutes**
-  // les réservations de ses listes sont sorties de « en attente ».
+  // (`can_reserve` = `pending === 0`). La modale s'ouvre **aussi** quand la
+  // liste est incomplète : elle y propose le bouton « Libérer la liste »
+  // (§7.1) — seul moyen de débloquer sans finir les prospects en attente.
   //
   // Tant que le compteur n'est pas chargé, `canReserve` reste `false` : on ne
   // connaît pas encore l'état des listes, le bouton ne s'active donc qu'après
@@ -95,12 +96,10 @@ export function useCommercialProspectList() {
     : reservationCounts
       ? Boolean(reservationCounts.data.can_reserve)
       : true
-  const openReserve = () => {
-    if (canReserve) setShowReserve(true)
-  }
+  const openReserve = () => setShowReserve(true)
 
   return {
-    pendingReservations, canReserve,
+    pendingReservations, canReserve, isLoadingCounts,
     isDesktop,
     search, setSearch,
     municipality, setMunicipality,

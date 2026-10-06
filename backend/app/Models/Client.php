@@ -53,6 +53,15 @@ class Client extends Model
     /** Confirmé (issue YES) — définitif jusqu'à clôture admin. */
     public const STATUS_CONFIRMED = 'CONFIRMED';
 
+    /**
+     * DÉRIVÉ — affichage et filtre uniquement, **jamais stocké** (même
+     * régime que `IN_PROGRESS`) : le client n'a **aucun numéro** de
+     * téléphone (`phone` NULL ou vide). Ce n'est pas un état du cycle de
+     * vie : un client sans numéro reste `AVAILABLE` / `RESERVED` / etc.,
+     * il entre en plus dans le seau `SANS_TELEPHONE` des badges.
+     */
+    public const STATUS_SANS_TELEPHONE = 'SANS_TELEPHONE';
+
     /** Valeurs stockées dans `clients.status` (IN_PROGRESS en est exclu). */
     public const STATUSES = [
         self::STATUS_AVAILABLE,
@@ -248,6 +257,17 @@ class Client extends Model
             ));
 
             return 'created';
+        }
+
+        // Numéro déjà en place (saisi à la main depuis l'accès Admin) : un
+        // payload sans « Téléphone » — ou vide — ne doit **pas** l'effacer.
+        // L'enrichissement ne fait que compléter le numéro manquant ; un
+        // client renseigné à la main ne repasse donc pas « Sans téléphone »
+        // au prochain import.
+        if (array_key_exists('phone', $attributes)
+            && $attributes['phone'] === null
+            && trim((string) ($client->phone ?? '')) !== '') {
+            unset($attributes['phone']);
         }
 
         $client->fill($attributes);
@@ -1787,7 +1807,7 @@ class Client extends Model
      * `5143535820 Ext.: 5417` → `514-353-5820 ext. 5417`.
      * Une valeur trop courte ou étrangère est laissée telle quelle.
      */
-    private static function cleanPhone(mixed $value): ?string
+    public static function cleanPhone(mixed $value): ?string
     {
         $text = self::cleanText($value);
 
@@ -1996,6 +2016,25 @@ class Client extends Model
         return $query
             ->where('status', self::STATUS_AVAILABLE)
             ->where(fn ($q) => $q->whereNull('returned_at')->orWhere('returned_at', '<=', now()));
+    }
+
+    /**
+     * Clients **sans numéro** (`status` dérivé `SANS_TELEPHONE`) : `phone`
+     * NULL ou chaîne vide — les deux formes ont existé en base.
+     *
+     * C'est le filtre du badge « Sans téléphone » de la Grande liste admin
+     * et l'exclusion appliquée à la liste **commerciale** (un prospect sans
+     * numéro ne peut pas être appelé).
+     */
+    public function scopeWithoutPhone($query)
+    {
+        return $query->where(fn ($q) => $q->whereNull('phone')->orWhere('phone', ''));
+    }
+
+    /** Inverse de `scopeWithoutPhone()` — au moins un numéro renseigné. */
+    public function scopeWithPhone($query)
+    {
+        return $query->whereNotNull('phone')->where('phone', '!=', '');
     }
 
     public function reservations(): HasMany
@@ -2376,14 +2415,22 @@ class Client extends Model
      *   Client::query()->filterByStatuses('AVAILABLE,RESERVED')  // chaîne
      *   Client::query()->filterByStatuses(['AVAILABLE'])         // tableau
      *
-     * Valeurs validées contre `Client::STATUSES` (une valeur inconnue est
-     * ignorée), sans doublon ; vide / null = aucun filtre.
+     * Valeurs validées contre `Client::STATUSES` + `SANS_TELEPHONE` (une
+     * valeur inconnue est ignorée), sans doublon ; vide / null = aucun
+     * filtre.
      *
      * Une ligne **blacklistée** appartient au seau `BLACKLISTED`, quel que
      * soit son `status` (une donnée réelle a encore `status = AVAILABLE`) :
      * elle n'entre donc que si `BLACKLISTED` est demandé. C'est la définition
      * **exacte** de `by_status` (`GET clients/overview`) — le chiffre affiché
      * sur un badge vaut alors le nombre de lignes renvoyées après clic.
+     *
+     * `SANS_TELEPHONE` est un seau **dérivé** (colonne `phone` vide, cf.
+     * `scopeWithoutPhone()`) : il recoupe les autres seaux client (un
+     * prospect sans numéro est aussi `AVAILABLE` ou blacklisté). La
+     * sélection reste unique dans l'UI, donc le compteur du badge = lignes
+     * rendues tient ; en revanche les compteurs ne sont **pas** additionnables
+     * avec ceux des autres seaux client.
      */
     public function scopeFilterByStatuses(Builder $query, string|array|null $statuses): Builder
     {
@@ -2393,28 +2440,40 @@ class Client extends Model
 
         $statuses = array_values(array_unique(array_intersect(
             array_map(fn ($value) => trim((string) $value), $values),
-            self::STATUSES,
+            [...self::STATUSES, self::STATUS_SANS_TELEPHONE],
         )));
 
         if ($statuses === []) {
             return $query;
         }
 
-        $others = array_values(array_diff($statuses, [self::STATUS_BLACKLISTED]));
+        $others = array_values(array_diff(
+            $statuses,
+            [self::STATUS_BLACKLISTED, self::STATUS_SANS_TELEPHONE],
+        ));
         $hasBlacklist = in_array(self::STATUS_BLACKLISTED, $statuses, true);
+        $hasWithoutPhone = in_array(self::STATUS_SANS_TELEPHONE, $statuses, true);
 
-        return $query->where(function (Builder $nested) use ($others, $hasBlacklist) {
+        return $query->where(function (Builder $nested) use ($others, $hasBlacklist, $hasWithoutPhone) {
+            $branches = [];
+
             if ($others !== []) {
-                $nested->where(function (Builder $group) use ($others) {
-                    $group->whereIn('status', $others)
-                        ->where('is_blacklisted', false);
-                });
+                $branches[] = fn (Builder $q) => $q
+                    ->whereIn('status', $others)
+                    ->where('is_blacklisted', false);
             }
 
             if ($hasBlacklist) {
-                $others === []
-                    ? $nested->where('is_blacklisted', true)
-                    : $nested->orWhere('is_blacklisted', true);
+                $branches[] = fn (Builder $q) => $q->where('is_blacklisted', true);
+            }
+
+            if ($hasWithoutPhone) {
+                $branches[] = fn (Builder $q) => $q->withoutPhone();
+            }
+
+            // Union `OR` des seaux demandés (un seul dans l'UI).
+            foreach ($branches as $index => $branch) {
+                $index === 0 ? $nested->where($branch) : $nested->orWhere($branch);
             }
         });
     }
@@ -2456,6 +2515,78 @@ class Client extends Model
                 'current_reservation_id',
                 Reservation::query()->whereIn('status', $statuses)->select('id')
             );
+    }
+
+    /**
+     * Application des **deux paramètres de badges** de la colonne « Statut »
+     * (docs/RULES.md §9) à une requête — partagée par la Grande liste
+     * admin, l'historique d'un employé et l'historique d'une entreprise :
+     *
+     *   - `$status`             → statut **client** (Disponible / Blacklist /
+     *     Sans téléphone), `scopeFilterByStatuses()` ;
+     *   - `$reservationStatus`  → statut de la **réservation courante**
+     *     (Oui / Non / BV / À rappeler / « - »),
+     *     `scopeFilterByReservationStatuses()`.
+     *
+     * Les deux jeux sont disjoints (sauf `SANS_TELEPHONE`, seau dérivé qui
+     * recoupe les autres) et combinés en **union `OR`** quand les deux sont
+     * fournis.
+     */
+    public static function applyDisplayStatusFilters(
+        Builder $query,
+        string|array|null $status,
+        string|array|null $reservationStatus,
+    ): Builder {
+        $hasStatus = is_array($status) ? $status !== [] : filled($status);
+        $hasReservation = is_array($reservationStatus) ? $reservationStatus !== [] : filled($reservationStatus);
+
+        if ($hasStatus && $hasReservation) {
+            return $query->where(function (Builder $q) use ($status, $reservationStatus) {
+                $q->where(fn (Builder $inner) => $inner->filterByStatuses($status))
+                    ->orWhere(fn (Builder $inner) => $inner->filterByReservationStatuses($reservationStatus));
+            });
+        }
+
+        if ($hasStatus) {
+            return $query->filterByStatuses($status);
+        }
+
+        if ($hasReservation) {
+            return $query->filterByReservationStatuses($reservationStatus);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Compteurs des **8 badges** de la colonne « Statut » pour un périmètre
+     * donné : `$base` reconstruit une requête **fraîche** (même base, sans
+     * filtre de statut) et chaque compteur est produit **par le scope qui
+     * pilote le filtre** — le chiffre affiché vaut donc le nombre de lignes
+     * rendues après clic sur ce badge.
+     *
+     * @param  callable(): Builder  $base
+     * @return array<string, int>
+     */
+    public static function displayStatusCounts(callable $base): array
+    {
+        $counts = [];
+
+        foreach ([self::STATUS_AVAILABLE, self::STATUS_BLACKLISTED, self::STATUS_SANS_TELEPHONE] as $bucket) {
+            $counts[$bucket] = $base()->filterByStatuses($bucket)->count();
+        }
+
+        foreach ([
+            Reservation::STATUS_YES,
+            Reservation::STATUS_NO,
+            Reservation::STATUS_BV_VOICEMAIL,
+            Reservation::STATUS_CALL_BACK,
+            Reservation::STATUS_PENDING,
+        ] as $bucket) {
+            $counts[$bucket] = $base()->filterByReservationStatuses($bucket)->count();
+        }
+
+        return $counts;
     }
 
     /**
@@ -2583,10 +2714,13 @@ class Client extends Model
         }
 
         // Exclusions de la page : hors liste noire, réellement disponible,
+        // au moins un numéro (un prospect sans téléphone ne peut pas être
+        // appelé — statut dérivé `SANS_TELEPHONE`, invisible côté commercial),
         // aucune réservation active en cours (ni la sienne ni celle d'un
         // autre employé).
         $query->where('is_blacklisted', false)
             ->available()
+            ->withPhone()
             ->whereDoesntHave('reservations', fn ($q) => $q->active());
 
         // Même tri que la page (défaut : `created_at` desc).

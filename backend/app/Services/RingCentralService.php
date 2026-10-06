@@ -3,10 +3,18 @@
 namespace App\Services;
 
 use Exception;
+use Illuminate\Support\Facades\Cache;
 use RingCentral\SDK\SDK;
+use Throwable;
 
 class RingCentralService
 {
+    /** Jeton d'accès partagé entre requêtes PHP (voir `authenticate()`). */
+    protected const AUTH_CACHE = 'ringcentral:auth';
+
+    /** Durée des listes figées (appareils / extensions / numéros). */
+    protected const LIST_CACHE_TTL = 60;
+
     protected ?SDK $sdk = null;
 
     protected $platform = null;
@@ -26,6 +34,11 @@ class RingCentralService
     /**
      * Authenticate using JWT
      *
+     * ⚠️ Le jeton d'accès est **mis en cache entre requêtes PHP** : sans
+     * cela, chaque requête ferait un échange `/oauth/token` en plus des
+     * appels API — c'est ce qui déclenche le `429 CMN-301 « Request rate
+     * exceeded »` rencontré sur l'onglet « Appels ».
+     *
      * @throws Exception
      */
     protected function authenticate(): void
@@ -34,15 +47,52 @@ class RingCentralService
             throw new Exception('RingCentral non configuré (RINGCENTRAL_CLIENT_ID ou CLIENT_SECRET manquant).');
         }
 
+        // 1. Jeton obtenu par une requête précédente — `expire_time` /
+        //    `refresh_token_expire_time` sont absolus, il est donc valable
+        //    tel quel.
+        $cached = Cache::get(self::AUTH_CACHE);
+        if (is_array($cached) && $cached !== []) {
+            $this->platform->auth()->setData($cached);
+        }
+
+        // 2. Toujours valide (ou rafraîchi via le `refresh_token`) →
+        //    **aucun appel réseau**.
+        if ($this->platform->loggedIn()) {
+            $this->storeAuth();
+
+            return;
+        }
+
         $jwt = config('services.ringcentral.jwt');
         if (empty($jwt)) {
             throw new Exception('RingCentral non authentifié (RINGCENTRAL_JWT manquant).');
         }
 
-        if (! $this->platform->loggedIn()) {
-            $this->platform->login([
-                'jwt' => $jwt,
-            ]);
+        $this->platform->login(['jwt' => $jwt]);
+        $this->storeAuth();
+    }
+
+    /** Re-persiste le jeton courant (TTL = durée résiduelle − 60 s de marge). */
+    protected function storeAuth(): void
+    {
+        try {
+            $data = $this->platform->auth()->data();
+        } catch (Throwable) {
+            return;
+        }
+
+        if (! is_array($data) || ($data['access_token'] ?? '') === '') {
+            return;
+        }
+
+        $expireAt = (int) ($data['expire_time'] ?? 0);
+        $ttl = $expireAt > time() ? $expireAt - time() - 60 : 0;
+
+        if ($ttl >= 30) {
+            Cache::put(self::AUTH_CACHE, $data, $ttl);
+        } else {
+            // Déjà expiré : la prochaine requête refera l'échange JWT.
+            Cache::forget(self::AUTH_CACHE);
         }
     }
 
@@ -53,15 +103,23 @@ class RingCentralService
      */
     public function getAllUsers(int $perPage = 100): array
     {
-        $this->authenticate();
+        // Listes figées 60 s : ouvertures répétées de l'onglet « Appels » /
+        // des modales employé sans rejouer les mêmes requêtes (CMN-301).
+        return Cache::remember(
+            "ringcentral:users:{$perPage}",
+            now()->addSeconds(self::LIST_CACHE_TTL),
+            function () use ($perPage) {
+                $this->authenticate();
 
-        $response = $this->platform->get('/account/~/extension', [
-            'type' => 'User',
-            'status' => 'Enabled',
-            'perPage' => $perPage,
-        ]);
+                $response = $this->platform->get('/account/~/extension', [
+                    'type' => 'User',
+                    'status' => 'Enabled',
+                    'perPage' => $perPage,
+                ]);
 
-        return $response->json()->records ?? [];
+                return $response->json()->records ?? [];
+            }
+        );
     }
 
     /**
@@ -137,13 +195,20 @@ class RingCentralService
      */
     public function getDevices(int $perPage = 100): array
     {
-        $this->authenticate();
+        // Listes figées 60 s (voir `getAllUsers`) — même garde-fou CMN-301.
+        return Cache::remember(
+            "ringcentral:devices:{$perPage}",
+            now()->addSeconds(self::LIST_CACHE_TTL),
+            function () use ($perPage) {
+                $this->authenticate();
 
-        $data = $this->decode($this->platform->get('/account/~/device', [
-            'perPage' => $perPage,
-        ]));
+                $data = $this->decode($this->platform->get('/account/~/device', [
+                    'perPage' => $perPage,
+                ]));
 
-        return $data['records'] ?? [];
+                return $data['records'] ?? [];
+            }
+        );
     }
 
     /**
@@ -160,13 +225,20 @@ class RingCentralService
      */
     public function getPhoneNumbers(int $perPage = 500): array
     {
-        $this->authenticate();
+        // Listes figées 60 s (voir `getAllUsers`) — même garde-fou CMN-301.
+        return Cache::remember(
+            "ringcentral:phone-numbers:{$perPage}",
+            now()->addSeconds(self::LIST_CACHE_TTL),
+            function () use ($perPage) {
+                $this->authenticate();
 
-        $data = $this->decode($this->platform->get('/account/~/phone-number', [
-            'perPage' => $perPage,
-        ]));
+                $data = $this->decode($this->platform->get('/account/~/phone-number', [
+                    'perPage' => $perPage,
+                ]));
 
-        return $data['records'] ?? [];
+                return $data['records'] ?? [];
+            }
+        );
     }
 
     /**
@@ -279,12 +351,40 @@ class RingCentralService
     {
         $this->authenticate();
 
-        // ⚠️ Aucun corps : le SDK n'encode qu'un tableau **non vide**
-        // (`parseProperties()` teste `!empty($body)`), Guzzle recevrait donc
-        // `[]` et planterait avec `Invalid resource type: array`.
-        return $this->decode($this->platform->post(
-            "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings"
-        ));
+        try {
+            // ⚠️ Aucun corps : le SDK n'encode qu'un tableau **non vide**
+            // (`parseProperties()` teste `!empty($body)`), Guzzle recevrait
+            // donc `[]` et planterait avec `Invalid resource type: array`.
+            return $this->decode($this->platform->post(
+                "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings"
+            ));
+        } catch (Throwable $e) {
+            // Variante documentée (docs/righcenter.md §Task 2) :
+            // `POST …/parties/{partyId}/record` avec un identifiant de
+            // demande — repli seulement si l'URL n'existe pas (404/405),
+            // un 400 « partie pas encore connectée » n'appelle pas ça.
+            if (! in_array($this->httpStatus($e), [404, 405], true)) {
+                throw $e;
+            }
+
+            return $this->decode($this->platform->post(
+                "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/record",
+                ['id' => 'recording-request']
+            ));
+        }
+    }
+
+    /** Statut HTTP de la réponse attachée à l'exception du SDK, sinon `null`. */
+    private function httpStatus(Throwable $e): ?int
+    {
+        if (! method_exists($e, 'apiResponse')) {
+            return null;
+        }
+
+        $apiResponse = $e->apiResponse();
+        $response = $apiResponse ? $apiResponse->response() : null;
+
+        return $response ? $response->getStatusCode() : null;
     }
 
     /**
@@ -292,8 +392,8 @@ class RingCentralService
      * par RingCentral n'est lisible qu'avec l'en-tête `Authorization`, qu'un
      * `<audio>` du navigateur ne peut pas envoyer.
      *
-     * GET /restapi/v1.0/account/~/recording/{recordingId}  →  contentUri
-     * GET {contentUri}                                     →  audio/mpeg
+     * GET /restapi/v1.0/account/~/recording/{recordingId}/content  (1 appel)
+     * → repli : métadonnées → `contentUri` (host `media.ringcentral.com`)
      *
      * @return array{content_type: string, body: string}
      *
@@ -303,6 +403,16 @@ class RingCentralService
     {
         $this->authenticate();
 
+        try {
+            return $this->audio($this->platform->get(
+                '/account/~/recording/'.$recordingId.'/content'
+            )->response());
+        } catch (Throwable $e) {
+            if ($this->httpStatus($e) !== 404) {
+                throw $e;
+            }
+        }
+
         $meta = $this->decode($this->platform->get('/account/~/recording/'.$recordingId));
         $contentUri = trim((string) ($meta['contentUri'] ?? ''));
 
@@ -310,11 +420,14 @@ class RingCentralService
             throw new Exception("Enregistrement {$recordingId} introuvable (contentUri absent).");
         }
 
-        // URL absolue : le SDK ne préfixe que les chemins (le préfixe serveur
-        // n'est ajouté que si le chemin ne commence pas par `http(s)://`),
-        // l'en-tête d'authentification reste ajouté.
-        $response = $this->platform->get($contentUri)->response();
+        // URL absolue : le SDK ne préfixe que les chemins, l'en-tête
+        // d'authentification reste ajouté.
+        return $this->audio($this->platform->get($contentUri)->response());
+    }
 
+    /** Corps binaire + type MIME (`audio/mpeg` / `audio/wav`). */
+    private function audio(mixed $response): array
+    {
         return [
             'content_type' => $response->getHeaderLine('Content-Type') ?: 'audio/mpeg',
             'body'         => (string) $response->getBody(),

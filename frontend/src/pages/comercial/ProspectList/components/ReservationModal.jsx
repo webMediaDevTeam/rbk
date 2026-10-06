@@ -1,10 +1,15 @@
-import { CheckCircle2, Loader2, X, AlertCircle } from 'lucide-react'
+import { CheckCircle2, Loader2, X, AlertCircle, ListChecks } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import Badge from '@/components/ui/badge.jsx'
 import { cn } from '@/lib/utils.js'
 import { useReservationModal, COUNT_OPTIONS } from './useReservationModal.js'
 
 export default function ReservationModal(props) {
+  // Garde « traitement en cours » (§7.1) : liste incomplète = le serveur
+  // refuse le nouveau lot (409) → la modale propose de **libérer**. Ces deux
+  // valeurs viennent de la **page** (props), pas du hook.
+  const { canReserve = true, pendingReservations } = props
+
   const {
     open,
     onClose,
@@ -12,10 +17,13 @@ export default function ReservationModal(props) {
     setCount,
     result,
     mutation,
+    releaseMutation,
     handleSubmit,
   } = useReservationModal(props)
 
   if (!open) return null
+
+  const blocked = !canReserve
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -49,6 +57,33 @@ export default function ReservationModal(props) {
             </div>
           </div>
 
+          {/* Liste incomplète : le lot serait refusé (409) — on propose
+              plutôt de **libérer** les prospects encore « en attente ». */}
+          {blocked && (
+            <div className="rounded-lg bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400 space-y-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  {typeof pendingReservations === 'number' && pendingReservations > 0
+                    ? `${pendingReservations} prospect(s) de vos listes sont encore en attente. Terminez-les, ou libérez votre liste pour réserver un nouveau lot.`
+                    : 'Vos listes contiennent encore des prospects en attente.'}
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                disabled={releaseMutation.isPending}
+                onClick={() => releaseMutation.mutate()}
+              >
+                {releaseMutation.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  : <ListChecks className="h-4 w-4 mr-2" />}
+                Libérer la liste
+              </Button>
+            </div>
+          )}
+
           {mutation.isError && (
             <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -57,10 +92,14 @@ export default function ReservationModal(props) {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>
+            <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending || releaseMutation.isPending}>
               Annuler
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              disabled={mutation.isPending || releaseMutation.isPending || blocked}
+              title={blocked ? 'Libérez d\'abord vos prospects en attente.' : undefined}
+            >
               {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Réserver
             </Button>

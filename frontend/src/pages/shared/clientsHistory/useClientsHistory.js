@@ -22,8 +22,9 @@ export function useClientsHistoryPage() {
   const [search, setSearch] = useState('')
   // Sélection **unique** des **badges de la colonne « Statut »** (valeurs
   // affichées, §9) : `null` = « Tous » (aucun filtre), sinon une seule valeur
-  // active à la fois — Disponible / Blacklist filtrent le statut **client**,
-  // Oui / Non / BV / À rappeler le statut de la **réservation courante**.
+  // active à la fois — Disponible / Blacklist / Sans téléphone filtrent le
+  // statut **client**, Oui / Non / BV / À rappeler le statut de la
+  // **réservation courante**.
   // Les deux paramètres serveur sont distincts et combinés en `OR`.
   const [statusFilter, setStatusFilter] = useState(null)
   const [municipality, setMunicipality] = useState('')
@@ -91,6 +92,9 @@ export function useClientsHistoryPage() {
     onSuccess: (_res, c) => {
       toast.success(isBlocked(c) ? 'Client débloqué.' : 'Client mis en liste noire.')
       qc.invalidateQueries({ queryKey: ['admin-clients-history'] })
+      // Badges « Disponible » / « Blacklist » / « Sans téléphone » : le
+      // bascule blocage en déplace le client d'un seau à l'autre.
+      qc.invalidateQueries({ queryKey: ['prospect-kpis'] })
     },
     onError: (err) => {
       toast.error(err?.response?.data?.message || 'Une erreur est survenue.')
@@ -101,6 +105,13 @@ export function useClientsHistoryPage() {
     if (blacklistId) return // une seule bascule à la fois
     toggleBlacklistMutation.mutate(c)
   }
+
+  // --- Saisie / modification du numéro (Admin / Super Admin) --------------
+  // Bouton « Modifier le numéro » en fin de ligne (et sur la carte mobile) :
+  // un prospect « Sans téléphone » reprend son seau dès la saisie.
+  const [phoneClient, setPhoneClient] = useState(null)
+  const openPhoneEdit = (c) => setPhoneClient(c)
+  const closePhoneEdit = () => setPhoneClient(null)
 
   const handleSearchChange = (v) => {
     setSearch(v)
@@ -163,5 +174,8 @@ export function useClientsHistoryPage() {
     handleHomeClick,
     blacklistId,
     toggleBlacklist,
+    phoneClient,
+    openPhoneEdit,
+    closePhoneEdit,
   }
 }

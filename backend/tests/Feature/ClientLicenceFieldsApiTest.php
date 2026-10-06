@@ -202,9 +202,12 @@ class ClientLicenceFieldsApiTest extends TestCase
     public function test_prospect_list_returns_displayed_columns_and_searches_each_of_them(): void
     {
         $commercial = $this->makeUser('COMERCIAL');
+        // `phone` obligatoire : la liste commerciale exclut les prospects
+        // sans numéro (statut dérivé `SANS_TELEPHONE`).
         $target = Client::create([
             'name' => 'Jean Dupont', 'enterprise_name' => 'Bâtiments Ltee',
             'status' => 'AVAILABLE',
+            'phone' => '514-555-0101',
             'licence_number' => 'LIC-777',
             'neq' => '9876543210',
             'categories' => ['Résidentiel'],
@@ -214,6 +217,7 @@ class ClientLicenceFieldsApiTest extends TestCase
         $other = Client::create([
             'name' => 'Autre Inc', 'enterprise_name' => 'Autre Groupe',
             'status' => 'AVAILABLE',
+            'phone' => '514-555-0102',
         ]);
 
         Sanctum::actingAs($commercial);

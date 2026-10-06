@@ -38,9 +38,12 @@ class CurrentReservationStatusBadgesTest extends TestCase
 
     private function makeClient(array $attrs = []): Client
     {
+        // Numéro présent par défaut : le seau dérivé « Sans téléphone »
+        // (`phone` vide) est testé à part, en écrasant `phone`.
         return Client::create(array_merge([
             'name' => 'ACME Construction',
             'status' => Client::STATUS_AVAILABLE,
+            'phone' => '514-555-0100',
         ], $attrs));
     }
 
@@ -230,6 +233,7 @@ class CurrentReservationStatusBadgesTest extends TestCase
             [
                 Client::STATUS_AVAILABLE,
                 Client::STATUS_BLACKLISTED,
+                Client::STATUS_SANS_TELEPHONE,
                 Reservation::STATUS_YES,
                 Reservation::STATUS_NO,
                 Reservation::STATUS_BV_VOICEMAIL,
@@ -237,11 +241,13 @@ class CurrentReservationStatusBadgesTest extends TestCase
                 Reservation::STATUS_PENDING,
             ],
             array_keys($badges ?? []),
-            'Les 7 badges de la colonne « Statut » sont renvoyés.'
+            'Les 8 badges de la colonne « Statut » sont renvoyés.'
         );
 
         // Chaque compteur est produit **par le scope qui pilote le filtre** :
         // il doit valoir exactement le nombre de lignes rendues après clic.
+        // (`SANS_TELEPHONE` est testé à part : aucun client du jeu n'est
+        // sans numéro, son compteur vaut donc 0.)
         $filters = [
             Client::STATUS_AVAILABLE => 'status',
             Client::STATUS_BLACKLISTED => 'status',

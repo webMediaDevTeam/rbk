@@ -33,6 +33,8 @@ class ReservationWorkflowApiTest extends TestCase
         return Client::create(array_merge([
             'name' => 'ACME Construction',
             'status' => 'AVAILABLE',
+            // La liste commerciale exclut les prospects sans numéro.
+            'phone' => '514-555-0100',
         ], $attrs));
     }
 
@@ -106,12 +108,91 @@ class ReservationWorkflowApiTest extends TestCase
             ->assertJsonPath('data.pending', 1)
             ->assertJsonPath('data.can_reserve', false);
 
-        $this->postJson('/api/v1/clients/reserver', ['count' => 200])
+        $this->postJson('/api/v1/clients/reserver', ['count' => 100])
             ->assertStatus(409)
             ->assertJsonPath('error', 'unfinished_treatment');
 
         // Issue d'appel enregistrée → plus aucune « en attente » → ouvert.
         $reservation->update(['status' => Reservation::STATUS_YES]);
+
+        $this->getJson('/api/v1/reservations/active-count')
+            ->assertOk()
+            ->assertJsonPath('data.pending', 0)
+            ->assertJsonPath('data.can_reserve', true);
+    }
+
+    /**
+     * **Libérer la liste** (`POST reservations/release-pending`,
+     * docs/RULES.md §7.1) : les prospects encore « en attente » redeviennent
+     * `AVAILABLE` pour tout le monde — l'employé n'a pas à finir la liste
+     * commencée. Les réservations déjà traitées et celles des autres
+     * employés sont conservées.
+     */
+    public function test_release_pending_frees_untreated_clients_and_keeps_treated_ones(): void
+    {
+        $commercial = $this->makeCommercial();
+        $other = $this->makeCommercial();
+
+        // Deux prospects « en attente », dont un avec rappel planifié.
+        $pendingA = $this->makeClient(['status' => 'RESERVED', 'returned_at' => now()]);
+        $reservationA = $this->makeReservation($pendingA, $commercial);
+        $this->makeRappel($reservationA, now()->addDay());
+
+        $pendingB = $this->makeClient(['status' => 'RESERVED']);
+        $reservationB = $this->makeReservation($pendingB, $commercial);
+
+        // Déjà traité (issue Oui) → conservé.
+        $treated = $this->makeClient(['status' => 'CONFIRMED']);
+        $treatedReservation = $this->makeReservation($treated, $commercial, [
+            'status' => Reservation::STATUS_YES,
+        ]);
+
+        // Liste « en attente » d'un autre employé → intacte.
+        $otherClient = $this->makeClient(['status' => 'RESERVED']);
+        $otherReservation = $this->makeReservation($otherClient, $other);
+
+        Sanctum::actingAs($commercial);
+
+        // Tant que la liste est en attente, la réreservation est refusée.
+        $this->postJson('/api/v1/clients/reserver', ['count' => 50])
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'unfinished_treatment');
+
+        $this->postJson('/api/v1/reservations/release-pending')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('released', 2)
+            ->assertJsonPath('pending', 0)
+            ->assertJsonPath('can_reserve', true);
+
+        // Prospects libérés : de nouveau disponibles et sans pointeur.
+        foreach ([$pendingA, $pendingB] as $client) {
+            $fresh = $client->fresh();
+            $this->assertSame('AVAILABLE', $fresh->status);
+            $this->assertNull($fresh->returned_at);
+            $this->assertNull($fresh->current_reservation_id);
+            $this->assertNull($fresh->current_comercial_id);
+        }
+
+        $this->assertDatabaseMissing('reservations', ['id' => $reservationA->id]);
+        $this->assertDatabaseMissing('reservations', ['id' => $reservationB->id]);
+        $this->assertDatabaseCount('rappels', 0);
+
+        // Historisation de la libération.
+        $this->assertSame(2, Note::where('type', Note::TYPE_RETURNED_TO_AVAILABLE)->count());
+
+        // Traité + autres employés : intacts.
+        $this->assertSame('CONFIRMED', $treated->fresh()->status);
+        $this->assertNotNull(Reservation::find($treatedReservation->id));
+        $this->assertSame('RESERVED', $otherClient->fresh()->status);
+        $this->assertNotNull(Reservation::find($otherReservation->id));
+
+        // Rien de plus à libérer : nouvel appel neutre, réreservation ouverte.
+        $this->postJson('/api/v1/reservations/release-pending')
+            ->assertOk()
+            ->assertJsonPath('released', 0)
+            ->assertJsonPath('pending', 0)
+            ->assertJsonPath('can_reserve', true);
 
         $this->getJson('/api/v1/reservations/active-count')
             ->assertOk()
@@ -213,20 +294,20 @@ class ReservationWorkflowApiTest extends TestCase
 
         Sanctum::actingAs($commercial);
 
-        // Nombre libre (50) refusé : seuls 200 / 250 / 300 sont acceptés.
-        $this->postJson('/api/v1/clients/reserver', ['count' => 50])
+        // Nombre libre (77) refusé : seuls 50 / 80 / 100 / 120 sont acceptés.
+        $this->postJson('/api/v1/clients/reserver', ['count' => 77])
             ->assertStatus(422);
 
         $this->assertDatabaseCount('reservation_groups', 0);
 
-        $this->postJson('/api/v1/clients/reserver', ['count' => 300, 'group_name' => 'Liste'])
+        $this->postJson('/api/v1/clients/reserver', ['count' => 120, 'group_name' => 'Liste'])
             ->assertCreated()
-            ->assertJsonPath('data.requested', 300);
+            ->assertJsonPath('data.requested', 120);
 
         // Sans nom : le serveur génère un nom de groupe par défaut.
-        $response = $this->postJson('/api/v1/clients/reserver', ['count' => 250])
+        $response = $this->postJson('/api/v1/clients/reserver', ['count' => 80])
             ->assertCreated()
-            ->assertJsonPath('data.requested', 250);
+            ->assertJsonPath('data.requested', 80);
 
         $groupId = $response->json('data.group.id');
         $this->assertStringStartsWith('Liste du ', ReservationGroup::find($groupId)->name);

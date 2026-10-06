@@ -3,7 +3,7 @@ import { api } from '@/api/client.js'
 
 /**
  * Compteurs de `GET clients/overview` — servent à la barre de filtres
- * « Tous + 6 valeurs affichées » des listes (Grande liste — panels commercial
+ * « Tous + 7 valeurs affichées » (8 badges, §9) des listes (Grande liste — panels commercial
  * et admin, À rappeler, BV). La colonne « Statut » lit `by_display_status`
  * (§9 de docs/RULES.md) ; `by_status` reste exposé par l'API.
  *

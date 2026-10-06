@@ -1,4 +1,4 @@
-import { Eye, Ban, Loader2, Unlock } from 'lucide-react'
+import { Eye, Ban, Loader2, Unlock, SquarePen } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
@@ -20,6 +20,9 @@ import { respondentsText } from './prospectFormat'
  * @param {(c: object) => void} [onToggleBlacklist]  bouton de **bascule**
  *   liste noire / débloquer en fin de ligne : action directe, **sans modale
  *   de confirmation** (l'état du client décide de l'icône et de l'action).
+ * @param {(c: object) => void} [onEditPhone]  bouton « Modifier le numéro »
+ *   (accès Admin / Super Admin) : saisie du téléphone d'un prospect
+ *   « Sans téléphone » — modale de saisie ouverte par la page.
  * @param {number|null} [blacklistId]  id en cours de bascule (spinner).
  */
 export default function ProspectTable({
@@ -32,17 +35,19 @@ export default function ProspectTable({
   showViewButton = true,
   rowClickable = true,
   onToggleBlacklist,
+  onEditPhone,
   blacklistId = null,
 }) {
   // La colonne « Statut » récupère la place du bouton « Voir » quand il est
   // masqué, pour que la somme des largeurs reste à 100 %.
-  const hasActionCell = showViewButton || Boolean(onToggleBlacklist)
+  const hasActionCell = showViewButton || Boolean(onToggleBlacklist) || Boolean(onEditPhone)
   const statusWidth = hasActionCell ? 'w-[17%]' : 'w-[22%]'
-  // La colonne d'action s'élargit quand elle porte les deux boutons
-  // (« Voir » + « liste noire / débloquer ») : la colonne « Prospect » cède
-  // la place, le total reste à 100 % (5 + 27 + 25 + 18 + 17 + 8).
-  const actionWidth = onToggleBlacklist ? 'w-[8%]' : 'w-[5%]'
-  const nameWidth = onToggleBlacklist ? 'w-[27%]' : 'w-[30%]'
+  // La colonne d'action s'élargit avec chaque bouton supplémentaire
+  // (« Voir » + « liste noire / débloquer » + « Modifier le numéro ») : la
+  // colonne « Prospect » cède la place, le total reste à 100 %
+  // (5 + 24 + 25 + 18 + 17 + 11, ou 5 + 27 + 25 + 18 + 17 + 8 à deux boutons).
+  const actionWidth = onEditPhone ? 'w-[11%]' : onToggleBlacklist ? 'w-[8%]' : 'w-[5%]'
+  const nameWidth = onEditPhone ? 'w-[24%]' : onToggleBlacklist ? 'w-[27%]' : 'w-[30%]'
   const clickable = rowClickable && typeof onViewDetail === 'function'
   // Un seul vocabulaire pour « ce client est en liste noire » (§2).
   const isBlocked = (c) => Boolean(c.is_blacklisted) || c.status === 'BLACKLISTED'
@@ -124,6 +129,19 @@ export default function ProspectTable({
                         aria-label="Voir détail"
                       >
                         <Eye className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    )}
+                    {/* Saisie / modification du numéro (Admin / Super Admin) :
+                        un prospect « Sans téléphone » reprend son seau
+                        « Disponible » / « Blacklist » dès le numéro saisi. */}
+                    {onEditPhone && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditPhone(c) }}
+                        className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                        aria-label={c.phone ? 'Modifier le numéro de téléphone' : 'Ajouter un numéro de téléphone'}
+                        title={c.phone ? 'Modifier le numéro' : 'Ajouter un numéro'}
+                      >
+                        <SquarePen className="h-4 w-4 text-muted-foreground" />
                       </button>
                     )}
                     {/* Bascule liste noire / débloquer — action directe,

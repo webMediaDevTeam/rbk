@@ -7,6 +7,27 @@ import { blacklistClientApi, adminBlacklistClientApi, adminUnblockClientApi } fr
 import { useClientNotes } from './useNotes.js'
 import { useAuth } from '@/context/AuthContext.jsx'
 
+/**
+ * Bascule blocage / déblocage : le client change de seau (« Disponible » /
+ * « Blacklist », et « Sans téléphone » qui recoupe les deux) — toutes les
+ * vues qui affichent un **compteur** ou une **ligne** de ce client sont
+ * invalidées, pour que les badges ne soient plus en retard.
+ */
+const CLIENT_STATE_KEYS = [
+  ['prospect-kpis'],
+  ['admin-clients-history'],
+  ['commercial-prospects'],
+  ['reservation-groups'],
+  ['reservation-group'],
+  ['active-reservations-count'],
+  ['comercialDetail'],
+  ['dashboard-stats'],
+]
+
+const invalidateClientState = (qc) => {
+  CLIENT_STATE_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey }))
+}
+
 export function useClientDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -50,6 +71,7 @@ export function useClientDetail() {
       qc.invalidateQueries({ queryKey: ['commercial-prospect', id] })
       qc.invalidateQueries({ queryKey: ['admin-client', id] })
       qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
+      invalidateClientState(qc)
     },
     onError: (err) => {
       const msg = err?.response?.data?.message || 'Une erreur est survenue.'
@@ -63,11 +85,19 @@ export function useClientDetail() {
     onSuccess: () => {
       toast.success('Client débloqué.')
       qc.invalidateQueries({ queryKey: ['admin-client', id] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospect', id] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
+      invalidateClientState(qc)
     },
     onError: (err) => toast.error(err?.response?.data?.message || 'Une erreur est survenue.'),
   })
 
   const blacklistConfirmDisabled = blacklistMutation.isPending
+
+  // --- Saisie / modification du numéro (Admin / Super Admin) --------------
+  const [phoneOpen, setPhoneOpen] = useState(false)
+  const openPhoneEdit = () => setPhoneOpen(true)
+  const closePhoneEdit = () => setPhoneOpen(false)
 
   const handleHomeClick = (e) => {
     e.preventDefault()
@@ -129,5 +159,8 @@ export function useClientDetail() {
     handleProspectsClick,
     handleBack,
     handleCopyPhone,
+    phoneOpen,
+    openPhoneEdit,
+    closePhoneEdit,
   }
 }

@@ -21,7 +21,8 @@ import RecordingPlayer from './RecordingPlayer.jsx'
  * @param {{ id: string }} props  identifiant de l'utilisateur
  */
 export default function CallLogsCard({ id }) {
-  const { source, rows, isLoading, isFetching, isError, error, refetch } = useCallLogs(id)
+  const { source, rows, isLoading, isFetching, isError, error, isRateLimited, refetch } =
+    useCallLogs(id)
 
   const errorMessage =
     error?.response?.data?.error ??
@@ -62,6 +63,11 @@ export default function CallLogsCard({ id }) {
         ) : isError ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-10 text-center">
             <p className="max-w-[36rem] text-sm text-muted-foreground">{errorMessage}</p>
+            {isRateLimited && (
+              <p className="text-xs text-muted-foreground">
+                Nouvel essai automatique dans ~30 s…
+              </p>
+            )}
             <Button variant="outline" size="sm" onClick={refetch}>
               Réessayer
             </Button>

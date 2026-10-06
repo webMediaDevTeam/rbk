@@ -35,15 +35,18 @@ class ProspectOverviewController extends Controller
      *    `prospects.system` (le total du badge « Tous »).
      *  - « par statut affiché » (`by_display_status`) : une entrée par valeur
      *    que la **colonne « Statut »** montre réellement — `AVAILABLE`
-     *    (Disponible), `BLACKLISTED` (Blacklist), puis le statut de la
+     *    (Disponible), `BLACKLISTED` (Blacklist), `SANS_TELEPHONE` (Sans
+     *    téléphone, seau dérivé d'un `phone` vide), puis le statut de la
      *    réservation **courante** `YES` / `NO` / `BV_VOICEMAIL` / `CALL_BACK`
-     *    / `PENDING` (« - »). Ce sont les 7 badges de filtre demandés ;
+     *    / `PENDING` (« - »). Ce sont les 8 badges de filtre demandés ;
      *    chaque compteur est calculé **par le scope qui pilote le filtre**
      *    (`filterByStatuses()` / `filterByReservationStatuses()`), donc le
      *    chiffre affiché coïncide avec le nombre de lignes renvoyées après
-     *    clic, et les jeux sont disjoints (un client AVAILABLE ou
-     *    blacklisté n'entre jamais dans la dimension réservation) — une
-     *    sélection mêlant les deux dimensions est une union exacte.
+     *    clic. Les jeux de la dimension réservation sont disjoints de celle
+     *    du statut client (un client AVAILABLE ou blacklisté n'entre jamais
+     *    dans la dimension réservation) — une sélection mêlant les deux
+     *    dimensions est une union exacte. `SANS_TELEPHONE`, lui, **recoupe**
+     *    les autres seaux client (sélection unique dans l'UI).
      *
      * Requêtes en direct (pas de cache) : les compteurs bougent à chaque
      * appel réservé, inutile de les figer une semaine comme les listes
@@ -90,13 +93,18 @@ class ProspectOverviewController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        // ── 6. Statut affiché (les 7 badges de la colonne « Statut ») ────
+        // ── 6. Statut affiché (les 8 badges de la colonne « Statut ») ────
         // Disponible / Blacklist = dimension **client** ; Oui / Non / BV /
-        // À rappeler / - = dimension **réservation courante**. Les compteurs
-        // sont produits par les scopes mêmes qui filtrent la liste, avec les
-        // mêmes paramètres que `GET commercials/clients`.
+        // À rappeler / - = dimension **réservation courante** ; Sans
+        // téléphone = seau **dérivé** (`phone` vide) qui recoupe les deux.
+        // Les compteurs sont produits par les scopes mêmes qui filtrent la
+        // liste, avec les mêmes paramètres que `GET commercials/clients`.
         $displayCounts = [];
-        $clientBuckets = [Client::STATUS_AVAILABLE, Client::STATUS_BLACKLISTED];
+        $clientBuckets = [
+            Client::STATUS_AVAILABLE,
+            Client::STATUS_BLACKLISTED,
+            Client::STATUS_SANS_TELEPHONE,
+        ];
         $reservationBuckets = [
             Reservation::STATUS_YES,
             Reservation::STATUS_NO,
@@ -140,8 +148,9 @@ class ProspectOverviewController extends Controller
                     Client::STATUS_BLACKLISTED => $blacklisted,
                 ],
                 // Badges « Tous / Disponible / Oui / Non / BV / À rappeler /
-                // Blacklist » : une entrée par valeur affichée, comptée par
-                // le filtre qu'elle pilote (invariant badge ⇄ lignes).
+                // Blacklist / Sans téléphone » : une entrée par valeur
+                // affichée, comptée par le filtre qu'elle pilote (invariant
+                // badge ⇄ lignes).
                 'by_display_status' => $displayCounts,
             ],
         ]);

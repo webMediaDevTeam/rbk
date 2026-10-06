@@ -11,6 +11,8 @@ Route::middleware(['auth:sanctum', CheckRole::class . ':ADMIN,SUPER_ADMIN'])->gr
     Route::get('commercials', [CommercialAdminController::class, 'index']);
     Route::get('commercials/clients', [CommercialAdminController::class, 'clients']);
     Route::get('commercials/clients/{id}', [CommercialAdminController::class, 'client']);
+    // Ajout / modification du numéro d'un client (statut « Sans téléphone »).
+    Route::patch('commercials/clients/{id}/phone', [CommercialAdminController::class, 'updatePhone']);
     Route::post('commercials/clients/{id}/blacklist', [CommercialAdminController::class, 'blacklist']);
     Route::get('commercials/{id}', [CommercialAdminController::class, 'show']);
 });

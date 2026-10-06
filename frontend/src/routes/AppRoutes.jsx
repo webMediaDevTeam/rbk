@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import DashboardPage from '@/pages/shared/dashboard/index.jsx'
 import ProfilPage from '@/pages/shared/profil/index.jsx'
 import EntrepriseListPage from '@/pages/shared/entrepriseList/index.jsx'
+import EntrepriseDetailPage from '@/pages/shared/entrepriseDetail/index.jsx'
 import ComercialListPage from '@/pages/shared/comercialList/index.jsx'
 import AdminListPage from '@/pages/superAdmin/adminList/index.jsx'
 import VerifyAccountPage from '@/pages/shared/verify-account/index.jsx'
@@ -22,6 +23,7 @@ export default function AppRoutes() {
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/profil" element={<ProfilPage />} />
       <Route path="/entreprises" element={<EntrepriseListPage />} />
+      <Route path="/entreprises/:id" element={<EntrepriseDetailPage />} />
       <Route path="/commerciaux" element={<ComercialListPage />} />
       <Route path="/comercialDetail/:id" element={<ComercialDetailPage />} />
       <Route path="/clients-historique" element={<ClientsHistoryPage />} />

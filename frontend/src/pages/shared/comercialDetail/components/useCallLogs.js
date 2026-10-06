@@ -1,5 +1,10 @@
+import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/client.js'
+
+/** Réessai automatique après un `429 CMN-301` (quota RingCentral). */
+const RATE_LIMIT_RETRY_DELAY = 30_000
+const MAX_RATE_LIMIT_RETRIES = 2
 
 /** `2026-10-06T10:08:10Z` → `06/10 10:08` (locale fr). */
 function formatDate(value) {
@@ -42,6 +47,23 @@ export function useCallLogs(id) {
   const source = query.data?.data ?? null
   const records = Array.isArray(source?.records) ? source.records : []
 
+  // Un `429 CMN-301` ne doit pas rester bloqué : on retente automatiquement
+  // (2 fois max) après la fenêtre de quota RingCentral.
+  const retries = useRef(0)
+  const upstreamStatus =
+    query.error?.response?.data?.upstream?.status ?? query.error?.response?.status ?? null
+  const isRateLimited = upstreamStatus === 429
+
+  useEffect(() => {
+    if (!isRateLimited || retries.current >= MAX_RATE_LIMIT_RETRIES) return
+
+    retries.current += 1
+    const timer = setTimeout(() => query.refetch(), RATE_LIMIT_RETRY_DELAY)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query.error])
+
   const rows = records.map((record, index) => ({
     key: record.id ?? record.sessionId ?? index,
     date: formatDate(record.startTime),
@@ -61,6 +83,7 @@ export function useCallLogs(id) {
     isFetching: query.isFetching,
     isError: query.isError,
     error: query.error,
+    isRateLimited,
     refetch: query.refetch,
   }
 }

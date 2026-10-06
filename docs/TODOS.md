@@ -42,7 +42,8 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
 ### Backend
 - [x] `ReservationController` : `activeCount`, `store` sans durée/expiration,
       candidats via `available()` + exclusion réservations actives et issues
-      NON/BV propres ; `pendingCount` / `releasePending` supprimés.
+      NON/BV propres ; `pendingCount` supprimé, **`releasePending` réintroduit**
+      (§ Phase 9 — libération de toute la liste, pas d'un groupe).
 - [x] `OutcomeController` : délègue au service, validation
       `in:OUI,NON,BV,INJOINABLE`, note nullable, **`recall_at` requis pour
       `INJOINABLE`** (datetime dans le futur) ; `release` supprimé.
@@ -68,7 +69,8 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       champ retiré), plus de gate « en attente » ni de bouton libération,
       conflits affichés `reservation_status`.
 - [x] `ReservationModal` : compteurs **200 / 250 / 300** uniquement, champ
-      libre supprimé (côté FE `COUNT_OPTIONS` et BE `in:200,250,300`).
+      libre supprimé (côté FE `COUNT_OPTIONS` et BE `in:200,250,300`)
+      → **50 / 80 / 100 / 120** en Phase 9.
 - [x] `MesListes` : colonne « En attente » et boutons release supprimés.
 - [x] `GroupDetail` : rename inline, colonne « Expire le » remplacée par le badge
       de réservation, lignes `recall_at` masquées (+ compteur « rappel(s) masqué »),
@@ -297,6 +299,38 @@ existe**.
 - [ ] **6. Vérification live** : **par vos soins** (aucun appel réel de mon
       côté — test manuel de l'onglet et d'un enregistrement existant).
 
+#### ✅ Quota RingCentral (`429 CMN-301`) + doc `docs/righcenter.md`
+
+Le premier essai live de l'onglet est tombé sur
+`RingCentral 429 Too Many Requests : CMN-301 — Request rate exceeded`.
+
+- [x] **Jeton partagé entre requêtes** : `RingCentralService::authenticate()`
+      restaure / re-persiste le jeton dans le cache (`ringcentral:auth`,
+      TTL = durée résiduelle − 60 s) — avant, **chaque requête PHP** faisait
+      un échange `/oauth/token` en plus des appels API.
+- [x] **Listes cachées 60 s** : `getAllUsers`, `getDevices`,
+      `getPhoneNumbers` (`Cache::remember`) — ouvertures répétées de
+      l'onglet / des modales sans rejouer les mêmes requêtes.
+- [x] **Message 429 explicite** (`RingCentralController::failed()`) :
+      « Limite de requêtes RingCentral atteinte (429 CMN-301) : patientez
+      une minute, la page réessaie automatiquement. »
+- [x] **Réessai automatique côté client** : `useCallLogs` retente
+      (`refetch`) 2 fois à 30 s d'intervalle sur un 429, la carte
+      l'indique ; `Retry-After` non exposé par RingCentral → délai fixe.
+- [x] **Alignement sur `docs/righcenter.md`** :
+      * contenu d'enregistrement via `/account/~/recording/{id}/content`
+        (**1 appel**, conforme au §Step 3) avec repli `contentUri`
+        (`media.ringcentral.com`) en cas de 404 ;
+      * démarrage d'enregistrement : `…/parties/{partyId}/recordings`
+        (sans corps) **avec repli** `…/record` + `{"id": "recording-request"}`
+        (§Task 2) si l'URL renvoie 404/405 — un 400 « partie non connectée »
+        n'active pas le repli ;
+      * call log `view=Detailed` : la doc confirme que `recording.id` +
+        `recording.contentUri` y figurent, et **qu'aucun filtre `deviceId`**
+        n'existe côté RingCentral → le filtrage se fait côté serveur et se
+        désactive tout seul (`filtered_by_device: false`) quand les
+        journaux n'en portent pas.
+
 ### ⏳ À faire — passage au réel (stockage)
 
 - [ ] **Compte** : persister `account_id` + infos société.
@@ -491,6 +525,94 @@ nul, `rappels` = 6 lignes, réservations `PENDING` 22 / `BV_VOICEMAIL` 6 /
       correspondance ancien → nouveau).
 - [x] ~~Appliquer `php artisan migrate` sur MySQL `rbqbot`~~ → fait (aucun
       `migrate:fresh`, backup avant + reprise vérifiée, cf. ci-dessus).
+
+## Phase 9 — Corrections & TODOs Admin/Commercial (2026-10-06) ✅
+
+Lot de bugs + TODOs relevés sur l'app (badges, « Sans téléphone », numéro à
+saisir, libération de liste, paliers, fiche client, stats d'entreprise).
+
+### 🐛 Bugs d'interface
+
+- [x] **Refetch des badges statistiques** : invalidation de `prospect-kpis`
+      (avec `admin-clients-history`, `reservation-group(s)`,
+      `active-reservations-count`, `comercialDetail`, `dashboard-stats`) au
+      blacklist / déblocage (`useClientsHistory.js`, `useClientDetail.js`) et
+      à **chaque issue d'appel** (`useOutcomes.js`) — les compteurs ne sont
+      plus en retard après une mutation.
+- [x] **« Répondant » remonté** : bandeau de la fiche client (sous le nom
+      d'entreprise) + bloc **Contact** en tête de l'onglet *Détails*.
+- [x] **Badges du détail client colorés** : téléphone, e-mail, représentant et
+      répondants rendus en **badges `info`** (`ClientDetailsTab.jsx`) ;
+      `E-mail` / `Téléphone` retirés des `DetailRow` d'*Identification* (plus
+      de doublon).
+- [x] **Bouton « Actualiser »** (onglet *Appels*) : vérifié — appelle
+      `query.refetch()` sans condition ; c'est le seul « Actualiser » de
+      l'application. Aucun correctif nécessaire.
+
+### 📱 Statut « Sans téléphone »
+
+- [x] **Backend** : `Client::STATUS_SANS_TELEPHONE` (**dérivé**, jamais
+      stocké) + scopes `withoutPhone()` / `withPhone()` ; valeur acceptée par
+      `scopeFilterByStatuses()` ; **8e badge** `by_display_status`
+      (`ProspectOverviewController`, `CommercialAdminController`) via les
+      helpers partagés `Client::applyDisplayStatusFilters()` /
+      `Client::displayStatusCounts()`.
+- [x] La **liste commerciale** (`scopeProspectList()` → `GET /clients` **et**
+      le lot réservé) exclut les prospects sans numéro ; `mine()` et la liste
+      admin restent inchangés.
+- [x] Un payload n8n **sans `phone` (ou vide) n'efface plus** un numéro déjà
+      saisi (`Client::upsertFromScraperPayload()`).
+- [x] **Frontend** : 8ᵉ pill **« Sans téléphone »** (`rose-600`) dans
+      `ProspectKpis` + `CLIENT_STATUS_KEYS` (dimension `status` côté serveur).
+
+### 🔢 Paliers & libération de liste
+
+- [x] Paliers **50 / 80 / 100 / 120** (`in:50,80,100,120` BE,
+      `COUNT_OPTIONS` FE) — remplace 200 / 250 / 300.
+- [x] **« Libérer la liste »** : `POST reservations/release-pending` —
+      toutes les réservations encore `PENDING` du connecté redeviennent
+      `AVAILABLE` (client remis en `AVAILABLE` + `returned_at` vidé, rappels
+      supprimés, réservation supprimée → resync de `current_reservation_id`,
+      note `RETURNED_TO_AVAILABLE`) ; les réservations **déjà traitées** et
+      celles des autres employés sont conservées. Réponse
+      `{released, pending, can_reserve}`.
+- [x] **Frontend** : la modale « Réserver des prospects » s'ouvre **aussi**
+      quand la liste est incomplète (le bouton « Réserver » n'est plus
+      bloquant côté page) et y propose **« Libérer la liste »** — le
+      `409 unfinished_treatment` n'est plus une impasse.
+
+### 🛠 Onglets Admin / Commercial
+
+- [x] **Filtre** : « Sans téléphone » rejoint *Disponible* / *Blacklist* dans
+      la dimension `status` (sélection unique, union `OR` avec
+      `reservation_status`) — les 8 badges sont **LE filtre de statut**.
+- [x] **Bouton admin de saisie du numéro** : `PATCH
+      commercials/clients/{id}/phone` (`CommercialAdminController::updatePhone`,
+      `Client::cleanPhone()` rendue publique ; champ **vide = numéro retiré**)
+      + modale partagée `pages/shared/components/PhoneEditModal` branchée sur
+      la Grande liste (tableau **et** carte, icône `SquarePen`) et sur la fiche
+      client (bouton + pastille « Sans téléphone » dans le bandeau).
+- [x] **Stats d'entreprise** : `GET entreprises/{id}/stats`
+      (`EnterpriseController::stats()` — analytics agrégés, tableau des
+      employés par **requêtes groupées** (jamais une requête par employé),
+      historique commun paginé avec les 8 badges) + page **`/entreprises/:id`**
+      (`pages/shared/entrepriseDetail`, `StatCards` + onglets
+      *Détails entreprise / Employés / Historique*, réutilise les composants
+      `comercialDetail`) + entrée depuis la liste des entreprises (nom
+      cliquable et « Voir »).
+
+### ✅ Vérifications
+
+- [x] `docs/RULES.md` : §2 (statut dérivé), §7 (paliers, libération,
+      exclusion de la liste commerciale), §9 (8 badges, couleur `rose-600`,
+      fiche Contact, page entreprise), §10 (3 nouvelles routes).
+- [x] Tests backend : **240 passed / 2 failed** — les 2 échecs sont les
+      **préexistants** (recherche par catégorie JSON sur SQLite, baseline
+      68/2). Nouveaux : `ClientWithoutPhoneTest` (6),
+      `test_release_pending_frees_untreated_clients_and_keeps_treated_ones`,
+      paliers dans `ReservationWorkflowApiTest`, 8 badges dans
+      `CurrentReservationStatusBadgesTest`.
+- [x] `npm run build` (`vite build`) **vert** ✅.
 
 ## Points ouverts
 

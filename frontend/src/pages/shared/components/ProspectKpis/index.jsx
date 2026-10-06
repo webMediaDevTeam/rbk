@@ -1,4 +1,4 @@
-import { Ban, CircleCheck, PhoneCall, ThumbsDown, ThumbsUp, Users, Voicemail } from 'lucide-react'
+import { Ban, CircleCheck, PhoneCall, PhoneOff, ThumbsDown, ThumbsUp, Users, Voicemail } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useProspectKpis } from './useProspectKpis.js'
 
@@ -10,7 +10,8 @@ const fmt = formatCount
  *
  * **Ordre imposé, identique sur les listes** (Grande liste — panel
  * admin, À rappeler, BV, détail d'un employé) :
- * `Tous` → `Disponible` → `Oui` → `Non` → `BV` → `À rappeler` → `Blacklist`.
+ * `Tous` → `Disponible` → `Oui` → `Non` → `BV` → `À rappeler` → `Blacklist`
+ * → `Sans téléphone`.
  *
  * Chaque badge compte une **valeur affichée** (`by_display_status` de
  * `GET clients/overview`), produite par le scope qui pilote le filtre :
@@ -30,7 +31,7 @@ const fmt = formatCount
  *
  * Couleur pleine à la sélection, sans bordure : chaque badge garde **sa**
  * couleur de fond, texte et icône passés en contraste (`activeFg`) — une
- * teinte distincte par badge pour rester lisible à7 pastilles.
+ * teinte distincte par badge pour rester lisible à 8 pastilles.
  * Tous les compteurs sont affichés, même à 0.
  */
 const STATUS_PILLS = [
@@ -88,13 +89,25 @@ const STATUS_PILLS = [
     activeFg: 'text-[var(--status-badge-foreground)]',
     title: 'Clients en liste noire (badge noir en clair, gris en sombre) — clique pour filtrer',
   },
+  {
+    // Seau **dérivé** (`phone` vide) : recoupe les autres (un prospect sans
+    // numéro est aussi `AVAILABLE` ou blacklisté) — sélection unique dans
+    // l'UI, donc le compteur = lignes rendues après clic reste exact.
+    key: 'SANS_TELEPHONE',
+    label: 'Sans téléphone',
+    icon: PhoneOff,
+    iconClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    activeClass: 'border border-transparent bg-rose-600',
+    activeFg: 'text-white',
+    title: 'Prospects sans numéro de téléphone (statut dérivé) — clique pour filtrer',
+  },
 ]
 
 /** Badges servis par le paramètre `status` (les autres : `reservation_status`). */
-export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED']
+export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED', 'SANS_TELEPHONE']
 
 /**
- * Barre « Tous + 6 statuts affichés ».
+ * Barre « Tous + 7 statuts affichés » (8 badges au total, §9).
  *
  * @param {string[]} statusFilters        valeurs affichées sélectionnées —
  *                                        **une seule** en sélection unique
@@ -123,7 +136,7 @@ export default function ProspectKpis({ statusFilters = [], onStatusFilterChange,
   if (isLoading || !kpis) {
     return (
       <div className="flex flex-wrap gap-2" aria-hidden="true">
-        {Array.from({ length: 7 }).map((_, i) => (
+        {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="h-8 w-40 animate-pulse rounded-full border border-border/60 bg-card" />
         ))}
       </div>

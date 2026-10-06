@@ -16,6 +16,7 @@ Route::middleware(['auth:sanctum', CheckRole::class . ':ADMIN,SUPER_ADMIN'])->gr
     // Aliases
     Route::get('entreprises', [EnterpriseController::class, 'index']);
     Route::post('entreprises', [EnterpriseController::class, 'store']);
+    Route::get('entreprises/{id}/stats', [EnterpriseController::class, 'stats']);
     Route::get('entreprises/{id}', [EnterpriseController::class, 'show']);
     Route::put('entreprises/{id}', [EnterpriseController::class, 'update']);
     Route::delete('entreprises/{id}', [EnterpriseController::class, 'destroy']);

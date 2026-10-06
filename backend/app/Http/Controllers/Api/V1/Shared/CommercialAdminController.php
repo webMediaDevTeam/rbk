@@ -82,7 +82,7 @@ class CommercialAdminController extends Controller
 
         $clientsPage = $historyQuery->paginate($perPage, ['*'], 'page', $page);
 
-        // Compteurs des 7 badges : périmètre employé, calculés par les scopes
+        // Compteurs des 8 badges : périmètre employé, calculés par les scopes
         // qui pilotent les filtres (compteur du badge = lignes après clic).
         // **Même forme que `data` de `GET clients/overview`**
         // (`{prospects, by_display_status}`) : la page les passe tels quels à
@@ -158,7 +158,7 @@ class CommercialAdminController extends Controller
             ] : null,
             'historique' => [
                 'clients' => $historique,
-                // Compteurs des 7 badges de statut, sur le périmètre de cet
+                // Compteurs des 8 badges de statut, sur le périmètre de cet
                 // employé (alimente `<ProspectKpis>` de l'onglet Historique).
                 'badges' => $badges,
                 'pagination' => [
@@ -305,56 +305,24 @@ class CommercialAdminController extends Controller
      */
     private function applyStatusFilters(Builder $query, Request $request): Builder
     {
-        if ($request->filled('status') && $request->filled('reservation_status')) {
-            $clientStatuses = $request->input('status');
-            $reservationStatuses = $request->input('reservation_status');
-
-            return $query->where(function (Builder $q) use ($clientStatuses, $reservationStatuses) {
-                $q->where(fn (Builder $inner) => $inner->filterByStatuses($clientStatuses))
-                    ->orWhere(fn (Builder $inner) => $inner->filterByReservationStatuses($reservationStatuses));
-            });
-        }
-
-        if ($request->filled('status')) {
-            return $query->filterByStatuses($request->input('status'));
-        }
-
-        if ($request->filled('reservation_status')) {
-            return $query->filterByReservationStatuses($request->input('reservation_status'));
-        }
-
-        return $query;
+        return Client::applyDisplayStatusFilters(
+            $query,
+            $request->input('status'),
+            $request->input('reservation_status'),
+        );
     }
 
     /**
-     * Compteurs des **7 badges** pour un périmètre donné (RULES §9) :
-     * `$base` reconstruit une requête **fraîche** (même base, sans filtre de
-     * statut) et chaque compteur est produit **par le scope qui pilote le
-     * filtre** — le chiffre affiché vaut donc le nombre de lignes rendues
-     * après clic sur ce badge.
+     * Compteurs des **8 badges** pour un périmètre donné — délégation à
+     * `Client::displayStatusCounts()` (partagé avec le détail d'une
+     * entreprise).
      *
      * @param  callable(): Builder  $base
      * @return array<string, int>
      */
     private function displayStatusCounts(callable $base): array
     {
-        $counts = [];
-
-        foreach ([Client::STATUS_AVAILABLE, Client::STATUS_BLACKLISTED] as $bucket) {
-            $counts[$bucket] = $base()->filterByStatuses($bucket)->count();
-        }
-
-        foreach ([
-            Reservation::STATUS_YES,
-            Reservation::STATUS_NO,
-            Reservation::STATUS_BV_VOICEMAIL,
-            Reservation::STATUS_CALL_BACK,
-            Reservation::STATUS_PENDING,
-        ] as $bucket) {
-            $counts[$bucket] = $base()->filterByReservationStatuses($bucket)->count();
-        }
-
-        return $counts;
+        return Client::displayStatusCounts($base);
     }
 
     /**
@@ -426,6 +394,43 @@ class CommercialAdminController extends Controller
                             'last_name' => $n->sender->last_name,
                         ] : null,
                     ]),
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Ajout / modification du numéro de téléphone d'un client — accès
+     * Admin / Super Admin (PATCH /commercials/clients/{id}/phone).
+     *
+     * Le statut « Sans téléphone » est **dérivé** de `phone` : renseigner un
+     * numéro fait donc sortir le client du seau dans le même élan (le badge
+     * et la liste sont invalidés côté client), une valeur vide le remet
+     * dedans. La saisie est normalisée par `Client::cleanPhone()` (même
+     * mise en forme que l'import n8n : `5143535820` → `514-353-5820`).
+     */
+    public function updatePhone(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'phone' => 'nullable|string|max:40',
+        ]);
+
+        $client = Client::findOrFail($id);
+        $phone = Client::cleanPhone($validated['phone'] ?? null);
+
+        $client->update(['phone' => $phone]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $phone === null ? 'Numéro retiré du client.' : 'Numéro de téléphone enregistré.',
+            'data' => [
+                'client' => [
+                    'id' => $client->id,
+                    'phone' => $client->phone,
+                    'display_status' => $client->displayStatus(),
+                    'is_blacklisted' => $client->is_blacklisted,
+                    'returned_at' => $client->returned_at,
+                    'municipality' => $client->municipality,
                 ],
             ],
         ]);
