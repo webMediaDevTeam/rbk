@@ -7,6 +7,7 @@ import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import Input from '@/components/ui/input.jsx'
 import Button from '@/components/ui/button.jsx'
+import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 
 function GroupNameEditor({ group, renameMutation }) {
   const [editing, setEditing] = useState(false)
@@ -246,7 +247,7 @@ export default function GroupDetailPage() {
                     <TableHead>Municipalité</TableHead>
                     <TableHead>État</TableHead>
                     <TableHead>Rappel</TableHead>
-                    <TableHead className="w-10" />
+                    <TableHead className="w-16" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -282,13 +283,18 @@ export default function GroupDetailPage() {
                         {r.recall_at ? `Retour le ${formatDate(r.recall_at)}` : '—'}
                       </TableCell>
                       <TableCell className="text-right">
-                        <button
-                          onClick={openProspectStopClick(r.client?.id)}
-                          className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                          aria-label="Voir détail"
-                        >
-                          <Eye className="h-4 w-4 text-muted-foreground" />
-                        </button>
+                        {/* Appel direct : `from` = numéro de l'employé
+                            (résolu par l'API), `to` = numéro du client. */}
+                        <div className="flex items-center justify-end gap-1">
+                          <CallButton phone={r.client?.phone} name={r.client?.name} />
+                          <button
+                            onClick={openProspectStopClick(r.client?.id)}
+                            className="p-1.5 rounded-lg hover:bg-muted transition-colors"
+                            aria-label="Voir détail"
+                          >
+                            <Eye className="h-4 w-4 text-muted-foreground" />
+                          </button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -333,9 +339,10 @@ export default function GroupDetailPage() {
                     )}
                   </div>
                   {/* État = une seule valeur, comme la colonne du tableau
-                      (docs/RULES.md §9). */}
+                      (docs/RULES.md §9) + appel direct du client. */}
                   <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-border">
                     {statusCell(r)}
+                    <CallButton phone={r.client?.phone} name={r.client?.name} />
                   </div>
                 </div>
               ))}

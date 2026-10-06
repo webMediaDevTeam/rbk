@@ -21,6 +21,8 @@ class Employee extends Model
         'phone',
         'image_dp',
         'additional_info',
+        'ringcentral_device_id',
+        'ringcentral_from_number',
     ];
 
     public function user(): BelongsTo

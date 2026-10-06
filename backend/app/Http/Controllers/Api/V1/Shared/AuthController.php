@@ -429,6 +429,9 @@ class AuthController extends Controller
                 'entreprise_id' => $user->employee->enterprise_id,
                 'entreprise_name' => $user->employee->enterprise?->name,
                 'image_dp' => $user->employee->image_dp,
+                // Source d'appel RingCentral de l'employé (fiche employé)
+                'ringcentral_device_id' => $user->employee->ringcentral_device_id,
+                'ringcentral_from_number' => $user->employee->ringcentral_from_number,
             ] : null,
             default => null,
         };

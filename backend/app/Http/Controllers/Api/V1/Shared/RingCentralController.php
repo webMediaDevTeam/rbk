@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
+use App\Models\Employee;
 use App\Models\User;
 use App\Services\RingCentralService;
 use Illuminate\Http\JsonResponse;
@@ -23,13 +24,16 @@ use Throwable;
  *     table `users`**, pour les seuls utilisateurs `COMERCIAL` ;
  *   - call logs (dé-doublonnés) puis sessions / événements / enregistrements.
  *
- * Endpoints (tous SUPER_ADMIN aujourd'hui) :
+ * Endpoints :
  *
- *   GET    /call-logs/account
- *   GET    /call-logs/devices
+ *   GET    /call-logs/account                               (SUPER_ADMIN)
+ *   GET    /call-logs/devices                               (ADMIN, SUPER_ADMIN)
+ *   POST   /call-logs/my-call                               (COMERCIAL —
+ *          appel sortant de l'employé, `from` résolu côté API)
  *   POST   /call-logs/call                                  (call-out)
  *   GET    /call-logs/calls/{sessionId}                     (statut)
  *   POST   /call-logs/calls/{sessionId}/parties/{partyId}/record
+ *          (COMERCIAL, ADMIN, SUPER_ADMIN — démarrage d'enregistrement)
  *   GET    /call-logs/calls/{sessionId}/parties/{partyId}/recordings
  *   DELETE /call-logs/calls/{sessionId}                     (raccroché)
  */
@@ -230,6 +234,98 @@ class RingCentralController extends Controller
                 'raw' => $this->ringCentral->hangUpSession($sessionId),
             ];
         });
+    }
+
+    /**
+     * 8. Appel sortant d'un **employé** (COMERCIAL) — bouton « Appeler » des
+     * pages Mes listes / Rappels / BV.
+     *
+     * La source n'est **jamais** envoyée par le client : `from` est résolu
+     * côté API dans la fiche de l'utilisateur connecté
+     * (`employees.ringcentral_from_number` + `ringcentral_device_id`),
+     * impossible donc d'emprunter le numéro d'un collègue. Seule la
+     * destination (`to`) est reçue du navigateur.
+     *
+     * `record` (booléen, **`true` par défaut**) démarre l'enregistrement de
+     * la session : l'essai est fait dès la réponse, mais la partie est
+     * souvent encore en « Setup » → `recorded: false` et le navigateur
+     * retente (`POST …/record`, ouvert au COMERCIAL) jusqu'à connexion.
+     *
+     * POST /call-logs/my-call   { to, record?: bool }
+     *
+     * @throws ValidationException  aucun numéro source configuré sur la fiche
+     */
+    public function callAsEmployee(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'to' => ['required', 'string', 'min:3', 'max:40'],
+            'record' => ['sometimes', 'boolean'],
+        ]);
+
+        $record = ! array_key_exists('record', $validated) || $validated['record'] === null
+            ? true
+            : (bool) $validated['record'];
+
+        $employee = Employee::query()->where('user_id', $request->user()->id)->first();
+        $from = (string) ($employee?->ringcentral_from_number ?? '');
+
+        if ($from === '') {
+            throw ValidationException::withMessages([
+                'to' => "Aucun numéro source configuré : demandez à un administrateur de choisir votre appareil / numéro (fiche employé) avant d'appeler.",
+            ]);
+        }
+
+        return $this->pass(function () use ($validated, $employee, $from, $record) {
+            $session = RingCentralService::unwrapSession($this->ringCentral->makeCallOut(
+                $validated['to'],
+                $from,
+                $employee->ringcentral_device_id,
+                null, // extension = celle de la session (la seule acceptée par RingCentral)
+            ));
+
+            $sessionId = RingCentralService::sessionIdFrom($session);
+            $partyId = RingCentralService::partyIdFrom($session);
+
+            return [
+                'session_id' => $sessionId,
+                'party_id' => $partyId,
+                'device_id' => $employee->ringcentral_device_id,
+                'from' => $from,
+                'to' => $validated['to'],
+                'record' => $record,
+                // Démarrage immédiat **best-effort** : `false` dès que la
+                // partie n'est pas encore connectée (cas le plus fréquent),
+                // le navigateur retente alors côté client.
+                'recorded' => $record && $this->startPartyRecording($sessionId, $partyId),
+                'raw' => $session,
+            ];
+        });
+    }
+
+    /**
+     * Démarre l'enregistrement d'une partie — **best-effort** : un échec
+     * (partie en « Setup », permission manquante, session déjà terminée…)
+     * ne doit jamais faire échouer l'appel, il est simplement signalé par
+     * `recorded: false` dans la réponse.
+     */
+    private function startPartyRecording(?string $sessionId, ?string $partyId): bool
+    {
+        if ($sessionId === null || $sessionId === '' || $partyId === null || $partyId === '') {
+            return false;
+        }
+
+        try {
+            $this->ringCentral->startRecording($sessionId, $partyId);
+
+            return true;
+        } catch (Throwable $e) {
+            Log::info('Enregistrement non démarré au moment de l\'appel : '.$e->getMessage(), [
+                'session_id' => $sessionId,
+                'party_id' => $partyId,
+            ]);
+
+            return false;
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

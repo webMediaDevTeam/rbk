@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Commercial\OutcomeController;
 use App\Http\Controllers\Api\V1\Commercial\ReminderController;
 use App\Http\Controllers\Api\V1\Commercial\ReservationController;
 use App\Http\Controllers\Api\V1\Commercial\ReservationGroupController;
+use App\Http\Controllers\Api\V1\Shared\RingCentralController;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
 
@@ -31,6 +32,11 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
 
     // Compteur header : réservations actives du commercial connecté
     Route::get('reservations/active-count', [ReservationController::class, 'activeCount']);
+
+    // Appel sortant de l'employé (bouton « Appeler » Mes listes / Rappels / BV) :
+    // `from` est résolu côté API dans `employees.ringcentral_from_number`,
+    // le navigateur n'envoie que la destination `to`.
+    Route::post('call-logs/my-call', [RingCentralController::class, 'callAsEmployee']);
 });
 
 // Renommage de liste : propriétaire (COMERCIAL) ou ADMIN / SUPER_ADMIN.

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { createUserApi } from '@/api/shared.api.js'
+import { createUserApi, listRingCentralDevicesApi } from '@/api/shared.api.js'
 import { listEntreprisesApi } from '@/api/admin.api.js'
 import { getApiErrorMessage } from '@/lib/api-errors.js'
+import { deviceNumber } from '@/utils/ringcentral.js'
 
 export function useCommercialCreateModal(props) {
   const { open, onClose, queryKey } = props
@@ -17,9 +18,23 @@ export function useCommercialCreateModal(props) {
 
   const enterprises = enterprisesData?.data?.entreprises ?? enterprisesData?.data?.utilisateurs ?? []
 
+  // Appareils RingCentral (libellé = numéro) — select « Appareil / numéro
+  // source » de la modale. `retry: false` : une panne de l'API ne doit pas
+  // réessayer en boucle, on affiche simplement « aucun appareil ».
+  const { data: devicesData, isLoading: devicesLoading, isError: devicesUnavailable } = useQuery({
+    queryKey: ['ringcentral-devices'],
+    queryFn: listRingCentralDevicesApi,
+    enabled: open,
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  })
+
+  const devices = devicesData?.data ?? []
+
   const [form, setForm] = useState({
     email: '', first_name: '', last_name: '', phone: '',
     enterprise_id: '', additional_info: '',
+    ringcentral_device_id: '', ringcentral_from_number: '',
   })
   const [error, setError] = useState(null)
 
@@ -29,6 +44,7 @@ export function useCommercialCreateModal(props) {
         email: '', first_name: '', last_name: '', phone: '',
         enterprise_id: '',
         additional_info: '',
+        ringcentral_device_id: '', ringcentral_from_number: '',
       })
       setError(null)
     }
@@ -57,6 +73,16 @@ export function useCommercialCreateModal(props) {
 
   const set = (key, val) => setForm((p) => ({ ...p, [key]: val }))
 
+  /** Choix d'un appareil → on enregistre aussi le numéro « from » affiché. */
+  const onDeviceChange = (deviceId) => {
+    const device = devices.find((d) => String(d.id) === String(deviceId))
+    setForm((p) => ({
+      ...p,
+      ringcentral_device_id: deviceId,
+      ringcentral_from_number: device ? deviceNumber(device) : '',
+    }))
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
     setError(null)
@@ -68,6 +94,11 @@ export function useCommercialCreateModal(props) {
       setError('Le prénom et le nom sont requis.')
       return
     }
+    // Numéro « from » : celui de l'appareil choisi (valeur fraîche de
+    // l'API), en secours celui déjà sélectionné dans le formulaire.
+    const selected = devices.find((d) => String(d.id) === String(form.ringcentral_device_id))
+    const fromNumber = deviceNumber(selected) || form.ringcentral_from_number || undefined
+
     const payload = {
       role: 'COMERCIAL',
       email: form.email,
@@ -76,9 +107,14 @@ export function useCommercialCreateModal(props) {
       phone: form.phone || undefined,
       enterprise_id: form.enterprise_id ? Number(form.enterprise_id) : undefined,
       additional_info: form.additional_info || undefined,
+      ringcentral_device_id: form.ringcentral_device_id || undefined,
+      ringcentral_from_number: form.ringcentral_device_id ? fromNumber : undefined,
     }
     mutation.mutate(payload)
   }
 
-  return { form, error, isPending: mutation.isPending, enterprises, set, handleSubmit }
+  return {
+    form, error, isPending: mutation.isPending, enterprises, set, handleSubmit,
+    devices, devicesLoading, devicesUnavailable, onDeviceChange,
+  }
 }

@@ -42,3 +42,11 @@ export function verifyProfilePasswordOtpApi(payload) {
 export function updateProfilePasswordApi(payload) {
   return api.put('/auth/profile/password', payload)
 }
+
+// RingCentral — appareils de l'account + numéros assignés (consultation
+// seule, ADMIN + SUPER_ADMIN) : sert au select « Appareil / numéro source »
+// des modales employé et à la console d'appel `/call-logs-test`.
+// Réponse : `{success, data: [{id, name, phoneLines, phoneNumbers, …}]}`.
+export function listRingCentralDevicesApi() {
+  return api.get('/call-logs/devices', { params: { per_page: 250 } })
+}

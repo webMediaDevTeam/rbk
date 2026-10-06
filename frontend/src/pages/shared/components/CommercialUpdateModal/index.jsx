@@ -2,10 +2,14 @@ import { AlertCircle, Loader2, X } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
 import Select from '@/components/ui/select.jsx'
+import { deviceLabel } from '@/utils/ringcentral.js'
 import { useCommercialUpdateModal } from './useCommercialUpdateModal.js'
 
 export default function CommercialUpdateModal({ open, onClose, user, queryKey }) {
-  const { form, error, isPending, enterprises, set, handleSubmit } = useCommercialUpdateModal({ open, onClose, user, queryKey })
+  const {
+    form, error, isPending, enterprises, set, handleSubmit,
+    devices, devicesLoading, devicesUnavailable, onDeviceChange,
+  } = useCommercialUpdateModal({ open, onClose, user, queryKey })
 
   if (!open || !user) return null
 
@@ -50,6 +54,30 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
                 ))}
               </Select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-1">Appareil / numéro source (RingCentral)</label>
+            <Select
+              value={form.ringcentral_device_id}
+              onChange={(e) => onDeviceChange(e.target.value)}
+              disabled={devicesLoading}
+            >
+              <option value="">
+                {devicesLoading
+                  ? 'Chargement des appareils…'
+                  : devices.length
+                    ? '— Aucun appareil / numéro —'
+                    : '— aucun appareil disponible —'}
+              </option>
+              {devices.map((d) => (
+                <option key={d.id} value={String(d.id)}>{deviceLabel(d)}</option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Numéro affiché dans la liste (pas le nom de l'appareil) — enregistré avec l'identifiant de l'appareil.
+              {devicesUnavailable && ' Appareils indisponibles pour le moment.'}
+            </p>
           </div>
 
           <div>

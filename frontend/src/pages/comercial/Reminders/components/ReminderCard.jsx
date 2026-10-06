@@ -1,15 +1,17 @@
 import { Eye, Clock } from 'lucide-react'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import Badge from '@/components/ui/badge.jsx'
 import { respondentsText, categoriesText } from '@/pages/comercial/ProspectList/components/prospectFormat'
 import { cn } from '@/lib/utils.js'
 
 /**
  * Carte (mobile) d'un rappel — même trame que `ProspectCard`, avec l'échéance.
- * **Aucune action directe** : seul l'œil « Voir » ouvre l'historique du client
- * (la page est consultative). Carte obsolète (`canView()` faux) : l'œil est
- * remplacé par la pastille « Obsolète ».
+ * Actions en haut à droite : le bouton « Appeler » (appel direct du client,
+ * source = numéro de l'employé) + l'œil « Voir » qui ouvre l'historique.
+ * Carte obsolète (`canView()` faux) : l'œil est remplacé par la pastille
+ * « Obsolète », l'appel reste proposé.
  */
 export default function ReminderCard({ reminder: r, num, onView, canView, formatRecallAt, formatRecallFull }) {
   const viewable = canView(r)
@@ -19,8 +21,9 @@ export default function ReminderCard({ reminder: r, num, onView, canView, format
       className="relative flex flex-col rounded-xl border border-border bg-card text-card-foreground p-5 shadow-sm transition-all hover:shadow-md cursor-pointer"
       onClick={() => viewable && onView(r)}
     >
-      {viewable ? (
-        <div className="absolute top-3 right-3">
+      <div className="absolute top-3 right-3 flex items-center gap-1">
+        <CallButton phone={r.client_phone} name={r.client_name} />
+        {viewable ? (
           <button
             onClick={(e) => { e.stopPropagation(); onView(r) }}
             className="p-1.5 rounded-lg hover:bg-muted transition-colors"
@@ -29,14 +32,12 @@ export default function ReminderCard({ reminder: r, num, onView, canView, format
           >
             <Eye className="h-4 w-4 text-muted-foreground" />
           </button>
-        </div>
-      ) : (
-        <div className="absolute top-3 right-3">
+        ) : (
           <Badge variant="outline" className="text-muted-foreground">
             Obsolète
           </Badge>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="flex items-center gap-3 mb-4">
         <UserAvatar user={{ name: r.client_name, email: r.client_email }} size="md" />

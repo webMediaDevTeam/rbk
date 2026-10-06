@@ -52,3 +52,20 @@ export function adminBlacklistClientApi(id, note) {
 export function adminUnblockClientApi(id) {
   return api.post(`/liste-noire/${id}/debloquer`)
 }
+
+// Appel sortant de l'employé (bouton « Appeler » : Mes listes, Rappels, BV).
+// La source (`from`) est résolue côté API dans `employees.ringcentral_from_number`,
+// le navigateur n'envoie que la destination. `record: true` → l'appel est
+// enregistré (démarrage immédiat, retenté par `startCallRecordingApi` tant
+// que la partie n'est pas connectée).
+export function callMyNumberApi(payload = {}) {
+  return api.post('/call-logs/my-call', payload)
+}
+
+// (Re)démarre l'enregistrement d'une partie de session — retenté par le
+// hook `useDirectCall` tant que la partie n'est pas encore connectée.
+export function startCallRecordingApi(sessionId, partyId) {
+  return api.post(
+    `/call-logs/calls/${encodeURIComponent(sessionId)}/parties/${encodeURIComponent(partyId)}/record`
+  )
+}

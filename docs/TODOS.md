@@ -202,6 +202,66 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       appel sortant, statut / enregistrement / raccroché), entrée de nav
       réactivée.
 
+### ✅ Source d'appel de l'employé (création / édition Admin-Super Admin)
+
+- [x] **1. Migration** : `employees.ringcentral_device_id` (appareil choisi)
+      + `employees.ringcentral_from_number` (numéro affiché, figé) — nullable
+      (`2026_10_06_000001_add_ringcentral_device_to_employees_table`).
+- [x] **2. Backend** : validation + persistance dans `UserController::store`
+      (branche COMERCIAL) et `update`, affichage
+      `profil.ringcentral_device_id` / `profil.ringcentral_from_number`.
+- [x] **3. Route** : `GET /call-logs/devices` ouverte à
+      `ADMIN,SUPER_ADMIN` (les autres routes RingCentral restent SUPER_ADMIN).
+- [x] **4. Frontend** : select « Appareil / numéro source » (libellé = **le
+      numéro**) dans `CommercialCreateModal` + `CommercialUpdateModal`,
+      payload `ringcentral_device_id` + `ringcentral_from_number`,
+      préremplissage à l'édition (libellés partagés :
+      `frontend/src/utils/ringcentral.js`).
+- [x] **5. Tests + vérification live** : `EmployeRingCentralDeviceTest`
+      (6 tests — création, mise à jour, retrait, validation, RBAC, sans
+      source) + parcours réel create/update/delete vérifié contre l'API et
+      la table `employees`.
+
+### ✅ Appel direct du client — bouton « Appeler » (COMERCIAL)
+
+Bouton « Appeler » sur les lignes / cartes des pages **Mes listes**
+(`/mes-listes/:id`), **Rappels** (`/reminders`) et **BV** (`/auto-rappels`,
+réutilise la page Rappels) : `to` = numéro du client, `from` = numéro de
+l'employé connecté.
+
+- [x] **1. Backend** : `POST /api/v1/call-logs/my-call`
+      (`RingCentralController::callAsEmployee`, route du groupe COMERCIAL de
+      `routes/api/commercial.php`) — le navigateur n'envoie que `to` ;
+      `from` (+ `device_id`) est **résolu côté API** dans
+      `employees.ringcentral_from_number` de l'utilisateur connecté →
+      impossible d'emprunter le numéro d'un collègue ; 422 explicite si la
+      fiche n'a pas de numéro source.
+- [x] **2. Profil** : `AuthController::getProfile()` expose aussi
+      `ringcentral_device_id` / `ringcentral_from_number`.
+- [x] **3. Frontend** : `callMyNumberApi()` (`api/commercial.api.js`) +
+      hook `useDirectCall()` (`hooks/use-direct-call.js`, toasts succès /
+      erreur) + composant partagé
+      `pages/shared/components/CallButton/index.jsx` branché dans
+      `GroupDetail.jsx` (tableau + cartes), `ReminderTable.jsx` et
+      `ReminderCard.jsx`.
+- [x] **4. Tests** : `CommercialEmployeeCallTest` (7 tests — appel avec le
+      propre numéro de l'employé, 422 sans source, `to` requis, 403 rôles,
+      401, 502) — 30 tests RingCentral verts au total.
+- [x] **5. Vérification live** (API de dev) : 422 sans source et 403
+      (SUPER_ADMIN sur `my-call`) confirmés ; deux call-out réels avec une
+      destination **non routable** (`+99999999999` → aucune communication
+      établie, sessions terminées/raccrochées) : RingCentral **accepte**
+      `from.phoneNumber` même s'il n'appartient pas à l'extension de session
+      (pas de `MSG-304` / `CMN-101`), mais la 1ʳᵉ jambe (le poste qui
+      décroche pour émettre) est toujours **l'extension de la session JWT**
+      (`217943024` / `+15146005994`). ⚠️ l'appel part donc de la ligne
+      authentifiée avec le numéro employé envoyé en source : pour que
+      l'appel parte vraiment de *sa* ligne, le numéro doit être rattaché à
+      cette extension (« forwarding number »), sinon il faudra un JWT par
+      employé (todo « Sync Users » ci-dessous). Le CLID présenté au
+      destinataire final n'a **pas** pu être vérifié (aucun appel
+      complété).
+
 ### ⏳ À faire — passage au réel (stockage)
 
 - [ ] **Compte** : persister `account_id` + infos société.
@@ -214,7 +274,10 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       (`GET /restapi/v1.0/account/~/extension/{extensionId}/call-log`).
 - [ ] **Suivi d'appel** : tables sessions / événements / enregistrements
       (`sessionId`, statuts, `partyId`, métadonnées d'enregistrement).
-- [ ] Étendre le contrôle d'appel aux `COMERCIAL` (aujourd'hui SUPER_ADMIN).
+- [ ] Étendre le contrôle d'appel aux `COMERCIAL` (aujourd'hui SUPER_ADMIN)
+      — **déjà fait pour l'appel sortant** : `POST /call-logs/my-call`
+      (avec son propre numéro source) ; reste le suivi, l'enregistrement et
+      le raccroché côté commercial.
 
 
 ## Phase 7 — Écarts API (audit du 2026-09-29) ⏳

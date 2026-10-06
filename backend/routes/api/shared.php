@@ -84,6 +84,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('call-logs/by-phone/{phone}', [CallLogController::class, 'callsToNumber']);
 });
 
+// ── Appareils RingCentral (libellé = numéro) — ADMIN + SUPER_ADMIN ──────
+// Consultation seule : nécessaire au select « Appareil / numéro source »
+// des modales employé (création / édition), ouvertes à l'ADMIN comme au
+// SUPER_ADMIN. Le reste du contrôle d'appel reste réservé SUPER_ADMIN.
+Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])
+    ->get('call-logs/devices', [RingCentralController::class, 'devices']);
+
 // ── RingCentral — contrôle d'appel (PHASE DE TEST, Super Admin) ────────
 // Pass-through vers RingCentral, **aucune écriture en base** pour l'instant :
 // la synchronisation (account_id, colonnes `ringcentral_*` de `users` pour
@@ -91,13 +98,18 @@ Route::middleware('auth:sanctum')->group(function () {
 // docs/TODOS.md « Phase 6bis ». Visible depuis `/call-logs-test`.
 Route::middleware(['auth:sanctum', CheckRole::class.':SUPER_ADMIN'])->group(function () {
     Route::get('call-logs/account', [RingCentralController::class, 'account']);
-    Route::get('call-logs/devices', [RingCentralController::class, 'devices']);
     Route::post('call-logs/call', [RingCentralController::class, 'makeCall']);
     Route::get('call-logs/calls/{sessionId}', [RingCentralController::class, 'callStatus']);
-    Route::post('call-logs/calls/{sessionId}/parties/{partyId}/record', [RingCentralController::class, 'record']);
     Route::get('call-logs/calls/{sessionId}/parties/{partyId}/recordings', [RingCentralController::class, 'recordings']);
     Route::delete('call-logs/calls/{sessionId}', [RingCentralController::class, 'hangUp']);
 });
+
+// ── Démarrage d'enregistrement d'une partie — SUPER_ADMIN + COMERCIAL ────
+// Le COMERCIAL en a besoin pour **ses propres appels** (`POST /call-logs/my-call`
+// envoyé avec `record: true`) : la réponse part avant que la partie soit
+// connectée, le navigateur retente donc `…/record` jusqu'au succès.
+Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL,ADMIN,SUPER_ADMIN'])
+    ->post('call-logs/calls/{sessionId}/parties/{partyId}/record', [RingCentralController::class, 'record']);
 
 // ── User Management ─────────────────────────────────────────
 // ADMIN       → manages COMERCIAL

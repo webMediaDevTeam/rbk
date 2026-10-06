@@ -135,6 +135,9 @@ class UserController extends Controller
                         ? "{$base}/storage/avatars/{$user->employee->image_dp}"
                         : null,
                     'info_supp'       => $user->employee->additional_info,
+                    // Source d'appel RingCentral choisie à la création/édition.
+                    'ringcentral_device_id'   => $user->employee->ringcentral_device_id,
+                    'ringcentral_from_number' => $user->employee->ringcentral_from_number,
                     'entreprise'      => $user->employee->enterprise ? [
                         'name'       => $user->employee->enterprise->name,
                         'email'      => $user->employee->enterprise->email,
@@ -257,11 +260,14 @@ class UserController extends Controller
 
         $profile = match ($base['role']) {
             'COMERCIAL' => $request->validate([
-                'first_name'      => 'required|string|max:255',
-                'last_name'       => 'required|string|max:255',
-                'phone'           => 'nullable|string|max:255',
-                'additional_info' => 'nullable|string',
-                'enterprise_id'   => 'nullable|uuid|exists:enterprises,id',
+                'first_name'           => 'required|string|max:255',
+                'last_name'            => 'required|string|max:255',
+                'phone'                => 'nullable|string|max:255',
+                'additional_info'      => 'nullable|string',
+                'enterprise_id'        => 'nullable|uuid|exists:enterprises,id',
+                // Source d'appel RingCentral choisie dans le select d'appareils.
+                'ringcentral_device_id'   => 'nullable|string|max:64',
+                'ringcentral_from_number' => 'nullable|string|max:32',
             ]),
             'ADMIN' => $request->validate([
                 'first_name' => 'nullable|string|max:255',
@@ -299,6 +305,8 @@ class UserController extends Controller
                     'last_name'       => $profile['last_name'],
                     'phone'           => $profile['phone']           ?? null,
                     'additional_info' => $profile['additional_info'] ?? null,
+                    'ringcentral_device_id'   => $profile['ringcentral_device_id']   ?? null,
+                    'ringcentral_from_number' => $profile['ringcentral_from_number'] ?? null,
                 ]);
             }
 
@@ -367,12 +375,18 @@ class UserController extends Controller
             'phone'           => 'sometimes|nullable|string|max:255',
             'additional_info' => 'sometimes|nullable|string',
             'enterprise_id'   => 'sometimes|nullable|uuid|exists:enterprises,id',
+            // Source d'appel RingCentral de l'employé (select d'appareils).
+            'ringcentral_device_id'   => 'sometimes|nullable|string|max:64',
+            'ringcentral_from_number' => 'sometimes|nullable|string|max:32',
         ]);
 
         if (!empty($data['mot_de_passe'])) {
             $data['password_hash'] = Hash::make($data['mot_de_passe']);
         }
         unset($data['mot_de_passe']);
+
+        // Portés par `employees` (1:1 COMERCIAL), jamais par `users`.
+        unset($data['ringcentral_device_id'], $data['ringcentral_from_number']);
 
         if (isset($data['role']) && $data['role'] !== $target->role) {
             $actorRank  = self::ROLE_HIERARCHY[$request->user()->role]  ?? 99;
@@ -387,6 +401,7 @@ class UserController extends Controller
         if ($target->role === 'COMERCIAL' && $target->employee) {
             $target->employee->update($request->only([
                 'first_name', 'last_name', 'phone', 'additional_info', 'enterprise_id',
+                'ringcentral_device_id', 'ringcentral_from_number',
             ]));
         }
 

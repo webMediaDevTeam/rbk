@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { api } from '@/api/client.js'
 import { cn } from '@/lib/utils'
+import { deviceLabel } from '@/utils/ringcentral.js'
 import Button from '@/components/ui/button.jsx'
 import Badge from '@/components/ui/badge.jsx'
 import Input from '@/components/ui/input.jsx'
@@ -178,20 +179,6 @@ export default function CallLogTestPage() {
   }
 
   // ── 5. Appareils + appel sortant ───────────────────────────────────────
-  /**
-   * Numéros d'un appareil : ses propres `phoneLines` (deskphone) puis ceux
-   * de son extension (`phoneNumbers`, renvoyés par `/call-logs/devices`) —
-   * les softphones n'ont aucune ligne.
-   */
-  const devicePhones = (d) =>
-    [...new Set([
-      ...(d?.phoneLines ?? []).map((l) => l?.phoneNumber).filter(Boolean),
-      ...(d?.phoneNumbers ?? []).filter(Boolean),
-    ])]
-
-  /** Libellé de l'option : **le numéro**, le nom de l'appareil en secours. */
-  const deviceLabel = (d) => devicePhones(d).join(' · ') || d?.name || d?.id
-
   const fetchDevices = async () => {
     clearError()
     setLoadingDevices(true)

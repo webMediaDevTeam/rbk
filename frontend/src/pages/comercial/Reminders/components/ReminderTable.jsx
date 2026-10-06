@@ -4,6 +4,7 @@ import Badge from '@/components/ui/badge.jsx'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
+import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import { respondentsText } from '@/pages/comercial/ProspectList/components/prospectFormat'
 import { cn } from '@/lib/utils.js'
 
@@ -12,11 +13,12 @@ import { cn } from '@/lib/utils.js'
  * largeurs en % (`table-fixed`, pas de défilement horizontal), textes
  * tronqués avec `title`, ligne cliquable = « Voir » l'historique du client.
  *
- * Colonne « Rappel » en plus (échéance), et **un seul contrôle en fin de
- * ligne : l'œil « Voir »** — aucune action directe (appel / terminer), la
- * page est consultative. Quand la ligne est **obsolète** (`canView()` faux :
- * rappel terminé, statut changé ou suivi plus récent), l'œil est remplacé
- * par la pastille « Obsolète ».
+ * Colonne « Rappel » en plus (échéance), et en fin de ligne : l'œil
+ * « Voir » (l'historique du client) **+ le bouton « Appeler »** (appel
+ * direct : source = numéro de l'employé, destination = numéro du client).
+ * Quand la ligne est **obsolète** (`canView()` faux : rappel terminé,
+ * statut changé ou suivi plus récent), l'œil est remplacé par la pastille
+ * « Obsolète » — le bouton « Appeler » reste proposé.
  */
 export default function ReminderTable({
   reminders,
@@ -111,8 +113,12 @@ export default function ReminderTable({
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    {viewable ? (
-                      <div className="flex justify-end">
+                    {/* Appel direct du client (source = numéro de l'employé,
+                        résolue par l'API) + œil « Voir » / pastille
+                        « Obsolète ». */}
+                    <div className="flex items-center justify-end gap-1">
+                      <CallButton phone={r.client_phone} name={r.client_name} />
+                      {viewable ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); onView(r) }}
                           className="p-1.5 rounded-lg hover:bg-muted transition-colors"
@@ -121,14 +127,12 @@ export default function ReminderTable({
                         >
                           <Eye className="h-4 w-4 text-muted-foreground" />
                         </button>
-                      </div>
-                    ) : (
-                      <div className="flex justify-end">
+                      ) : (
                         <Badge variant="outline" className="text-muted-foreground" title="Rappel déjà traité : nouveau suivi, statut changé ou rappel terminé.">
                           Obsolète
                         </Badge>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               )
