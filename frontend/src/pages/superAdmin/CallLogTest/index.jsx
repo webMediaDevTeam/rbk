@@ -178,7 +178,19 @@ export default function CallLogTestPage() {
   }
 
   // ── 5. Appareils + appel sortant ───────────────────────────────────────
-  const devicePhone = (d) => d?.phoneLines?.[0]?.phoneNumber ?? ''
+  /**
+   * Numéros d'un appareil : ses propres `phoneLines` (deskphone) puis ceux
+   * de son extension (`phoneNumbers`, renvoyés par `/call-logs/devices`) —
+   * les softphones n'ont aucune ligne.
+   */
+  const devicePhones = (d) =>
+    [...new Set([
+      ...(d?.phoneLines ?? []).map((l) => l?.phoneNumber).filter(Boolean),
+      ...(d?.phoneNumbers ?? []).filter(Boolean),
+    ])]
+
+  /** Libellé de l'option : **le numéro**, le nom de l'appareil en secours. */
+  const deviceLabel = (d) => devicePhones(d).join(' · ') || d?.name || d?.id
 
   const fetchDevices = async () => {
     clearError()
@@ -186,6 +198,7 @@ export default function CallLogTestPage() {
     try {
       const res = await api.get('/call-logs/devices')
       setDevices(res.data || [])
+      console.log('Appareils RingCentral :', res.data)
     } catch (err) {
       fail(err)
     } finally {
@@ -395,11 +408,10 @@ export default function CallLogTestPage() {
                   </button>
                 </div>
                 <Select id="rc-device" value={deviceId} onChange={(e) => setDeviceId(e.target.value)} disabled={loadingDevices}>
-                  <option value="">{devices.length ? '— Choisir un appareil —' : '— appareils non chargés —'}</option>
+                  <option value="">{devices.length ? '— Choisir un numéro —' : '— appareils non chargés —'}</option>
                   {devices.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.name || d.id}
-                      {devicePhone(d) ? ` (${devicePhone(d)})` : ''}
+                      {deviceLabel(d)}
                     </option>
                   ))}
                 </Select>

@@ -147,6 +147,29 @@ class RingCentralService
     }
 
     /**
+     * Numéros de téléphone assignés dans l'account — **libellé de la
+     * sélection « Appareil source »** : les softphones ont `phoneLines: []`,
+     * le numéro rattaché au poste vit donc ici, rattaché à son extension
+     * (`extension.id`, la même que celle d'un appareil).
+     *
+     * GET /restapi/v1.0/account/~/phone-number
+     *
+     * @return array  records : `{phoneNumber, extension: {id, extensionNumber}, primary, …}`
+     *
+     * @throws Exception
+     */
+    public function getPhoneNumbers(int $perPage = 500): array
+    {
+        $this->authenticate();
+
+        $data = $this->decode($this->platform->get('/account/~/phone-number', [
+            'perPage' => $perPage,
+        ]));
+
+        return $data['records'] ?? [];
+    }
+
+    /**
      * Extension liée à la session d'authentification (`~`) — **c'est elle
      * qui doit figurer dans `from.extensionId`** d'un call-out :
      *

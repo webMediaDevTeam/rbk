@@ -92,16 +92,43 @@ class RingCentralApiTest extends TestCase
             ->assertJsonStructure(['success', 'error']);
     }
 
-    public function test_devices_returns_records(): void
+    public function test_devices_returns_records_with_their_phone_numbers(): void
     {
         Sanctum::actingAs($this->superAdmin);
 
         $mock = $this->mockService();
+        // Les softphones ont `phoneLines: []` : le numéro vient de
+        // `/account/~/phone-number`, rattaché par `extension.id`.
         $mock->shouldReceive('getDevices')->once()->with(50)->andReturn([
-            $this->obj(['id' => 'dev-1', 'name' => 'Bureau']),
+            $this->obj(['id' => 'dev-1', 'name' => 'Bureau', 'extension' => ['id' => 'ext-101']]),
+            $this->obj(['id' => 'dev-2', 'name' => 'Softphone orphelin']),
+        ]);
+        $mock->shouldReceive('getPhoneNumbers')->once()->with(500)->andReturn([
+            ['phoneNumber' => '+15145550100', 'extension' => ['id' => 'ext-101']],
         ]);
 
         $this->getJson('/api/v1/call-logs/devices?per_page=50')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.0.id', 'dev-1')
+            ->assertJsonPath('data.0.phoneNumbers.0', '+15145550100')
+            ->assertJsonPath('data.0.phoneNumber', '+15145550100')
+            // Aucun numéro rattaché → libellé de secours = nom de l'appareil.
+            ->assertJsonPath('data.1.phoneNumbers', [])
+            ->assertJsonPath('data.1.phoneNumber', null);
+    }
+
+    public function test_devices_survive_an_unreachable_phone_number_api(): void
+    {
+        Sanctum::actingAs($this->superAdmin);
+
+        $mock = $this->mockService();
+        $mock->shouldReceive('getDevices')->once()->andReturn([
+            ['id' => 'dev-1', 'name' => 'Bureau', 'extension' => ['id' => 'ext-101']],
+        ]);
+        $mock->shouldReceive('getPhoneNumbers')->once()->andThrow(new Exception('RingCentral non configuré'));
+
+        $this->getJson('/api/v1/call-logs/devices')
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.0.id', 'dev-1');

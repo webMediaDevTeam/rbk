@@ -180,10 +180,14 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
 - [x] Vue de test Super Admin : `/call-logs-test` dans la navigation Super Admin.
 - [x] **Contrôle d'appel (pass-through, SUPER_ADMIN, sans écriture en base)**
       — `RingCentralController` + méthodes `RingCentralService::getAccount`,
-      `getDevices`, `makeCallOut`, `getCallSession`, `startRecording`,
-      `getRecordings`, `hangUpSession` :
+      `getDevices`, `getPhoneNumbers`, `makeCallOut`, `getCallSession`,
+      `startRecording`, `getRecordings`, `hangUpSession` :
       * `GET /call-logs/account` — compte / entreprise (`account_id`) ;
-      * `GET /call-logs/devices` — appareils (source du « from ») ;
+      * `GET /call-logs/devices` — appareils (source du « from »), enrichis
+        de `phoneNumbers` / `phoneNumber` (`GET /account/~/phone-number`
+        rattaché par `extension.id` — les softphones ont `phoneLines: []`),
+        pour afficher **le numéro** (et non le nom) dans la sélection
+        « Appareil source » ;
       * `POST /call-logs/call` — `to` + (`device_id` | `from` | `user_id`),
         retourne `session_id` / `party_id` ; `user_id` résout l'extension
         (correspondance d'e-mail) puis son appareil ;
@@ -191,8 +195,9 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       * `POST /call-logs/calls/{sessionId}/parties/{partyId}/record` ;
       * `GET /call-logs/calls/{sessionId}/parties/{partyId}/recordings` ;
       * `DELETE /call-logs/calls/{sessionId}` — raccroché.
-- [x] Tests : `RingCentralApiTest` (15 tests validés — RBAC 401/403,
-      validation 422, résolution `user_id`, 502 sur panne du service).
+- [x] Tests : `RingCentralApiTest` (17 tests validés — RBAC 401/403,
+      validation 422, résolution `user_id`, numéros des appareils, 502 sur
+      panne du service).
 - [x] Vue de test : sections 4 à 6 de `/call-logs-test` (compte, appareils +
       appel sortant, statut / enregistrement / raccroché), entrée de nav
       réactivée.

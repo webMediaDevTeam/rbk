@@ -46,13 +46,71 @@ class RingCentralController extends Controller
     }
 
     /**
-     * 2. Appareils disponibles (source d'un appel sortant).
+     * 2. Appareils disponibles (source d'un appel sortant), enrichis des
+     * **numéros de téléphone rattachés** à leur extension : les softphones
+     * renvoient `phoneLines: []`, c'est donc `/account/~/phone-number` qui
+     * fournit le libellé affiché dans la sélection (numéro, pas nom).
+     *
+     * Best-effort : si l'API des numéros est injoignable, les appareils
+     * sont renvoyés tels quels (la sélection retombe sur le nom).
      */
     public function devices(Request $request): JsonResponse
     {
         $perPage = max(1, min(250, (int) $request->query('per_page', 100)));
 
-        return $this->pass(fn () => $this->ringCentral->getDevices($perPage));
+        return $this->pass(fn () => $this->withPhoneNumbers($this->ringCentral->getDevices($perPage)));
+    }
+
+    /**
+     * Ajoute à chaque appareil `phoneNumbers` (`list<string>`, numéros de
+     * son extension + ses propres `phoneLines`) et `phoneNumber` (le
+     * premier) — sans jamais échouer l'appareillage pour autant.
+     *
+     * @param  array  $devices  records RingCentral (tableaux **ou** objets)
+     * @return array
+     */
+    private function withPhoneNumbers(array $devices): array
+    {
+        try {
+            $byExtension = [];
+
+            foreach ($this->ringCentral->getPhoneNumbers(500) as $number) {
+                $extensionId = (string) (data_get($number, 'extension.id') ?? '');
+                $phoneNumber = (string) (data_get($number, 'phoneNumber') ?? '');
+
+                if ($extensionId !== '' && $phoneNumber !== '') {
+                    $byExtension[$extensionId][] = $phoneNumber;
+                }
+            }
+        } catch (Throwable $e) {
+            Log::warning('Numéros RingCentral injoignables (libellé des appareils réduit) : '.$e->getMessage());
+
+            return $devices;
+        }
+
+        foreach ($devices as $key => $device) {
+            $extensionId = (string) (data_get($device, 'extension.id') ?? '');
+
+            $numbers = array_values(array_unique(array_merge(
+                array_filter(array_map(
+                    fn ($line) => (string) (data_get($line, 'phoneNumber') ?? ''),
+                    (array) (data_get($device, 'phoneLines') ?? [])
+                )),
+                $byExtension[$extensionId] ?? [],
+            )));
+
+            if (is_array($device)) {
+                $device['phoneNumbers'] = $numbers;
+                $device['phoneNumber'] = $numbers[0] ?? null;
+            } else { // objet stdClass (records mockés / SDK)
+                $device->phoneNumbers = $numbers;
+                $device->phoneNumber = $numbers[0] ?? null;
+            }
+
+            $devices[$key] = $device;
+        }
+
+        return $devices;
     }
 
     /**
