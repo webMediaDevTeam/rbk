@@ -1,5 +1,4 @@
 import { useComercialDetailPage } from './useComercialDetail.js'
-import BreadcrumbNav from './components/BreadcrumbNav.jsx'
 import PageHeader from './components/PageHeader.jsx'
 import StatCards from './components/StatCards.jsx'
 import Tabs from './components/Tabs.jsx'
@@ -40,7 +39,6 @@ export default function ComercialDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <BreadcrumbNav name={name} />
       <PageHeader name={name} />
       <StatCards analytics={analytics} />
 

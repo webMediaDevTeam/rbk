@@ -1,4 +1,4 @@
-import { ChevronRight, Home, Loader2, BellOff } from 'lucide-react'
+import { Loader2, BellOff } from 'lucide-react'
 import { useRemindersPage } from './useRemindersPage.js'
 import ReminderTable from './components/ReminderTable.jsx'
 import ReminderCard from './components/ReminderCard.jsx'
@@ -38,7 +38,6 @@ export default function RemindersPage({
     rowsPerPage, handleRowsPerPageChange,
     totalPages,
     canView,
-    handleAccueilClick,
     handleViewHistory,
     formatRecallAt,
     formatRecallFull,
@@ -46,14 +45,6 @@ export default function RemindersPage({
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={handleAccueilClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
-          <Home className="h-3.5 w-3.5" /> Accueil
-        </a>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">{title}</span>
-      </nav>
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>

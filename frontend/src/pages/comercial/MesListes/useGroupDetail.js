@@ -53,10 +53,6 @@ export function useGroupDetail() {
     },
   })
 
-  const handleMesListesClick = (e) => {
-    e.preventDefault()
-    navigate('/mes-listes')
-  }
   const goBackClick = () => navigate(-1)
   const openProspectClick = (clientId) => () => navigate(`/prospects/${clientId}`)
   const openProspectStopClick = (clientId) => (e) => {
@@ -93,7 +89,6 @@ export function useGroupDetail() {
     rappelCount,
     isDesktop,
     renameMutation,
-    handleMesListesClick,
     goBackClick,
     openProspectClick,
     openProspectStopClick,

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Eye, Home } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import { useEntrepriseDetailPage } from './useEntrepriseDetail.js'
 import StatCards from '@/pages/shared/comercialDetail/components/StatCards.jsx'
 import Tabs from '@/pages/shared/comercialDetail/components/Tabs.jsx'
@@ -45,16 +45,6 @@ export default function EntrepriseDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link to="/entreprises" className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
-          <Home className="h-3.5 w-3.5" /> Accueil
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link to="/entreprises" className="hover:text-foreground transition-colors">Entreprises</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">{name}</span>
-      </nav>
-
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{name}</h1>

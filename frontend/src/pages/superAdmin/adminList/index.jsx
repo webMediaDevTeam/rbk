@@ -1,4 +1,4 @@
-import { ChevronRight, Home, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import { useAdminListPage } from './useAdminList.js'
 import AdminTable from './components/AdminTable.jsx'
@@ -36,19 +36,10 @@ export default function AdminListPage() {
     handleCloseEdit,
     handlePageChange,
     handleRowsPerPageChange,
-    handleHomeClick,
   } = useAdminListPage()
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={handleHomeClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
-          <Home className="h-3.5 w-3.5" /> Accueil
-        </a>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">Admins</span>
-      </nav>
-
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Liste des admins</h1>

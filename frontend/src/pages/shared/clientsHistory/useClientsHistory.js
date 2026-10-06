@@ -146,8 +146,6 @@ export function useClientsHistoryPage() {
     setCurrentPage(1)
   }
 
-  const handleHomeClick = (e) => e.preventDefault()
-
   return {
     isDesktop,
     isLoading,
@@ -171,7 +169,6 @@ export function useClientsHistoryPage() {
     sortOrder,
     handleSort,
     handleViewDetail,
-    handleHomeClick,
     blacklistId,
     toggleBlacklist,
     phoneClient,

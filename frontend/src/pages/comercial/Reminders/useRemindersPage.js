@@ -123,11 +123,6 @@ export function useRemindersPage(type = 'CALL_BACK') {
     setCurrentPage(1)
   }
 
-  const handleAccueilClick = (e) => {
-    e.preventDefault()
-    navigate('/prospects')
-  }
-
   // Voir l'historique du client : détail client ouvert sur l'onglet « Historique ».
   const handleViewHistory = (reminder) => {
     navigate(`/prospects/${reminder.client_id}?tab=history`)
@@ -152,7 +147,6 @@ export function useRemindersPage(type = 'CALL_BACK') {
     totalPages,
     // Lignes
     canView,
-    handleAccueilClick,
     handleViewHistory,
     formatRecallAt,
     formatRecallFull,

@@ -113,8 +113,6 @@ export function useAdminListPage() {
   const handleCloseAvatarModal = () => setAvatarTarget(null)
   const handleCloseCreate = () => setShowCreate(false)
   const handleCloseEdit = () => setEditTarget(null)
-  const handleHomeClick = (e) => e.preventDefault()
-
   return {
     isDesktop,
     search,
@@ -141,6 +139,5 @@ export function useAdminListPage() {
     handleCloseEdit,
     handlePageChange,
     handleRowsPerPageChange,
-    handleHomeClick,
   }
 }

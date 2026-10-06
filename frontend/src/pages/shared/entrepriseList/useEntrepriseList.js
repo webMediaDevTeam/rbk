@@ -117,8 +117,6 @@ export function useEntrepriseListPage() {
   const handleCloseCreate = () => setShowCreate(false)
   const handleCloseAvatar = () => setAvatarTarget(null)
   const handleCloseEdit = () => setEditTarget(null)
-  const handleHomeClick = (e) => e.preventDefault()
-
   return {
     isDesktop,
     isLoading,
@@ -149,6 +147,5 @@ export function useEntrepriseListPage() {
     editTarget,
     setEditTarget,
     handleCloseEdit,
-    handleHomeClick,
   }
 }

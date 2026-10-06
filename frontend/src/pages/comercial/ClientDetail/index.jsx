@@ -1,4 +1,4 @@
-import { ChevronRight, Copy, Home, ArrowLeft, Phone, Ban, Loader2, AlertCircle, SquarePen, X, Unlock } from 'lucide-react'
+import { Copy, ArrowLeft, Phone, Ban, Loader2, AlertCircle, SquarePen, X, Unlock } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs.jsx'
 import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
@@ -7,6 +7,7 @@ import ClientDetailsTab from './components/ClientDetailsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
 import PhoneEditModal from '@/pages/shared/components/PhoneEditModal/index.jsx'
+import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import { respondentsText } from '@/pages/comercial/ProspectList/components/prospectFormat'
 import { cn } from '@/lib/utils.js'
 import { useClientDetail } from './useClientDetail.js'
@@ -36,8 +37,6 @@ export default function ClientDetailPage() {
     blacklistMutation,
     blacklistConfirmDisabled,
     unblockMutation,
-    handleHomeClick,
-    handleProspectsClick,
     handleBack,
     handleCopyPhone,
     phoneOpen,
@@ -47,18 +46,6 @@ export default function ClientDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={handleHomeClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
-          <Home className="h-3.5 w-3.5" /> Accueil
-        </a>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <a href="#" onClick={handleProspectsClick} className="hover:text-foreground transition-colors">
-          Prospects
-        </a>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">Détail</span>
-      </nav>
-
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
       ) : !client ? (
@@ -151,12 +138,18 @@ export default function ClientDetailPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {/* Bouton masqué si le client n'est pas réservé par le connecté (F-xx). */}
+              {/* Appel direct (**même bouton que dans les tableaux**) : il
+                  disparaît **exactement** avec « Suite appel », car les deux
+                  sont rendus dans la même condition — client réservé par le
+                  connecté. CallButton ne rend rien sans numéro. */}
               {!isAdmin && hasReservation && (
-                <Button onClick={openAction}>
-                  <Phone className="h-4 w-4 mr-1" />
-                  Suite appel
-                </Button>
+                <>
+                  <CallButton phone={client.phone} name={client.name} />
+                  <Button onClick={openAction}>
+                    <Phone className="h-4 w-4 mr-1" />
+                    Suite appel
+                  </Button>
+                </>
               )}
             </div>
           </div>

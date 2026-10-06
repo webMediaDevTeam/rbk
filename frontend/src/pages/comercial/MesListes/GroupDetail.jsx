@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Home, ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff, Users } from 'lucide-react'
+import { ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff, Users } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
@@ -76,7 +76,6 @@ export default function GroupDetailPage() {
     rappelCount,
     isDesktop,
     renameMutation,
-    handleMesListesClick,
     goBackClick,
     openProspectClick,
     openProspectStopClick,
@@ -184,18 +183,6 @@ export default function GroupDetailPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <a href="#" onClick={handleMesListesClick} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
-          <Home className="h-3.5 w-3.5" /> Accueil
-        </a>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <a href="#" onClick={handleMesListesClick} className="hover:text-foreground transition-colors">
-          Mes listes
-        </a>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-foreground">Détail</span>
-      </nav>
-
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
       ) : !group ? (

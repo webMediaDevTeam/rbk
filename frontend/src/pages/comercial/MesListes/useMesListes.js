@@ -19,7 +19,6 @@ export function useMesListes() {
   const total = data?.data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage))
 
-  const handleAccueilClick = (e) => e.preventDefault()
   const openGroupClick = (id) => () => navigate(`/mes-listes/${id}`)
   const openGroupStopClick = (id) => (e) => {
     e.stopPropagation()
@@ -48,7 +47,6 @@ export function useMesListes() {
     totalPages,
     rowsPerPage,
     currentGroupId,
-    handleAccueilClick,
     openGroupClick,
     openGroupStopClick,
     handlePageChange,

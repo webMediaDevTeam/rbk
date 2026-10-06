@@ -99,16 +99,8 @@ export function useClientDetail() {
   const openPhoneEdit = () => setPhoneOpen(true)
   const closePhoneEdit = () => setPhoneOpen(false)
 
-  const handleHomeClick = (e) => {
-    e.preventDefault()
-    navigate('/prospects')
-  }
-
-  const handleProspectsClick = (e) => {
-    e.preventDefault()
-    navigate('/prospects')
-  }
-
+  // Retour en arrière (seul navigation restante : les breadcrumbs ont été
+  // supprimés de toutes les pages).
   const handleBack = () => navigate(-1)
 
   const openAction = () => setActionOpen(true)
@@ -155,8 +147,6 @@ export function useClientDetail() {
     blacklistMutation,
     blacklistConfirmDisabled,
     unblockMutation,
-    handleHomeClick,
-    handleProspectsClick,
     handleBack,
     handleCopyPhone,
     phoneOpen,

@@ -127,8 +127,6 @@ export function useComercialListPage() {
   const handleCloseCreate = () => setShowCreate(false)
   const handleCloseAvatar = () => setAvatarTarget(null)
   const handleCloseEdit = () => setEditTarget(null)
-  const handleHomeClick = (e) => e.preventDefault()
-
   return {
     isDesktop,
     search,
@@ -157,6 +155,5 @@ export function useComercialListPage() {
     editTarget,
     setEditTarget,
     handleCloseEdit,
-    handleHomeClick,
   }
 }
