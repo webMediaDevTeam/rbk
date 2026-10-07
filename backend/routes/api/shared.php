@@ -110,13 +110,18 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
 // la synchronisation (account_id, colonnes `ringcentral_*` de `users` pour
 // les seuls COMERCIAL, call logs dé-doublonnés) viendra au passage au réel —
 // docs/TODOS.md « Phase 6bis ». Visible depuis `/call-logs-test`.
-Route::middleware(['auth:sanctum', CheckRole::class.':SUPER_ADMIN'])->group(function () {
-    Route::get('call-logs/account', [RingCentralController::class, 'account']);
-    Route::post('call-logs/call', [RingCentralController::class, 'makeCall']);
-    Route::get('call-logs/calls/{sessionId}', [RingCentralController::class, 'callStatus']);
-    Route::get('call-logs/calls/{sessionId}/parties/{partyId}/recordings', [RingCentralController::class, 'recordings']);
-    Route::delete('call-logs/calls/{sessionId}', [RingCentralController::class, 'hangUp']);
-});
+// Isolé (docs/TODOS.md Item 5) : ces endpoints de test ne sont enregistrés
+// qu'en dev (`APP_ENV=local`) et en test — en production, 404 inconditionnel,
+// même pour un SUPER_ADMIN authentifié.
+if (app()->environment('local', 'testing')) {
+    Route::middleware(['auth:sanctum', CheckRole::class.':SUPER_ADMIN'])->group(function () {
+        Route::get('call-logs/account', [RingCentralController::class, 'account']);
+        Route::post('call-logs/call', [RingCentralController::class, 'makeCall']);
+        Route::get('call-logs/calls/{sessionId}', [RingCentralController::class, 'callStatus']);
+        Route::get('call-logs/calls/{sessionId}/parties/{partyId}/recordings', [RingCentralController::class, 'recordings']);
+        Route::delete('call-logs/calls/{sessionId}', [RingCentralController::class, 'hangUp']);
+    });
+}
 
 // ── Démarrage d'enregistrement d'une partie — SUPER_ADMIN + COMERCIAL ────
 // Le COMERCIAL en a besoin pour **ses propres appels** (`POST /call-logs/my-call`

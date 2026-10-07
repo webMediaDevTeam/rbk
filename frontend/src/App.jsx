@@ -34,7 +34,11 @@ const ROLE_NAV = {
         { title: 'Employés', path: '/commerciaux', icon: List },
         { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
-        { title: 'Test Appels (RingCentral)', path: '/call-logs-test', icon: PhoneCall },
+        // Console RingCentral — dev uniquement : `vite build` (prod)
+        // supprime cette entrée (import.meta.env.DEV = false).
+        ...(import.meta.env.DEV
+          ? [{ title: 'Test Appels (RingCentral)', path: '/call-logs-test', icon: PhoneCall }]
+          : []),
       ],
     },
     {

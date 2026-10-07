@@ -53,7 +53,12 @@ export default function AppRoutes() {
 
       {/* SUPER_ADMIN uniquement — routes/api/superAdmin.php + shared.php */}
       <Route path="/admins" element={guard(ROLES.SUPER_ADMIN, <AdminListPage />)} />
-      <Route path="/call-logs-test" element={guard(ROLES.SUPER_ADMIN, <CallLogTestPage />)} />
+      {/* Console d'appel RingCentral — dev uniquement : `vite build` fige
+          import.meta.env.DEV à false, la route n'existe pas en prod
+          (l'URL inconnue retombe sur /dashboard via le catch-all). */}
+      {import.meta.env.DEV && (
+        <Route path="/call-logs-test" element={guard(ROLES.SUPER_ADMIN, <CallLogTestPage />)} />
+      )}
 
       {/* Pages hôte (déjà filtrées par GuestRoute dans App.jsx) */}
       <Route path="/connexion" element={<ConnexionPage />} />
