@@ -23,6 +23,20 @@ class Employee extends Model
         'additional_info',
         'ringcentral_device_id',
         'ringcentral_from_number',
+        'ringcentral_extension_id',
+        'ringcentral_extension_number',
+        'ringcentral_phone_numbers',
+        'ringcentral_synced_at',
+    ];
+
+    /**
+     * Correspondance employé ↔ poste RingCentral établie par la synchro
+     * (`RingCentralSyncService::syncEmployees()`) : tous les numéros
+     * assignés au poste, sous forme de liste.
+     */
+    protected $casts = [
+        'ringcentral_phone_numbers' => 'array',
+        'ringcentral_synced_at'     => 'datetime',
     ];
 
     public function user(): BelongsTo

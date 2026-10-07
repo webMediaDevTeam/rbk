@@ -795,6 +795,26 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   statut (sélection unique) + `HistoryList` sur le périmètre **commun** de
   l'entreprise (`GET entreprises/{id}/stats`, §10). Entrée depuis la liste
   des entreprises (nom cliquable + « Voir »).
+  **Enveloppe de la réponse** : `{success, data: {entreprise, analytics,
+  employees, historique}}` — le hook `useEntrepriseDetail.js` déballe
+  `body.data` (sinon `entreprise` reste `undefined` et la page affiche
+  « Entreprise introuvable. » **même avec une réponse 200**) ; un id inconnu
+  renvoie `404 {"success": false, "message": "Entreprise introuvable."}`,
+  message affiché tel quel dans la page.
+* **Bouton « Appeler » de la fiche client** : le composant partagé
+  `pages/shared/components/CallButton` (identique à celui des tableaux et
+  des cartes : icône `Phone` verte, appel `POST /call-logs/my-call` via
+  `useDirectCall`) est rendu dans le bandeau, **juste avant « Suite appel »**,
+  et **dans la même condition** `!isAdmin && hasReservation` : les deux
+  boutons apparaissent et disparaissent **exactement ensemble** — aucun des
+  deux si le client n'est pas réservé par l'employé connecté, ni pour un
+  admin. Sans numéro, `CallButton` ne rend rien.
+* **Navigation : plus de breadcrumbs** — les filiants « Accueil › … » ont été
+  **retirés de toutes les pages** (composants partagés `BreadcrumbNav` et
+  `components/layout/Breadcrumb` supprimés avec les handlers associés). La
+  navigation repose sur le **bouton retour** (flèche `ArrowLeft`,
+  `navigate(-1)`) des en-têtes concernés et sur le lien **« Retour »** des
+  pages de détail.
 
 ## 10. Endpoints clés
 

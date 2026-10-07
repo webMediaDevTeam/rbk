@@ -12,6 +12,38 @@ import {
   toggleCommercialStatusApi,
   statistiquesCommerciauxApi,
 } from '@/api/entreprise.api.js'
+import { syncRingCentralEmployeesApi } from '@/api/shared.api.js'
+
+/**
+ * Phase « Lier les employés à leurs numéros RingCentral » :
+ * `POST /call-logs/sync/employees` rapproche chaque fiche employé de son
+ * poste (appareil choisi → e-mail → numéro) et stocke la correspondance
+ * dans `employees.ringcentral_*` (extension, tous les numéros, appareil +
+ * numéro source préremplis si la fiche était vide).
+ *
+ * @returns {{ syncRingCentral: () => void, isSyncingRingCentral: boolean }}
+ */
+export function useSyncRingCentral() {
+  return useMutation({
+    mutationFn: syncRingCentralEmployeesApi,
+    onSuccess: (body) => {
+      const report = body?.data ?? {}
+
+      toast.success(
+        `RingCentral : ${report.matched ?? 0}/${report.total ?? 0} employé(s) relié(s) à un poste` +
+          ` (${report.updated ?? 0} fiche(s) mise(s) à jour).`
+      )
+
+      if (Array.isArray(report.unmatched) && report.unmatched.length > 0) {
+        toast.warning(
+          `${report.unmatched.length} employé(s) sans correspondance RingCentral (e-mail ou numéro inconnu).`
+        )
+      }
+    },
+    onError: (error) =>
+      toast.error(error?.response?.data?.error ?? 'Synchronisation RingCentral impossible.'),
+  })
+}
 
 export function useComercialList(params = {}) {
   return useQuery({
@@ -92,6 +124,7 @@ export function useComercialListPage() {
 
   const deleteMut = useDeleteCommercial()
   const toggleMut = useToggleCommercialStatus()
+  const ringCentralSync = useSyncRingCentral()
 
   const commerciaux = data?.data?.utilisateurs ?? []
   const total = data?.data?.pagination?.total ?? 0
@@ -140,6 +173,8 @@ export function useComercialListPage() {
     totalPages,
     canCreate,
     canUpdate,
+    syncRingCentral: ringCentralSync.mutate,
+    isSyncingRingCentral: ringCentralSync.isPending,
     commerciaux,
     sortBy,
     sortOrder,

@@ -55,7 +55,7 @@ export function useEntrepriseDetailPage() {
   const statusParam = statusFilter && CLIENT_STATUS_KEYS.includes(statusFilter) ? statusFilter : undefined
   const reservationStatusParam = statusFilter && !CLIENT_STATUS_KEYS.includes(statusFilter) ? statusFilter : undefined
 
-  const { data, isLoading } = useEntrepriseStats(id, {
+  const { data: body, isLoading } = useEntrepriseStats(id, {
     page,
     search: searchParam,
     status: statusParam,
@@ -63,6 +63,13 @@ export function useEntrepriseDetailPage() {
     rowsPerPage,
   })
 
+  // Enveloppe du serveur : `EnterpriseController::stats()` répond
+  // `{success, data: {entreprise, analytics, employees, historique}}`
+  // (comme les autres endpoints « entreprises » — cf. `useEntrepriseList`,
+  // `data?.data?.entreprises`). Sans ce déballage, `entreprise` reste
+  // `undefined` et la page affiche « Entreprise introuvable. » même
+  // quand l'API répond 200.
+  const data = body?.data
   const entreprise = data?.entreprise
   const analytics = data?.analytics
   const employees = data?.employees ?? []
@@ -74,6 +81,10 @@ export function useEntrepriseDetailPage() {
 
   const name = entreprise?.name ?? 'Chargement…'
   const companyName = entreprise?.name ?? '—'
+
+  // Message serveur d'un échec (`404 Entreprise introuvable.`, `403 Accès
+  // non autorisé.`…) : la page l'affiche plutôt que le texte générique.
+  const errorMessage = body?.success === false ? body.message ?? null : null
 
   const handleSearchChange = (v) => {
     setSearch(v)
@@ -116,6 +127,7 @@ export function useEntrepriseDetailPage() {
     clients,
     name,
     companyName,
+    errorMessage,
     handleViewDetail,
   }
 }

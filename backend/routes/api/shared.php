@@ -93,12 +93,15 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])
 
 // ── Journal d'appels d'un employé + lecture d'enregistrement ────────────
 // Onglet « Appels » de la fiche `/comercialDetail/:id` (ADMIN + SUPER_ADMIN,
-// même périmètre que les modales employé) : le journal est résolu **via
-// l'appareil de l'employé** (`employees.ringcentral_device_id`), et
-// l'enregistrement est relayé par un proxy car le `contentUri` RingCentral
-// exige l'en-tête `Authorization` qu'un `<audio>` ne peut pas envoyer.
+// même périmètre que les modales employé) : la lecture est **locale**
+// (`call_logs`, aucun appel RingCentral à l'ouverture), la synchro est un
+// geste explicite (`…/logs/sync`), et l'enregistrement est relayé par un
+// proxy car le `contentUri` RingCentral exige l'en-tête `Authorization`
+// qu'un `<audio>` ne peut pas envoyer.
 Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->group(function () {
     Route::get('call-logs/employees/{id}/logs', [RingCentralController::class, 'employeeLogs']);
+    Route::post('call-logs/employees/{id}/logs/sync', [RingCentralController::class, 'syncEmployeeLogs']);
+    Route::post('call-logs/sync/employees', [RingCentralController::class, 'syncEmployees']);
     Route::get('call-logs/recordings/{recordingId}/content', [RingCentralController::class, 'recordingContent']);
 });
 

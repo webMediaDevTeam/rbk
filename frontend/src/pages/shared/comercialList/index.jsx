@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { CloudDownload, Plus } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import { useComercialListPage } from './useComercialList.js'
 import ComercialTable from './components/ComercialTable.jsx'
@@ -23,6 +23,8 @@ export default function ComercialListPage() {
     totalPages,
     canCreate,
     canUpdate,
+    syncRingCentral,
+    isSyncingRingCentral,
     commerciaux,
     sortBy,
     sortOrder,
@@ -48,10 +50,23 @@ export default function ComercialListPage() {
           <p className="text-sm text-muted-foreground mt-1">Gérez vos employés et leurs performances ici.</p>
         </div>
         {canCreate && (
-          <Button variant="default" size="md" className="px-2.5 lg:px-4" onClick={handleOpenCreate}>
-            <Plus className="h-4 w-4" />
-            <span className="hidden lg:inline">Ajouter un employé</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="md"
+              className="px-2.5 lg:px-4"
+              onClick={() => syncRingCentral()}
+              disabled={isSyncingRingCentral}
+              title="Relier chaque employé à son poste et à ses numéros RingCentral"
+            >
+              <CloudDownload className={`h-4 w-4 ${isSyncingRingCentral ? 'animate-spin' : ''}`} />
+              <span className="hidden lg:inline">Synchroniser RingCentral</span>
+            </Button>
+            <Button variant="default" size="md" className="px-2.5 lg:px-4" onClick={handleOpenCreate}>
+              <Plus className="h-4 w-4" />
+              <span className="hidden lg:inline">Ajouter un employé</span>
+            </Button>
+          </div>
         )}
       </div>
 

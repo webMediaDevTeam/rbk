@@ -278,9 +278,11 @@ existe**.
       POST sans corps** est concerné). Poster sans corps (`null`) ✅ fait.
 - [x] **2. Backend — journaux** : `GET /api/v1/call-logs/employees/{id}/logs`
       (`RingCentralController::employeeLogs`, route `ADMIN,SUPER_ADMIN`) :
-      `employees.ringcentral_device_id` → appareil → `extension.id`
-      (repli e-mail), call log `view=Detailed` (`recording` inclus),
-      filtrage par `deviceId` quand RingCentral le renvoie ✅ fait.
+      **lecture locale** depuis `call_logs` (aucun appel RingCentral à
+      l'ouverture) — la récupération chez RingCentral passe par
+      `POST …/logs/sync` (résolution via `ringcentral_device_id` → appareil
+      → e-mail, call log `view=Detailed`) ✅ fait (voir « Passage au
+      réel » ci-dessous).
 - [x] **3. Backend — lecture d'un enregistrement** :
       `GET /api/v1/call-logs/recordings/{recordingId}/content`
       (`RingCentralController::recordingContent` + service
@@ -291,10 +293,10 @@ existe**.
       `CallLogsCard` / `useCallLogs` (table date · sens · numéro · durée ·
       résultat · enregistrement, états chargement / vide / erreur) +
       `RecordingPlayer` (fetch blob → `<audio>`) ✅ fait.
-- [x] **5. Tests + build** : `EmployeeCallLogsTest` (**10 tests verts**,
-      RBAC 401/403, résolution par appareil puis e-mail, 422 sans
-      correspondance, 502, proxy 200/502/422) ; suite complète
-      **233 passed / 2 failed** (2 échecs préexistants non liés) ;
+- [x] **5. Tests + build** : `EmployeeCallLogsTest` (**12 tests verts**,
+      RBAC 401/403, lecture locale sans API, synchro 422/502,
+      proxy 200/502/422) ; suite complète
+      **253 passed / 2 failed** (2 échecs préexistants non liés) ;
       `vite build` vert ✅ fait.
 - [ ] **6. Vérification live** : **par vos soins** (aucun appel réel de mon
       côté — test manuel de l'onglet et d'un enregistrement existant).
@@ -331,22 +333,74 @@ Le premier essai live de l'onglet est tombé sur
         désactive tout seul (`filtered_by_device: false`) quand les
         journaux n'en portent pas.
 
-### ⏳ À faire — passage au réel (stockage)
+### ✅ Passage au réel — stockage (Phase 1 + Phase 2)
 
+Bases : samples officiels `/home/webmedia/work/github/ringcentral-api-code-samples`
+(`provisioning/extensions/get-extension-list`,
+`account/phone-numbers/get-extension-phone-number-list`,
+`voice-telephony/call-log/get-user-call-log-records`,
+`voice-telephony/call-recordings/*`, `voice-telephony/call-control/*`) +
+`docs/righcenter.md`.
+
+#### Phase 1 — lier les employés à leurs numéros
+
+- [x] **Migrations additives sur `employees`** : `ringcentral_extension_id`,
+      `ringcentral_extension_number`, `ringcentral_phone_numbers` (json),
+      `ringcentral_synced_at` (`2026_10_07_000001_…`, `php artisan migrate`).
+- [x] **`RingCentralSyncService::syncEmployees()`** : `GET …/extension?type=User`
+      + `…/device` + `…/phone-number` → correspondance **appareil choisi →
+      e-mail → numéro** (les formats de numéro sont normalisés), écrite dans
+      la fiche ; appareil + numéro source **préremplis** si la fiche était
+      vide ; rapport `{total, matched, updated, unmatched[]}`.
+- [x] **Endpoint** `POST /api/v1/call-logs/sync/employees` (`ADMIN,SUPER_ADMIN`)
+      + bouton **« Synchroniser RingCentral »** en tête de la page
+      « Liste des employés » (toasts du rapport).
+
+#### Phase 2 — appels, enregistrements, historique
+
+- [x] **Tables** `call_logs` + `call_recordings`
+      (`2026_10_07_000002_create_call_logs_tables`) + modèles `CallLog` /
+      `CallRecording` : appel dé-doublonné sur `ringcentral_call_id`
+      (**unique**) avec repli `ringcentral_session_id` + employé (ligne
+      ouverte avant la synchro) ; enregistrement dé-doublonné sur
+      `ringcentral_recording_id` (unique). Métadonnées seules : l'audio
+      reste streamé par le proxy.
+- [x] **Appel sortant enregistré** : `POST /call-logs/my-call` ouvre la
+      ligne `call_logs` dès la réponse du call-out (`recordOutboundCall`)
+      et range l'enregistrement dès son démarrage (`attachRecording`) — la
+      lecture est possible sans attendre la synchro ; **aucun échec de
+      persistance ne casse l'appel** (test dédié).
+- [x] **Synchro du journal** `POST /call-logs/employees/{id}/logs/sync` :
+      call log `view=Detailed` écrit dans `call_logs` + `call_recordings`
+      sans doublon → rapport `{extension_id, resolved_by, fetched, created,
+      updated}` ; le poste résolu est **mémorisé sur la fiche** (la 2ᵉ
+      synchro ne rebondit plus sur `/device` — quota).
+- [x] **Lecture locale** `GET /call-logs/employees/{id}/logs` : lit
+      `call_logs` (**aucun appel RingCentral** à l'ouverture de l'onglet :
+      ni latence, ni `429 CMN-301`), réponse à la **même forme** que
+      RingCentral (`records[].startTime / from.phoneNumber / result /
+      recording.id`) — le front ne distingue pas le local du distant.
+- [x] **Frontend** : bouton **« Synchroniser »** de l'onglet « Appels »
+      (affiche le rapport ajoutés / mis à jour), état vide explicite,
+      action de repli « Relier les employés aux numéros RingCentral » sur
+      un `422` (aucune extension), lecture audio inchangée (proxy blob).
+- [x] **Tests + build** : `RingCentralSyncTest` (9 tests : RBAC,
+      correspondance appareil / e-mail / numéro, défauts préremplis,
+      non-appariés, 502, appel sortant + enregistrement, échec de
+      persistance) + `EmployeeCallLogsTest` réécrit (12 tests : RBAC,
+      lecture locale sans API, synchro + dé-doublonnage, 422, 502, proxy) ;
+      suite complète **253 passed / 2 failed** (2 échecs préexistants non
+      liés) ; `vite build` vert ✅ fait.
+
+#### ⏳ Restant
+
+- [ ] **Vérification live** : **par vos soins** — bouton « Synchroniser
+      RingCentral » (liste des employés) → « Synchroniser » dans l'onglet
+      « Appels » → lecture d'un enregistrement.
 - [ ] **Compte** : persister `account_id` + infos société.
-- [ ] **Sync Users** : colonnes `ringcentral_*` sur `users`
-      (**seuls les `COMERCIAL`**) — `ringcentral_id` (extension),
-      `extension_number`, `phone_numbers` (json), `status`, `synced_at` +
-      logique sync/update (`GET /restapi/v1.0/account/~/extension?type=User&status=Enabled`).
-- [ ] **Sync Call Logs** : table dédiée, dé-doublonnage sur l'id RingCentral,
-      pagination + filtres `dateFrom` / `dateTo`
-      (`GET /restapi/v1.0/account/~/extension/{extensionId}/call-log`).
-- [ ] **Suivi d'appel** : tables sessions / événements / enregistrements
-      (`sessionId`, statuts, `partyId`, métadonnées d'enregistrement).
-- [ ] Étendre le contrôle d'appel aux `COMERCIAL` (aujourd'hui SUPER_ADMIN)
-      — **déjà fait pour l'appel sortant** : `POST /call-logs/my-call`
-      (avec son propre numéro source) ; reste le suivi, l'enregistrement et
-      le raccroché côté commercial.
+- [ ] **Suivi d'appel** : tables sessions / événements (`sessionId`,
+      statuts, `partyId`) + raccroché / suivi côté `COMERCIAL` (l'appel
+      sortant et l'enregistrement le sont déjà : `POST /call-logs/my-call`).
 
 
 ## Phase 7 — Écarts API (audit du 2026-09-29) ⏳
@@ -601,17 +655,52 @@ saisir, libération de liste, paliers, fiche client, stats d'entreprise).
       `comercialDetail`) + entrée depuis la liste des entreprises (nom
       cliquable et « Voir »).
 
+### 🧭 Navigation, fiche client & page entreprise (2026-10-07)
+
+- [x] **Breadcrumbs supprimés de toutes les pages** (filiants « Accueil › … ») :
+      11 pages nettoyées + composants morts supprimés
+      (`pages/shared/comercialDetail/components/BreadcrumbNav.jsx`,
+      `components/layout/Breadcrumb.jsx`, `useSettingsHeader.js`), handlers
+      `handleHomeClick` / `handleProspectsClick` / `handleAccueilClick` /
+      `handleMesListesClick` retirés des hooks. **Les boutons retour sont
+      conservés** (flèche `ArrowLeft` de la fiche client et de `GroupDetail`,
+      lien « Retour » des pages de détail).
+- [x] **Bouton « Appeler » ajouté à la fiche client** : `CallButton` partagé
+      (même rendu que dans les tableaux/cartes), placé avant « Suite appel »
+      et rendu **dans la même condition** `!isAdmin && hasReservation` → les
+      deux boutons apparaissent et disparaissent **exactement ensemble**.
+- [x] **🐛 Enveloppe de `GET entreprises/{id}/stats`** : `stats()` répond
+      `{success, data: {entreprise, analytics, employees, historique}}` mais
+      `useEntrepriseDetail.js` lisait `data.entreprise` → `entreprise`
+      restait `undefined` et la page affichait **« Entreprise
+      introuvable. » même avec une réponse HTTP 200**. Correction : déballage
+      de `body.data` (+ `errorMessage` = message serveur affiché tel quel,
+      ce qui distingue un vrai `404` d'une réponse incomplète).
+- [x] **Test** `EnterpriseStatsApiTest` (2 tests / 15 assertions) : verrouille
+      l'enveloppe, le périmètre (appels des seuls employés de l'entreprise),
+      l'historique commun et le `404 {"success":false,"message":"Entreprise
+      introuvable."}`.
+- [ ] **⚠️ Prod — origine de l'API** : le build de production utilise
+      `VITE_API_URL=http://51.255.192.50` alors que la page est ouverte sur
+      `http://zdigia.com` → requêtes **cross-site** : cookies `XSRF-TOKEN` et
+      `laravel-session` rejetés par le navigateur (console) + avertissement
+      « Password fields present on an insecure (http://) page ». À faire :
+      passer `VITE_API_URL` (et `APP_URL` / `FRONTEND_URL`) sur
+      **`http://zdigia.com`** — le gateway accepte déjà le domaine
+      (`server_name _`, `location /api` proxy) — puis activer HTTPS.
+
 ### ✅ Vérifications
 
 - [x] `docs/RULES.md` : §2 (statut dérivé), §7 (paliers, libération,
       exclusion de la liste commerciale), §9 (8 badges, couleur `rose-600`,
       fiche Contact, page entreprise), §10 (3 nouvelles routes).
-- [x] Tests backend : **240 passed / 2 failed** — les 2 échecs sont les
+- [x] Tests backend : **253 passed / 2 failed** — les 2 échecs sont les
       **préexistants** (recherche par catégorie JSON sur SQLite, baseline
       68/2). Nouveaux : `ClientWithoutPhoneTest` (6),
       `test_release_pending_frees_untreated_clients_and_keeps_treated_ones`,
       paliers dans `ReservationWorkflowApiTest`, 8 badges dans
-      `CurrentReservationStatusBadgesTest`.
+      `CurrentReservationStatusBadgesTest`, enveloppe + 404 de la fiche
+      entreprise dans `EnterpriseStatsApiTest` (2 tests / 15 assertions).
 - [x] `npm run build` (`vite build`) **vert** ✅.
 
 ## Points ouverts

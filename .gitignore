@@ -7,3 +7,6 @@
 # Dépendances / artefacts
 /vendor/
 /node_modules/
+
+# Knowledge graph local (graphify) — regeneration: `graphify extract . --code-only`
+/graphify-out/

@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
+use App\Models\CallLog;
 use App\Models\Employee;
 use App\Models\User;
 use App\Services\RingCentralService;
+use App\Services\RingCentralSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -17,34 +19,41 @@ use Throwable;
  * Contrôle d'appel RingCentral — **phase de test Super Admin**
  * (page `/call-logs-test`, docs/TODOS.md « Phase 6bis »).
  *
- * Pass-through pur vers RingCentral : **aucune écriture en base** pour le
- * moment. Le stockage viendra au passage au réel :
+ *   - `RingCentralService`      : lectures / écritures **chez** RingCentral ;
+ *   - `RingCentralSyncService`  : persistance locale (employés ↔ postes,
+ *     `call_logs` + `call_recordings`).
  *
- *   - `account_id` + infos société ;
- *   - extensions synchronisées dans des **colonnes `ringcentral_*` de la
- *     table `users`**, pour les seuls utilisateurs `COMERCIAL` ;
- *   - call logs (dé-doublonnés) puis sessions / événements / enregistrements.
+ * L'onglet « Appels » se lit **en base** ; la synchro est un appel explicite
+ * (`…/logs/sync`) pour ne jamais déclencher de rafale d'API (429 CMN-301).
  *
  * Endpoints :
  *
  *   GET    /call-logs/account                               (SUPER_ADMIN)
  *   GET    /call-logs/devices                               (ADMIN, SUPER_ADMIN)
+ *   POST   /call-logs/sync/employees                        (ADMIN,
+ *          SUPER_ADMIN — correspondance employés ↔ postes/numéros)
+ *   GET    /call-logs/employees/{id}/logs                   (ADMIN,
+ *          SUPER_ADMIN — journal **stocké** de l'employé)
+ *   POST   /call-logs/employees/{id}/logs/sync              (ADMIN,
+ *          SUPER_ADMIN — récupère le journal RingCentral puis le stocke)
+ *   GET    /call-logs/recordings/{recordingId}/content      (ADMIN,
+ *          SUPER_ADMIN — proxy audio d'un enregistrement)
  *   POST   /call-logs/my-call                               (COMERCIAL —
- *          appel sortant de l'employé, `from` résolu côté API)
+ *          appel sortant de l'employé, `from` résolu côté API, journal
+ *          ouvert immédiatement + enregistrement automatique)
  *   POST   /call-logs/call                                  (call-out)
  *   GET    /call-logs/calls/{sessionId}                     (statut)
  *   POST   /call-logs/calls/{sessionId}/parties/{partyId}/record
  *          (COMERCIAL, ADMIN, SUPER_ADMIN — démarrage d'enregistrement)
  *   GET    /call-logs/calls/{sessionId}/parties/{partyId}/recordings
  *   DELETE /call-logs/calls/{sessionId}                     (raccroché)
- *   GET    /call-logs/employees/{id}/logs                   (ADMIN,
- *          SUPER_ADMIN — journal d'appels d'un employé, via son appareil)
- *   GET    /call-logs/recordings/{recordingId}/content      (ADMIN,
- *          SUPER_ADMIN — proxy audio d'un enregistrement)
  */
 class RingCentralController extends Controller
 {
-    public function __construct(private RingCentralService $ringCentral) {}
+    public function __construct(
+        private RingCentralService $ringCentral,
+        private RingCentralSyncService $ringCentralSync
+    ) {}
 
     /**
      * 1. Compte / entreprise : `account_id`, société, plan, état.
@@ -198,10 +207,17 @@ class RingCentralController extends Controller
         $this->assertIdentifier($partyId, 'partyId');
 
         return $this->pass(function () use ($sessionId, $partyId) {
+            $response = $this->ringCentral->startRecording($sessionId, $partyId);
+
+            // Même traitement que lors de l'appel : si RingCentral renvoie
+            // un id d'enregistrement exploitable, il est rangé tout de
+            // suite (la carte peut alors lire l'audio sans synchro).
+            $this->attachRecordingToSession($sessionId, $response);
+
             return [
                 'session_id' => $sessionId,
                 'party_id' => $partyId,
-                'raw' => $this->ringCentral->startRecording($sessionId, $partyId),
+                'raw' => $response,
             ];
         });
     }
@@ -291,6 +307,19 @@ class RingCentralController extends Controller
             $sessionId = RingCentralService::sessionIdFrom($session);
             $partyId = RingCentralService::partyIdFrom($session);
 
+            // Journal ouvert **immédiatement** : l'appel apparaît dans
+            // l'onglet « Appels » sans attendre la synchro suivante (la
+            // ligne n'a que la session — l'id de call log arrive avec
+            // `POST …/logs/sync`, qui complète la même ligne).
+            $call = $this->ringCentralSync->recordOutboundCall(
+                $employee,
+                (string) $sessionId,
+                $partyId,
+                $from,
+                $validated['to'],
+                $session
+            );
+
             return [
                 'session_id' => $sessionId,
                 'party_id' => $partyId,
@@ -301,7 +330,8 @@ class RingCentralController extends Controller
                 // Démarrage immédiat **best-effort** : `false` dès que la
                 // partie n'est pas encore connectée (cas le plus fréquent),
                 // le navigateur retente alors côté client.
-                'recorded' => $record && $this->startPartyRecording($sessionId, $partyId),
+                'recorded' => $record && $this->startPartyRecording($sessionId, $partyId, $call),
+                'call_log_id' => $call?->id,
                 'raw' => $session,
             ];
         });
@@ -312,17 +342,20 @@ class RingCentralController extends Controller
      * (partie en « Setup », permission manquante, session déjà terminée…)
      * ne doit jamais faire échouer l'appel, il est simplement signalé par
      * `recorded: false` dans la réponse.
+     *
+     * Quand la réponse porte un vrai id d'enregistrement (`uri` /
+     * `contentUri`), il est rangé dans `call_recordings` : la lecture de
+     * l'audio n'attend pas la synchro. La persistance d'une ligne
+     * annexe n'a jamais le droit de casser l'appel non plus.
      */
-    private function startPartyRecording(?string $sessionId, ?string $partyId): bool
+    private function startPartyRecording(?string $sessionId, ?string $partyId, ?CallLog $call = null): bool
     {
         if ($sessionId === null || $sessionId === '' || $partyId === null || $partyId === '') {
             return false;
         }
 
         try {
-            $this->ringCentral->startRecording($sessionId, $partyId);
-
-            return true;
+            $response = $this->ringCentral->startRecording($sessionId, $partyId);
         } catch (Throwable $e) {
             Log::info('Enregistrement non démarré au moment de l\'appel : '.$e->getMessage(), [
                 'session_id' => $sessionId,
@@ -331,19 +364,122 @@ class RingCentralController extends Controller
 
             return false;
         }
+
+        $this->attachRecordingToSession($call ?? $sessionId, $response);
+
+        return true;
     }
 
     /**
-     * Journal d'appels RingCentral d'un employé — onglet « Appels » de la
-     * fiche `/comercialDetail/:id` (ADMIN / SUPER_ADMIN).
-     *
-     * Résolution de l'extension **via l'appareil de l'employé**
-     * (`employees.ringcentral_device_id` → appareil → `extension.id`),
-     * repli sur la correspondance d'e-mail ; sans correspondance → 422
-     * explicite. Call log lu en `view=Detailed` : les métadonnées
-     * `recording` (id + `contentUri`) viennent avec.
+     * Range l'enregistrement renvoyé par RingCentral, à partir de son
+     * modèle (appel du call-out) ou de la seule session (relance du
+     * navigateur sur `…/record`). Silencieux : le reste du flux ne dépend
+     * jamais du stockage.
      */
-    public function employeeLogs(Request $request, string $userId): JsonResponse
+    private function attachRecordingToSession(CallLog|string $callOrSessionId, mixed $response): void
+    {
+        try {
+            $call = $callOrSessionId instanceof CallLog
+                ? $callOrSessionId
+                : CallLog::query()->where('ringcentral_session_id', $callOrSessionId)->first();
+
+            if ($call !== null && is_array($response)) {
+                $this->ringCentralSync->attachRecording($call, $response);
+            }
+        } catch (Throwable $e) {
+            Log::info('Enregistrement non stocké : '.$e->getMessage());
+        }
+    }
+
+    /**
+     * 9. Synchronisation **employés ↔ postes/numéros RingCentral** (Phase 1
+     * du passage au réel) — établit la correspondance par appareil choisi,
+     * e-mail ou numéro, et la stocke dans `employees.ringcentral_*`
+     * (extension, poste, tous les numéros, appareil + numéro source par
+     * défaut quand la fiche est vide).
+     *
+     * POST /call-logs/sync/employees
+     *
+     * @return JsonResponse  `{total, matched, updated, unmatched[]}`
+     */
+    public function syncEmployees(): JsonResponse
+    {
+        try {
+            $report = $this->ringCentralSync->syncEmployees();
+        } catch (Throwable $e) {
+            return $this->failed($e); // 502 : API injoignable
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => $report,
+        ]);
+    }
+
+    /**
+     * 10. Journal **stocké** d'un employé — onglet « Appels » de la fiche
+     * `/comercialDetail/:id` (ADMIN / SUPER_ADMIN).
+     *
+     * Lecture locale (`call_logs` + `call_recordings`) : **aucun appel
+     * RingCentral**, donc ni latence ni quota `429 CMN-301` à l'ouverture.
+     * L'enrichissement passe par `POST …/logs/sync`.
+     */
+    public function employeeLogs(string $userId): JsonResponse
+    {
+        $employee = $this->employeeOrFail($userId);
+
+        if ($employee instanceof JsonResponse) {
+            return $employee;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => $this->logsPayload($employee),
+        ]);
+    }
+
+    /**
+     * 11. Récupération du journal RingCentral de l'employé (Phase 2) :
+     * poste résolu (fiche → appareil → e-mail), call log `view=Detailed`
+     * écrit dans `call_logs` / `call_recordings` **sans doublon**
+     * (`ringcentral_call_id` unique, repli sur `session_id` + employé).
+     *
+     * POST /call-logs/employees/{id}/logs/sync   {dateFrom?, dateTo?, direction?}
+     */
+    public function syncEmployeeLogs(Request $request, string $userId): JsonResponse
+    {
+        $employee = $this->employeeOrFail($userId);
+
+        if ($employee instanceof JsonResponse) {
+            return $employee;
+        }
+
+        try {
+            $sync = $this->ringCentralSync->syncCalls($employee, $request->only([
+                'dateFrom', 'dateTo', 'direction',
+            ]));
+        } catch (Throwable $e) {
+            return $this->failed($e); // 502 : API injoignable pendant la synchro
+        }
+
+        if ($sync === null) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Aucune extension RingCentral rattachée à cet employé (appareil « '
+                    .($employee->ringcentral_device_id ?? '—').' » introuvable, e-mail « '
+                    .($employee->user?->email ?? '—').' » sans correspondance). Choisissez son '
+                    .'appareil source dans sa fiche ou lancez la synchronisation des employés.',
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => $this->logsPayload($employee, $sync),
+        ]);
+    }
+
+    /** Fiche employé d'un utilisateur ; `422` prêt à renvoyer sinon. */
+    private function employeeOrFail(string $userId): Employee|JsonResponse
     {
         $user = User::query()->findOrFail($userId);
         $employee = $user->employee;
@@ -355,46 +491,37 @@ class RingCentralController extends Controller
             ], 422);
         }
 
-        $filters = array_merge(
-            ['view' => 'Detailed', 'perPage' => 100],
-            $request->only(['dateFrom', 'dateTo', 'direction', 'page'])
-        );
+        return $employee;
+    }
 
-        try {
-            $resolved = $this->resolveEmployeeExtension($employee, (string) $user->email);
-        } catch (Throwable $e) {
-            return $this->failed($e); // API injoignable pendant la résolution
+    /** Charge le journal stocké (+ enregistrements) d'une fiche employé. */
+    private function logsPayload(Employee $employee, ?array $sync = null): array
+    {
+        $calls = CallLog::query()
+            ->with('recordings')
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('started_at')
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get();
+
+        $payload = [
+            'source'            => 'db',
+            'extension_id'      => $employee->ringcentral_extension_id,
+            'extension_number'  => $employee->ringcentral_extension_number,
+            'device_id'         => $employee->ringcentral_device_id,
+            'from_number'       => $employee->ringcentral_from_number,
+            'phone_numbers'     => $employee->ringcentral_phone_numbers,
+            'synced_at'         => $employee->ringcentral_synced_at?->toIso8601String(),
+            'filtered_by_device' => false,
+            'records'           => $calls->map(fn (CallLog $call) => $call->toApiArray())->values()->all(),
+        ];
+
+        if ($sync !== null) {
+            $payload['sync'] = $sync;
         }
 
-        [$extensionId, $extensionNumber, $resolvedBy] = $resolved ?? [null, null, null];
-
-        if ($extensionId === null) {
-            return response()->json([
-                'success' => false,
-                'error'   => 'Aucune extension RingCentral rattachée à cet employé (appareil « '
-                    .($employee->ringcentral_device_id ?? '—').' » introuvable, e-mail « '.$user->email
-                    .' » sans correspondance). Choisissez son appareil source dans sa fiche.',
-            ], 422);
-        }
-
-        return $this->pass(function () use ($employee, $extensionId, $extensionNumber, $resolvedBy, $filters) {
-            $records = $this->ringCentral->getCallHistoryByUser($extensionId, $filters);
-
-            [$records, $filteredByDevice] = $this->filterByDevice(
-                $records,
-                (string) ($employee->ringcentral_device_id ?? '')
-            );
-
-            return [
-                'extension_id'       => $extensionId,
-                'extension_number'   => $extensionNumber,
-                'resolved_by'        => $resolvedBy,
-                'device_id'          => $employee->ringcentral_device_id,
-                'from_number'        => $employee->ringcentral_from_number,
-                'filtered_by_device' => $filteredByDevice,
-                'records'            => $records,
-            ];
-        });
+        return $payload;
     }
 
     /**
@@ -529,89 +656,6 @@ class RingCentralController extends Controller
 
             if ($match && ! empty($device->id)) {
                 return (string) $device->id;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Extension RingCentral de l'employé : **l'appareil configuré sur sa
-     * fiche** (`ringcentral_device_id`) donne son extension, sinon la
-     * correspondance d'e-mail ; sinon `null` (422 côté contrôleur).
-     *
-     * @return array{string, ?string, string}|null  [extension id, numéro d'extension, résolu via]
-     */
-    private function resolveEmployeeExtension(Employee $employee, string $email): ?array
-    {
-        $deviceId = (string) ($employee->ringcentral_device_id ?? '');
-
-        if ($deviceId !== '') {
-            foreach ($this->ringCentral->getDevices(250) as $device) {
-                if ((string) data_get($device, 'id') !== $deviceId) {
-                    continue;
-                }
-
-                $extensionId = (string) (data_get($device, 'extension.id') ?? '');
-
-                if ($extensionId !== '') {
-                    $number = (string) (data_get($device, 'extensionNumber') ?? '');
-
-                    return [$extensionId, $number === '' ? null : $number, 'device'];
-                }
-            }
-        }
-
-        $extension = $this->findExtensionByEmail($email);
-
-        if ($extension !== null) {
-            $extensionId = (string) ($extension->id ?? $extension->extensionNumber ?? '');
-
-            if ($extensionId !== '') {
-                $number = (string) ($extension->extensionNumber ?? '');
-
-                return [$extensionId, $number === '' ? null : $number, 'email'];
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Ne garde que les appels passés par l'appareil de l'employé — **si
-     * RingCentral en renvoie l'identifiant** (sinon rien n'est filtré :
-     * filtrer à l'aveugle viderait le journal).
-     *
-     * @return array{array, bool}  [enregistrements, filtré oui/non]
-     */
-    private function filterByDevice(array $records, string $deviceId): array
-    {
-        if ($deviceId === '' || $records === []) {
-            return [$records, false];
-        }
-
-        $known = array_filter($records, fn ($record) => $this->recordDeviceId($record) !== null);
-
-        if ($known === []) {
-            return [$records, false];
-        }
-
-        $kept = array_values(array_filter(
-            $records,
-            fn ($record) => in_array($this->recordDeviceId($record), [null, $deviceId], true)
-        ));
-
-        return [$kept, true];
-    }
-
-    /** `deviceId` d'un appel (record ou sa première jambe), sinon `null`. */
-    private function recordDeviceId(mixed $record): ?string
-    {
-        foreach (['deviceId', 'device.id', 'legs.0.deviceId'] as $path) {
-            $value = data_get($record, $path);
-
-            if ($value !== null && $value !== '') {
-                return (string) $value;
             }
         }
 

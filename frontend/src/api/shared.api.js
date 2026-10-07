@@ -50,3 +50,17 @@ export function updateProfilePasswordApi(payload) {
 export function listRingCentralDevicesApi() {
   return api.get('/call-logs/devices', { params: { per_page: 250 } })
 }
+
+// RingCentral — synchronisation (ADMIN + SUPER_ADMIN) :
+//   * `syncRingCentralEmployeesApi()` : correspondance employé ↔ poste +
+//     numéros, écrite dans `employees.ringcentral_*` (Phase 1) ;
+//   * `syncEmployeeCallLogsApi(id)`   : journal d'un employé récupéré chez
+//     RingCentral puis rangé dans `call_logs` (Phase 2).
+// Réponse : `{success, data: {…rapport}}`.
+export function syncRingCentralEmployeesApi() {
+  return api.post('/call-logs/sync/employees')
+}
+
+export function syncEmployeeCallLogsApi(id) {
+  return api.post(`/call-logs/employees/${id}/logs/sync`)
+}

@@ -40,6 +40,7 @@ export default function EntrepriseDetailPage() {
     clients,
     name,
     companyName,
+    errorMessage,
     handleViewDetail,
   } = useEntrepriseDetailPage()
 
@@ -63,7 +64,10 @@ export default function EntrepriseDetailPage() {
       {isLoading ? (
         <div className="h-48 flex items-center justify-center text-muted-foreground">Chargement...</div>
       ) : !entreprise ? (
-        <div className="h-48 flex items-center justify-center text-muted-foreground">Entreprise introuvable.</div>
+        // Message serveur (404 « Entreprise introuvable. »…) si présent.
+        <div className="h-48 flex items-center justify-center text-muted-foreground">
+          {errorMessage ?? 'Entreprise introuvable.'}
+        </div>
       ) : (
         <>
           <StatCards analytics={analytics} />
