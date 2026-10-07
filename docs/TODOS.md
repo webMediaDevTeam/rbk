@@ -301,7 +301,7 @@ existe**.
 - [ ] **6. Vérification live** : **par vos soins** (aucun appel réel de mon
       côté — test manuel de l'onglet et d'un enregistrement existant).
 
-#### ✅ Quota RingCentral (`429 CMN-301`) + doc `docs/righcenter.md`
+#### ✅ Quota RingCentral (`429 CMN-301`) + doc `docs/ringcentral.md`
 
 Le premier essai live de l'onglet est tombé sur
 `RingCentral 429 Too Many Requests : CMN-301 — Request rate exceeded`.
@@ -319,7 +319,7 @@ Le premier essai live de l'onglet est tombé sur
 - [x] **Réessai automatique côté client** : `useCallLogs` retente
       (`refetch`) 2 fois à 30 s d'intervalle sur un 429, la carte
       l'indique ; `Retry-After` non exposé par RingCentral → délai fixe.
-- [x] **Alignement sur `docs/righcenter.md`** :
+- [x] **Alignement sur `docs/ringcentral.md`** :
       * contenu d'enregistrement via `/account/~/recording/{id}/content`
         (**1 appel**, conforme au §Step 3) avec repli `contentUri`
         (`media.ringcentral.com`) en cas de 404 ;
@@ -340,7 +340,7 @@ Bases : samples officiels `/home/webmedia/work/github/ringcentral-api-code-sampl
 `account/phone-numbers/get-extension-phone-number-list`,
 `voice-telephony/call-log/get-user-call-log-records`,
 `voice-telephony/call-recordings/*`, `voice-telephony/call-control/*`) +
-`docs/righcenter.md`.
+`docs/ringcentral.md`.
 
 #### Phase 1 — lier les employés à leurs numéros
 

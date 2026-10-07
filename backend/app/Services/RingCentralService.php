@@ -359,7 +359,7 @@ class RingCentralService
                 "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings"
             ));
         } catch (Throwable $e) {
-            // Variante documentée (docs/righcenter.md §Task 2) :
+            // Variante documentée (docs/ringcentral.md §Task 2) :
             // `POST …/parties/{partyId}/record` avec un identifiant de
             // demande — repli seulement si l'URL n'existe pas (404/405),
             // un 400 « partie pas encore connectée » n'appelle pas ça.

@@ -1188,7 +1188,7 @@ employé** — une donnée de préparation, **pas** le workflow d'appel.
 
 ## 13. Téléphonie & Call Logs (RingCentral)
 
-Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/exteranl_api.md`).
+Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/external_api.md`).
 
 * **Configuration** (`config/services.php` sous `ringcentral`) :
   - `RINGCENTRAL_CLIENT_ID`
