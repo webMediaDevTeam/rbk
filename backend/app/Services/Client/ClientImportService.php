@@ -123,7 +123,7 @@ class ClientImportService
      *  - dérivations identiques à `ClientsFromJsonSeeder` : `categories` ←
      *    `authorized_categories`, `licence_propre` ← numéro propre renseigné.
      *
-     * @return string `created` | `updated` | `unchanged`
+     * @return string `created` | `updated` | `unchanged` | `skipped_manual`
      *
      * @throws InvalidArgumentException si aucune clé d'upsert n'est fournie
      */
@@ -169,6 +169,14 @@ class ClientImportService
             return 'created';
         }
 
+        // Fiche déjà saisie à la main (`is_manually_updated = true`, posé
+        // par PATCH commercials/clients/{id}/phone) : l'import scraper / n8n
+        // ne réécrit **aucun** champ de la ligne. Retour `skipped_manual`,
+        // compté à part dans le lot (docs/public_api.md).
+        if ($client->is_manually_updated) {
+            return 'skipped_manual';
+        }
+
         // Numéro déjà en place (saisi à la main depuis l'accès Admin) : un
         // payload sans « Téléphone » — ou vide — ne doit **pas** l'effacer.
         // L'enrichissement ne fait que compléter le numéro manquant ; un
@@ -201,7 +209,7 @@ class ClientImportService
      * reste exploitable côté scraper.
      *
      * @param  list<mixed>  $payloads
-     * @return array{received:int, processed:int, created:int, updated:int, unchanged:int, failed:int, errors:list<array{index:int, licence_number:?string, error:string}>}
+     * @return array{received:int, processed:int, created:int, updated:int, unchanged:int, skipped_manual:int, failed:int, errors:list<array{index:int, licence_number:?string, error:string}>}
      */
     public static function bulkUpsertFromScraperPayload(array $payloads): array
     {
@@ -211,6 +219,7 @@ class ClientImportService
             'created' => 0,
             'updated' => 0,
             'unchanged' => 0,
+            'skipped_manual' => 0,
             'failed' => 0,
             'errors' => [],
         ];

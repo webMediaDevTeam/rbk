@@ -422,7 +422,13 @@ class CommercialAdminController extends Controller
         $client = Client::findOrFail($id);
         $phone = Client::cleanPhone($validated['phone'] ?? null);
 
-        $client->update(['phone' => $phone]);
+        // Saisie manuelle : la fiche devient « modifiée à la main » — l'import
+        // scraper / n8n ne la réécrit plus jamais (is_manually_updated = true,
+        // lu par ClientImportService::upsertFromScraperPayload).
+        $client->update([
+            'phone' => $phone,
+            'is_manually_updated' => true,
+        ]);
 
         return response()->json([
             'success' => true,

@@ -23,7 +23,9 @@ use InvalidArgumentException;
  *   [{"Licence": "…"}, {"Licence": "…"}]
  *
  * Réponse 200 : `{success, data: {received, processed, created, updated,
- * unchanged, failed, errors[]}}` — `errors[]` porte `index`,
+ * unchanged, skipped_manual, failed, errors[]}}` — `skipped_manual` =
+ * fiches « modifiées à la main » laissées intactes (`is_manually_updated`),
+ * `errors[]` porte `index`,
  * `licence_number` et `error` pour chaque entrée rejetée (le reste du lot a
  * bien été écrit). Corps invalide / lot trop long → 422.
  *

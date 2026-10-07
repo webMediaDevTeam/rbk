@@ -120,8 +120,8 @@
                   "    pm.expect(d.failed).to.eql(0);",
                   "});",
                   "",
-                  "pm.test('created + updated + unchanged === processed', function () {",
-                  "    pm.expect(d.created + d.updated + d.unchanged).to.eql(d.processed);",
+                  "pm.test('created + updated + unchanged + skipped_manual === processed', function () {",
+                  "    pm.expect(d.created + d.updated + d.unchanged + d.skipped_manual).to.eql(d.processed);",
                   "});",
                   "",
                   "pm.test('aucune erreur', function () {",
@@ -186,8 +186,8 @@
                   "    pm.expect(d.processed).to.eql(3);",
                   "});",
                   "",
-                  "pm.test('created + updated + unchanged === processed', function () {",
-                  "    pm.expect(d.created + d.updated + d.unchanged).to.eql(d.processed);",
+                  "pm.test('created + updated + unchanged + skipped_manual === processed', function () {",
+                  "    pm.expect(d.created + d.updated + d.unchanged + d.skipped_manual).to.eql(d.processed);",
                   "});"
                 ]
               }

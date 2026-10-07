@@ -90,6 +90,10 @@ class Client extends Model
         'current_reservation_id',
         'current_comercial_id',
         'is_blacklisted',
+        // Drapeau « fiche modifiée à la main » : positionné par l'interface
+        // (saisie manuelle) et lu par l'import scraper / n8n, qui **ne
+        // réécrit plus** la fiche quand il vaut `true`.
+        'is_manually_updated',
         'returned_at',
         'licence_number',
         'licence_propre',
@@ -119,6 +123,7 @@ class Client extends Model
         return [
             'categories' => 'array',
             'is_blacklisted' => 'boolean',
+            'is_manually_updated' => 'boolean',
             'licence_propre' => 'boolean',
             'licence_propre_numero' => 'integer',
             'respondents' => 'array',

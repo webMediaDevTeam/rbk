@@ -775,9 +775,11 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   nettoyée et reformattée côté serveur (`Client::cleanPhone()`). Après
   enregistrement : invalidation `admin-clients-history`, `prospect-kpis`,
   `commercial-prospects`, `admin-client` / `commercial-prospect` et
-  `dashboard-stats`. Côté import, un payload n8n **sans `phone` (ou vide)
-  n'efface plus** un numéro déjà saisi
-  (`Client::upsertFromScraperPayload()`).
+  `dashboard-stats`. Chaque enregistrement pose **`is_manually_updated =
+  true`** : l'import scraper / n8n ne réécrit **plus aucun champ** de la
+  fiche (upsert → `skipped_manual`), la saisie manuelle prime toujours
+  (un payload n8n **sans `phone`** n'effaçait déjà pas le numéro saisi,
+  `Client::upsertFromScraperPayload()`).
 * **Fiche client — « Contact » en tête** : le bandeau affiche les
   **répondants** (sous le nom d'entreprise) et l'onglet *Détails* s'ouvre sur
   un bloc **Contact** où **téléphone**, **e-mail**, **représentant** et
@@ -998,8 +1000,9 @@ clé partagée `X-Api-Key` (`EXTERNAL_SYSTEM_API_KEY`, middleware
   pas de numéro de licence. Une ligne invalide (ou un conflit d'unicité) est
   signalée sans annuler le reste du lot ;
 * **réponse `200`** :
-  `{success, data: {received, processed, created, updated, unchanged, failed,
-  errors[]}}` avec `errors[] = {index, licence_number, error}` (le SQL n'est
+  `{success, data: {received, processed, created, updated, unchanged,
+  skipped_manual, failed, errors[]}}` avec `errors[] = {index, licence_number,
+  error}` (le SQL n'est
   jamais exposé, il est journalisé) ; `success = false` **uniquement** si
   aucune ligne n'a pu être traitée ;
 * **mêmes règles que le seeder** : dérivations `categories` ←
@@ -1008,6 +1011,10 @@ clé partagée `X-Api-Key` (`EXTERNAL_SYSTEM_API_KEY`, middleware
   **jamais** repris, et une ligne **identique** n'est pas réécrite
   (`unchanged` : `updated_at` ne bouge pas d'une resynchronisation à
   l'autre) ;
+* **fiche modifiée à la main intouchable** : `is_manually_updated = true`
+  (posé par `PATCH commercials/clients/{id}/phone`, §2) → l'upsert
+  **skippe** la ligne (`skipped_manual`) : aucun champ n'est complété ni
+  réécrit, la saisie manuelle prime sur le scraper ;
 * **nettoyage du payload** — `Client::scrubAttributes()`, appelé en fin de
   `Client::attributesFromPayload()` (donc aussi par le seeder JSON et par la
   clé de recherche du `bulk-delete`). Le webhook ne **valide** pas (choix

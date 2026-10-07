@@ -176,6 +176,7 @@ temporaires (voir « Voir aussi » §7).
   "data": {
     "received": 3, "processed": 3,
     "created": 1, "updated": 1, "unchanged": 1,   // créés / modifiés / identiques
+    "skipped_manual": 0,                          // fiches saisies à la main (jamais réécrites)
     "failed": 0,
     "errors": []                                   // {index, licence_number, error}
   }
@@ -186,6 +187,9 @@ temporaires (voir « Voir aussi » §7).
   dans `failed` sans annuler le reste du lot ;
 * ligne **identique** → `unchanged` : `updated_at` ne bouge donc pas entre
   deux resynchronisations ;
+* fiche **modifiée à la main** (`is_manually_updated = true`, posée par
+  `PATCH commercials/clients/{id}/phone`) → `skipped_manual` : la ligne est
+  laissée telle quelle, **aucun** champ n'est complété ni réécrit ;
 * invalidation des caches de listes distinctes déclenchée par le modèle ;
 * `Conflit de données : numéro de licence déjà utilisé par un autre client.`
   couvre l'unicité de `licence_propre_numero`.
@@ -211,7 +215,7 @@ curl -X POST http://localhost:8000/api/v1/clients/bulk-upsert \
 Réponse :
 
 ```json
-{"success":true,"data":{"received":2,"processed":2,"created":2,"updated":0,"unchanged":0,"failed":0,"errors":[]}}
+{"success":true,"data":{"received":2,"processed":2,"created":2,"updated":0,"unchanged":0,"skipped_manual":0,"failed":0,"errors":[]}}
 ```
 
 ---
@@ -353,8 +357,8 @@ docker exec rbqbot-backend-dev php artisan test \
   `success === (processed > 0)` et `failed === errors.length` ; sur `422`, il
   vérifie `{success: false, error}` **sans** `data`. Il s'auto-exempt pour le
   préflight (`204`). Chaque requête ajoute ensuite ses **assertions propres**
-  (`pm.test`) sur ses compteurs (`created + updated + unchanged ===
-  processed`, `deleted + skipped + missing === processed`, forme de
+  (`pm.test`) sur ses compteurs (`created + updated + unchanged +
+  skipped_manual === processed`, `deleted + skipped + missing === processed`, forme de
   `skipped_items[].linked`, etc.).
 
 > ⚠️ **Ordre d'exécution** — le dossier d'import doit passer **avant** celui de
