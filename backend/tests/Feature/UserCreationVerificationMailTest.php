@@ -40,9 +40,8 @@ class UserCreationVerificationMailTest extends TestCase
         Mail::assertSent(UserAccountVerificationMail::class, function (UserAccountVerificationMail $mail) use ($createdUser) {
             return $mail->hasTo($createdUser->email)
                 && $mail->token === $createdUser->verification_token
-                && str_contains($mail->verificationUrl, '/verify-account?token=' . $createdUser->verification_token)
+                && str_contains($mail->verificationUrl, '/verify-account?token='.$createdUser->verification_token)
                 && $mail->userName === 'New Admin';
         });
     }
-
 }

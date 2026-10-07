@@ -36,10 +36,10 @@ class CommercialEmployeeCallTest extends TestCase
         $user = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
 
         $user->employee()->create([
-            'first_name'              => 'Jean',
-            'last_name'               => 'Tremblay',
+            'first_name' => 'Jean',
+            'last_name' => 'Tremblay',
             'ringcentral_from_number' => $fromNumber,
-            'ringcentral_device_id'   => $deviceId,
+            'ringcentral_device_id' => $deviceId,
         ]);
 
         return $user;
@@ -169,7 +169,7 @@ class CommercialEmployeeCallTest extends TestCase
         Sanctum::actingAs($this->employe('+15146120498'));
 
         $mock = $this->mockService();
-        $mock->shouldReceive('makeCallOut')->once()->andThrow(new \Exception('RingCentral non configuré'));
+        $mock->shouldReceive('makeCallOut')->once()->andThrow(new Exception('RingCentral non configuré'));
 
         $this->postJson('/api/v1/call-logs/my-call', ['to' => '15145550123'])
             ->assertStatus(502)

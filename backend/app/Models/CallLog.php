@@ -55,10 +55,10 @@ class CallLog extends Model
 
     protected $casts = [
         'started_at' => 'datetime',
-        'ended_at'   => 'datetime',
-        'duration'   => 'integer',
-        'raw'        => 'array',
-        'synced_at'  => 'datetime',
+        'ended_at' => 'datetime',
+        'duration' => 'integer',
+        'raw' => 'array',
+        'synced_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -82,26 +82,26 @@ class CallLog extends Model
         $recordings = $this->recordings;
 
         return [
-            'id'         => $this->ringcentral_call_id ?? $this->id,
-            'local_id'   => $this->id,
+            'id' => $this->ringcentral_call_id ?? $this->id,
+            'local_id' => $this->id,
             'session_id' => $this->ringcentral_session_id,
-            'direction'  => $this->direction,
-            'type'       => $this->type,
-            'startTime'  => $this->started_at?->toIso8601String(),
-            'endTime'    => $this->ended_at?->toIso8601String(),
-            'duration'   => $this->duration,
-            'result'     => $this->result,
-            'from'       => [
+            'direction' => $this->direction,
+            'type' => $this->type,
+            'startTime' => $this->started_at?->toIso8601String(),
+            'endTime' => $this->ended_at?->toIso8601String(),
+            'duration' => $this->duration,
+            'result' => $this->result,
+            'from' => [
                 'phoneNumber' => $this->from_number,
-                'name'        => $this->from_name,
+                'name' => $this->from_name,
             ],
-            'to'         => [
+            'to' => [
                 'phoneNumber' => $this->to_number,
-                'name'        => $this->to_name,
+                'name' => $this->to_name,
             ],
             // Lecture de l'audio : la carte n'affiche qu'un lecteur, on lui
             // donne le premier enregistrement ; `recordings` reste disponible.
-            'recording'  => $recordings->first()?->toApiArray(),
+            'recording' => $recordings->first()?->toApiArray(),
             'recordings' => $recordings->map->toApiArray()->values()->all(),
         ];
     }

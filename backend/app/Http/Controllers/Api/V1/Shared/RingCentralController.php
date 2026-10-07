@@ -85,7 +85,6 @@ class RingCentralController extends Controller
      * premier) — sans jamais échouer l'appareillage pour autant.
      *
      * @param  array  $devices  records RingCentral (tableaux **ou** objets)
-     * @return array
      */
     private function withPhoneNumbers(array $devices): array
     {
@@ -274,7 +273,7 @@ class RingCentralController extends Controller
      *
      * POST /call-logs/my-call   { to, record?: bool }
      *
-     * @throws ValidationException  aucun numéro source configuré sur la fiche
+     * @throws ValidationException aucun numéro source configuré sur la fiche
      */
     public function callAsEmployee(Request $request): JsonResponse
     {
@@ -400,7 +399,7 @@ class RingCentralController extends Controller
      *
      * POST /call-logs/sync/employees
      *
-     * @return JsonResponse  `{total, matched, updated, unmatched[]}`
+     * @return JsonResponse `{total, matched, updated, unmatched[]}`
      */
     public function syncEmployees(): JsonResponse
     {
@@ -412,7 +411,7 @@ class RingCentralController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $report,
+            'data' => $report,
         ]);
     }
 
@@ -434,7 +433,7 @@ class RingCentralController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->logsPayload($employee),
+            'data' => $this->logsPayload($employee),
         ]);
     }
 
@@ -465,7 +464,7 @@ class RingCentralController extends Controller
         if ($sync === null) {
             return response()->json([
                 'success' => false,
-                'error'   => 'Aucune extension RingCentral rattachée à cet employé (appareil « '
+                'error' => 'Aucune extension RingCentral rattachée à cet employé (appareil « '
                     .($employee->ringcentral_device_id ?? '—').' » introuvable, e-mail « '
                     .($employee->user?->email ?? '—').' » sans correspondance). Choisissez son '
                     .'appareil source dans sa fiche ou lancez la synchronisation des employés.',
@@ -474,7 +473,7 @@ class RingCentralController extends Controller
 
         return response()->json([
             'success' => true,
-            'data'    => $this->logsPayload($employee, $sync),
+            'data' => $this->logsPayload($employee, $sync),
         ]);
     }
 
@@ -487,7 +486,7 @@ class RingCentralController extends Controller
         if ($employee === null) {
             return response()->json([
                 'success' => false,
-                'error'   => 'Aucune fiche employé rattachée à cet utilisateur.',
+                'error' => 'Aucune fiche employé rattachée à cet utilisateur.',
             ], 422);
         }
 
@@ -506,15 +505,15 @@ class RingCentralController extends Controller
             ->get();
 
         $payload = [
-            'source'            => 'db',
-            'extension_id'      => $employee->ringcentral_extension_id,
-            'extension_number'  => $employee->ringcentral_extension_number,
-            'device_id'         => $employee->ringcentral_device_id,
-            'from_number'       => $employee->ringcentral_from_number,
-            'phone_numbers'     => $employee->ringcentral_phone_numbers,
-            'synced_at'         => $employee->ringcentral_synced_at?->toIso8601String(),
+            'source' => 'db',
+            'extension_id' => $employee->ringcentral_extension_id,
+            'extension_number' => $employee->ringcentral_extension_number,
+            'device_id' => $employee->ringcentral_device_id,
+            'from_number' => $employee->ringcentral_from_number,
+            'phone_numbers' => $employee->ringcentral_phone_numbers,
+            'synced_at' => $employee->ringcentral_synced_at?->toIso8601String(),
             'filtered_by_device' => false,
-            'records'           => $calls->map(fn (CallLog $call) => $call->toApiArray())->values()->all(),
+            'records' => $calls->map(fn (CallLog $call) => $call->toApiArray())->values()->all(),
         ];
 
         if ($sync !== null) {
@@ -540,9 +539,9 @@ class RingCentralController extends Controller
         }
 
         return response($content['body'], 200, [
-            'Content-Type'        => $content['content_type'],
-            'Content-Length'      => (string) strlen($content['body']),
-            'Cache-Control'       => 'private, max-age=3600',
+            'Content-Type' => $content['content_type'],
+            'Content-Length' => (string) strlen($content['body']),
+            'Cache-Control' => 'private, max-age=3600',
             'Content-Disposition' => 'inline; filename="recording-'.$recordingId.'.mp3"',
         ]);
     }
@@ -562,7 +561,7 @@ class RingCentralController extends Controller
      * @param  array{to: string, user_id?: ?string, extension_id?: ?string, device_id?: ?string, from?: ?string}  $validated
      * @return array{device_id: ?string, from: ?string, extension_id: ?string}
      *
-     * @throws ValidationException  aucune source résoluble
+     * @throws ValidationException aucune source résoluble
      */
     private function resolveSource(array $validated): array
     {
@@ -772,8 +771,8 @@ class RingCentralController extends Controller
      * sans ce déballage l'UI ne peut pas expliquer l'échec.
      *
      * @return array{status: int, reason: string, request_id: ?string, detail: string, body: mixed}|null
-     *         `null` si l'exception ne provient pas d'un échange HTTP
-     *         (SDK non configuré, JWT expiré, validation…).
+     *                                                                                                   `null` si l'exception ne provient pas d'un échange HTTP
+     *                                                                                                   (SDK non configuré, JWT expiré, validation…).
      */
     private function upstream(Throwable $e): ?array
     {

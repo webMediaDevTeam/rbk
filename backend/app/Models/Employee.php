@@ -36,7 +36,7 @@ class Employee extends Model
      */
     protected $casts = [
         'ringcentral_phone_numbers' => 'array',
-        'ringcentral_synced_at'     => 'datetime',
+        'ringcentral_synced_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

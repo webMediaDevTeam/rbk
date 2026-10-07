@@ -619,5 +619,4 @@ class Client extends Model
             'administrative_regions' => self::distinctValues('administrative_region'),
         ];
     }
-
 }

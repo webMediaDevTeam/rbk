@@ -19,10 +19,10 @@
  * valeurs, quel que soit l'hôte (conteneur, CI, poste local).
  */
 $forcedEnvironment = [
-    'APP_ENV'       => 'testing',
+    'APP_ENV' => 'testing',
     'DB_CONNECTION' => 'sqlite',
-    'DB_DATABASE'   => ':memory:',
-    'DB_URL'        => '',
+    'DB_DATABASE' => ':memory:',
+    'DB_URL' => '',
 ];
 
 foreach ($forcedEnvironment as $key => $value) {

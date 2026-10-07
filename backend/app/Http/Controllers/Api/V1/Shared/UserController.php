@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\User;
 use App\Support\AccountVerificationLinks;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,15 +25,23 @@ class UserController extends Controller
     protected function respondOk($data = null, ?string $message = null, int $code = 200): JsonResponse
     {
         $payload = ['success' => true];
-        if ($message) $payload['message'] = $message;
-        if ($data !== null) $payload['data'] = $data;
+        if ($message) {
+            $payload['message'] = $message;
+        }
+        if ($data !== null) {
+            $payload['data'] = $data;
+        }
+
         return response()->json($payload, $code);
     }
 
     protected function respondError(string $message, int $code = 400, $errors = null): JsonResponse
     {
         $payload = ['success' => false, 'message' => $message];
-        if ($errors) $payload['errors'] = $errors;
+        if ($errors) {
+            $payload['errors'] = $errors;
+        }
+
         return response()->json($payload, $code);
     }
 
@@ -61,8 +70,8 @@ class UserController extends Controller
 
     private const ROLE_HIERARCHY = [
         'SUPER_ADMIN' => 0,
-        'ADMIN'       => 1,
-        'COMERCIAL'   => 2,
+        'ADMIN' => 1,
+        'COMERCIAL' => 2,
     ];
 
     private const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
@@ -70,15 +79,15 @@ class UserController extends Controller
     /**
      * Build a scoped query filtered by the connected user's role.
      */
-    protected function scopedQuery(Request $request): \Illuminate\Database\Eloquent\Builder
+    protected function scopedQuery(Request $request): Builder
     {
-        $user  = $request->user();
+        $user = $request->user();
         $query = User::with(['employee.enterprise']);
 
         return match ($user->role) {
             'SUPER_ADMIN' => $query,
-            'ADMIN'       => $query->whereIn('role', ['ADMIN', 'COMERCIAL']),
-            default       => $query->where('id', $user->id),
+            'ADMIN' => $query->whereIn('role', ['ADMIN', 'COMERCIAL']),
+            default => $query->where('id', $user->id),
         };
     }
 
@@ -87,9 +96,11 @@ class UserController extends Controller
      */
     protected function canAct(User $actor, User $target, string $action = 'view'): bool
     {
-        if ($actor->id === $target->id) return true;
+        if ($actor->id === $target->id) {
+            return true;
+        }
 
-        $actorRank  = self::ROLE_HIERARCHY[$actor->role]  ?? 99;
+        $actorRank = self::ROLE_HIERARCHY[$actor->role] ?? 99;
         $targetRank = self::ROLE_HIERARCHY[$target->role] ?? 99;
 
         if ($action === 'view') {
@@ -110,49 +121,49 @@ class UserController extends Controller
         $base = request()->getSchemeAndHttpHost();
 
         return [
-            'id'         => $user->id,
-            'email'      => $user->email,
-            'role'       => $user->role,
-            'status'     => $user->status,
-            'avatar'     => $user->avatar,
+            'id' => $user->id,
+            'email' => $user->email,
+            'role' => $user->role,
+            'status' => $user->status,
+            'avatar' => $user->avatar,
             'avatar_url' => $user->avatar
                 ? "{$base}/storage/avatars/{$user->avatar}"
                 : null,
             'first_name' => $user->first_name,
-            'last_name'  => $user->last_name,
-            'phone'      => $user->phone,
+            'last_name' => $user->last_name,
+            'phone' => $user->phone,
             'created_at' => $user->created_at,
-            'profil'     => match ($user->role) {
+            'profil' => match ($user->role) {
                 'COMERCIAL' => $user->employee ? [
-                    'id'              => $user->employee->id,
-                    'prenom'          => $user->employee->first_name,
-                    'nom'             => $user->employee->last_name,
-                    'telephone'       => $user->employee->phone,
-                    'entreprise_id'   => $user->employee->enterprise_id,
+                    'id' => $user->employee->id,
+                    'prenom' => $user->employee->first_name,
+                    'nom' => $user->employee->last_name,
+                    'telephone' => $user->employee->phone,
+                    'entreprise_id' => $user->employee->enterprise_id,
                     'entreprise_name' => $user->employee->enterprise?->name,
-                    'image_dp'        => $user->employee->image_dp,
-                    'image_dp_url'    => $user->employee->image_dp
+                    'image_dp' => $user->employee->image_dp,
+                    'image_dp_url' => $user->employee->image_dp
                         ? "{$base}/storage/avatars/{$user->employee->image_dp}"
                         : null,
-                    'info_supp'       => $user->employee->additional_info,
+                    'info_supp' => $user->employee->additional_info,
                     // Source d'appel RingCentral choisie à la création/édition.
-                    'ringcentral_device_id'   => $user->employee->ringcentral_device_id,
+                    'ringcentral_device_id' => $user->employee->ringcentral_device_id,
                     'ringcentral_from_number' => $user->employee->ringcentral_from_number,
-                    'entreprise'      => $user->employee->enterprise ? [
-                        'name'       => $user->employee->enterprise->name,
-                        'email'      => $user->employee->enterprise->email,
+                    'entreprise' => $user->employee->enterprise ? [
+                        'name' => $user->employee->enterprise->name,
+                        'email' => $user->employee->enterprise->email,
                         'tax_number' => $user->employee->enterprise->tax_number,
-                        'phone'      => $user->employee->enterprise->phone,
-                        'address'    => $user->employee->enterprise->address,
-                        'status'     => $user->employee->enterprise->status,
-                        'logo_url'   => $user->employee->enterprise->logo
+                        'phone' => $user->employee->enterprise->phone,
+                        'address' => $user->employee->enterprise->address,
+                        'status' => $user->employee->enterprise->status,
+                        'logo_url' => $user->employee->enterprise->logo
                             ? "{$base}/storage/logos/{$user->employee->enterprise->logo}"
                             : null,
                     ] : null,
                 ] : null,
                 default => [
-                    'prenom'    => $user->first_name,
-                    'nom'       => $user->last_name,
+                    'prenom' => $user->first_name,
+                    'nom' => $user->last_name,
                     'telephone' => $user->phone,
                 ],
             },
@@ -177,11 +188,11 @@ class UserController extends Controller
             $like = "%{$search}%";
             $query->where(function ($q) use ($like) {
                 $q->where('email', 'LIKE', $like)
-                  ->orWhere('first_name', 'LIKE', $like)
-                  ->orWhere('last_name', 'LIKE', $like)
-                  ->orWhereHas('employee', fn ($eq) => $eq->where('first_name', 'LIKE', $like)
-                                                       ->orWhere('last_name', 'LIKE', $like)
-                                                       ->orWhereHas('enterprise', fn ($entQ) => $entQ->where('name', 'LIKE', $like)));
+                    ->orWhere('first_name', 'LIKE', $like)
+                    ->orWhere('last_name', 'LIKE', $like)
+                    ->orWhereHas('employee', fn ($eq) => $eq->where('first_name', 'LIKE', $like)
+                        ->orWhere('last_name', 'LIKE', $like)
+                        ->orWhereHas('enterprise', fn ($entQ) => $entQ->where('name', 'LIKE', $like)));
             });
         }
 
@@ -194,13 +205,13 @@ class UserController extends Controller
         }
 
         $sortable = [
-            'email'      => 'users.email',
-            'role'       => 'users.role',
-            'status'     => 'users.status',
+            'email' => 'users.email',
+            'role' => 'users.role',
+            'status' => 'users.status',
             'created_at' => 'users.created_at',
         ];
 
-        $sortBy    = $request->input('sort_by', 'created_at');
+        $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = strtolower($request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if ($sortBy === 'name') {
@@ -220,15 +231,15 @@ class UserController extends Controller
         }
 
         $perPage = min((int) $request->input('per_page', 20), 300);
-        $users   = $query->paginate($perPage);
+        $users = $query->paginate($perPage);
 
         return $this->respondOk([
             'utilisateurs' => $users->getCollection()->map(fn ($u) => $this->formatUser($u)),
-            'pagination'   => [
+            'pagination' => [
                 'current_page' => $users->currentPage(),
-                'last_page'    => $users->lastPage(),
-                'per_page'     => $users->perPage(),
-                'total'        => $users->total(),
+                'last_page' => $users->lastPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
             ],
         ]);
     }
@@ -247,46 +258,46 @@ class UserController extends Controller
         $actor = $request->user();
 
         $base = $request->validate([
-            'email'        => 'required|email|unique:users,email',
+            'email' => 'required|email|unique:users,email',
             'mot_de_passe' => 'nullable|string|min:8|confirmed',
-            'role'         => 'required|in:ADMIN,COMERCIAL',
+            'role' => 'required|in:ADMIN,COMERCIAL',
         ]);
 
         $targetRank = self::ROLE_HIERARCHY[$base['role']] ?? 99;
-        $actorRank  = self::ROLE_HIERARCHY[$actor->role]  ?? 99;
+        $actorRank = self::ROLE_HIERARCHY[$actor->role] ?? 99;
         if ($targetRank <= $actorRank) {
             return $this->forbidden('Vous ne pouvez pas créer un utilisateur de niveau égal ou supérieur.');
         }
 
         $profile = match ($base['role']) {
             'COMERCIAL' => $request->validate([
-                'first_name'           => 'required|string|max:255',
-                'last_name'            => 'required|string|max:255',
-                'phone'                => 'nullable|string|max:255',
-                'additional_info'      => 'nullable|string',
-                'enterprise_id'        => 'nullable|uuid|exists:enterprises,id',
+                'first_name' => 'required|string|max:255',
+                'last_name' => 'required|string|max:255',
+                'phone' => 'nullable|string|max:255',
+                'additional_info' => 'nullable|string',
+                'enterprise_id' => 'nullable|uuid|exists:enterprises,id',
                 // Source d'appel RingCentral choisie dans le select d'appareils.
-                'ringcentral_device_id'   => 'nullable|string|max:64',
+                'ringcentral_device_id' => 'nullable|string|max:64',
                 'ringcentral_from_number' => 'nullable|string|max:32',
             ]),
             'ADMIN' => $request->validate([
                 'first_name' => 'nullable|string|max:255',
-                'last_name'  => 'nullable|string|max:255',
-                'phone'      => 'nullable|string|max:255',
+                'last_name' => 'nullable|string|max:255',
+                'phone' => 'nullable|string|max:255',
             ]),
             default => [],
         };
 
-        return DB::transaction(function () use ($actor, $base, $profile, $request, $verificationLinks) {
+        return DB::transaction(function () use ($base, $profile, $request, $verificationLinks) {
             $data = [
-                'email'      => $base['email'],
-                'role'       => $base['role'],
+                'email' => $base['email'],
+                'role' => $base['role'],
                 'first_name' => $profile['first_name'] ?? null,
-                'last_name'  => $profile['last_name']  ?? null,
-                'phone'      => $profile['phone']      ?? null,
+                'last_name' => $profile['last_name'] ?? null,
+                'phone' => $profile['phone'] ?? null,
             ];
 
-            if (!empty($base['mot_de_passe'])) {
+            if (! empty($base['mot_de_passe'])) {
                 $data['password_hash'] = Hash::make($base['mot_de_passe']);
                 $data['email_verified_at'] = now();
             }
@@ -299,13 +310,13 @@ class UserController extends Controller
 
             if ($base['role'] === 'COMERCIAL') {
                 Employee::create([
-                    'user_id'         => $user->id,
-                    'enterprise_id'   => $profile['enterprise_id'] ?? null,
-                    'first_name'      => $profile['first_name'],
-                    'last_name'       => $profile['last_name'],
-                    'phone'           => $profile['phone']           ?? null,
+                    'user_id' => $user->id,
+                    'enterprise_id' => $profile['enterprise_id'] ?? null,
+                    'first_name' => $profile['first_name'],
+                    'last_name' => $profile['last_name'],
+                    'phone' => $profile['phone'] ?? null,
                     'additional_info' => $profile['additional_info'] ?? null,
-                    'ringcentral_device_id'   => $profile['ringcentral_device_id']   ?? null,
+                    'ringcentral_device_id' => $profile['ringcentral_device_id'] ?? null,
                     'ringcentral_from_number' => $profile['ringcentral_from_number'] ?? null,
                 ]);
             }
@@ -338,9 +349,11 @@ class UserController extends Controller
     public function show(Request $request, string $id): JsonResponse
     {
         $target = User::with(['employee.enterprise'])->find($id);
-        if (!$target) return $this->notFound();
+        if (! $target) {
+            return $this->notFound();
+        }
 
-        if (!$this->canAct($request->user(), $target, 'view')) {
+        if (! $this->canAct($request->user(), $target, 'view')) {
             return $this->forbidden();
         }
 
@@ -359,28 +372,30 @@ class UserController extends Controller
     public function update(Request $request, string $id): JsonResponse
     {
         $target = User::with(['employee.enterprise'])->find($id);
-        if (!$target) return $this->notFound();
+        if (! $target) {
+            return $this->notFound();
+        }
 
-        if (!$this->canAct($request->user(), $target, 'update')) {
+        if (! $this->canAct($request->user(), $target, 'update')) {
             return $this->forbidden();
         }
 
         $data = $request->validate([
-            'email'           => 'sometimes|email|unique:users,email,' . $id,
-            'mot_de_passe'    => 'nullable|string|min:8',
-            'role'            => 'sometimes|in:ADMIN,COMERCIAL',
-            'status'          => 'sometimes|in:' . implode(',', self::VALID_STATUSES),
-            'first_name'      => 'sometimes|nullable|string|max:255',
-            'last_name'       => 'sometimes|nullable|string|max:255',
-            'phone'           => 'sometimes|nullable|string|max:255',
+            'email' => 'sometimes|email|unique:users,email,'.$id,
+            'mot_de_passe' => 'nullable|string|min:8',
+            'role' => 'sometimes|in:ADMIN,COMERCIAL',
+            'status' => 'sometimes|in:'.implode(',', self::VALID_STATUSES),
+            'first_name' => 'sometimes|nullable|string|max:255',
+            'last_name' => 'sometimes|nullable|string|max:255',
+            'phone' => 'sometimes|nullable|string|max:255',
             'additional_info' => 'sometimes|nullable|string',
-            'enterprise_id'   => 'sometimes|nullable|uuid|exists:enterprises,id',
+            'enterprise_id' => 'sometimes|nullable|uuid|exists:enterprises,id',
             // Source d'appel RingCentral de l'employé (select d'appareils).
-            'ringcentral_device_id'   => 'sometimes|nullable|string|max:64',
+            'ringcentral_device_id' => 'sometimes|nullable|string|max:64',
             'ringcentral_from_number' => 'sometimes|nullable|string|max:32',
         ]);
 
-        if (!empty($data['mot_de_passe'])) {
+        if (! empty($data['mot_de_passe'])) {
             $data['password_hash'] = Hash::make($data['mot_de_passe']);
         }
         unset($data['mot_de_passe']);
@@ -389,8 +404,8 @@ class UserController extends Controller
         unset($data['ringcentral_device_id'], $data['ringcentral_from_number']);
 
         if (isset($data['role']) && $data['role'] !== $target->role) {
-            $actorRank  = self::ROLE_HIERARCHY[$request->user()->role]  ?? 99;
-            $targetRank = self::ROLE_HIERARCHY[$data['role']]           ?? 99;
+            $actorRank = self::ROLE_HIERARCHY[$request->user()->role] ?? 99;
+            $targetRank = self::ROLE_HIERARCHY[$data['role']] ?? 99;
             if ($targetRank <= $actorRank) {
                 return $this->forbidden('Impossible de promouvoir un utilisateur à un niveau égal ou supérieur.');
             }
@@ -423,9 +438,11 @@ class UserController extends Controller
     public function destroy(Request $request, string $id): JsonResponse
     {
         $target = User::find($id);
-        if (!$target) return $this->notFound();
+        if (! $target) {
+            return $this->notFound();
+        }
 
-        if (!$this->canAct($request->user(), $target, 'delete')) {
+        if (! $this->canAct($request->user(), $target, 'delete')) {
             return $this->forbidden();
         }
 
@@ -451,9 +468,11 @@ class UserController extends Controller
     public function toggleStatus(Request $request, string $id): JsonResponse
     {
         $target = User::find($id);
-        if (!$target) return $this->notFound();
+        if (! $target) {
+            return $this->notFound();
+        }
 
-        if (!$this->canAct($request->user(), $target, 'update')) {
+        if (! $this->canAct($request->user(), $target, 'update')) {
             return $this->forbidden();
         }
 
@@ -482,9 +501,11 @@ class UserController extends Controller
     public function updateAvatar(Request $request, string $id): JsonResponse
     {
         $target = User::with(['employee.enterprise'])->find($id);
-        if (!$target) return $this->notFound();
+        if (! $target) {
+            return $this->notFound();
+        }
 
-        if (!$this->canAct($request->user(), $target, 'update')) {
+        if (! $this->canAct($request->user(), $target, 'update')) {
             return $this->forbidden();
         }
 
@@ -494,7 +515,7 @@ class UserController extends Controller
 
         [$directory, $field, $model] = match (true) {
             $target->role === 'COMERCIAL' && $target->employee => ['avatars', 'image_dp', $target->employee],
-            default                                            => ['avatars', 'avatar', $target],
+            default => ['avatars', 'avatar', $target],
         };
 
         $oldFile = $model->{$field};
@@ -502,9 +523,9 @@ class UserController extends Controller
             Storage::disk('public')->delete("{$directory}/{$oldFile}");
         }
 
-        $file      = $request->file('avatar');
+        $file = $request->file('avatar');
         $extension = $file->getClientOriginalExtension();
-        $filename  = Str::uuid() . ".{$extension}";
+        $filename = Str::uuid().".{$extension}";
 
         $file->storeAs($directory, $filename, 'public');
 
@@ -519,12 +540,12 @@ class UserController extends Controller
             }
         }
 
-        $url = request()->getSchemeAndHttpHost() . "/storage/{$directory}/{$filename}";
+        $url = request()->getSchemeAndHttpHost()."/storage/{$directory}/{$filename}";
 
         return $this->respondOk(
             [
                 'avatar_url' => $url,
-                'avatar'     => $filename,
+                'avatar' => $filename,
             ],
             'Avatar mis à jour.',
         );

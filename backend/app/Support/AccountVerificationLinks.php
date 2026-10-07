@@ -12,7 +12,7 @@ class AccountVerificationLinks
 {
     public function send(User $user, ?string $userName = null, ?Request $request = null, bool $regenerate = false): void
     {
-        $token = $regenerate || !$user->verification_token
+        $token = $regenerate || ! $user->verification_token
             ? Str::random(64)
             : $user->verification_token;
 
@@ -34,7 +34,7 @@ class AccountVerificationLinks
             ?: config('app.frontend_url')
             ?: 'http://localhost:5173';
 
-        return rtrim($frontendUrl, '/') . '/verify-account?token=' . $token;
+        return rtrim($frontendUrl, '/').'/verify-account?token='.$token;
     }
 
     private function displayName(User $user): string

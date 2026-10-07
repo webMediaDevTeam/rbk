@@ -4,10 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\User;
+use App\Services\Client\ClientImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
-use App\Services\Client\ClientImportService;
 
 /**
  * Statut dérivé « Sans téléphone » (`Client::STATUS_SANS_TELEPHONE`,

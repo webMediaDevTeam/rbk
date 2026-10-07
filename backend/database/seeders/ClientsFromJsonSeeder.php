@@ -3,9 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\Client;
+use App\Services\Client\ClientImportService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Services\Client\ClientImportService;
 
 /**
  * Remplace l'intégralité des clients par les enregistrements d'un export RBQ
@@ -83,7 +83,6 @@ class ClientsFromJsonSeeder extends Seeder
      * Clés du payload (FR) → attributs `clients`, plus les colonnes que le
      * payload ne porte pas (statut, drapeaux).
      *
-     * @param  array  $row
      * @return array<string, mixed>
      */
     private function attributes(array $row): array

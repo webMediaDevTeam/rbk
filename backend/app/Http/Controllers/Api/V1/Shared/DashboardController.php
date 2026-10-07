@@ -37,17 +37,17 @@ class DashboardController extends Controller
             'data' => [
                 'role' => $user->role,
                 'stats' => [
-                    'enterprises'    => Enterprise::count(),
-                    'commercials'    => User::where('role', 'COMERCIAL')->count(),
-                    'prospects'      => Client::count(),
-                    'groups'         => ReservationGroup::count(),
-                    'reservations'   => Reservation::count(),
-                    'calls'          => Note::calls()->count(),
+                    'enterprises' => Enterprise::count(),
+                    'commercials' => User::where('role', 'COMERCIAL')->count(),
+                    'prospects' => Client::count(),
+                    'groups' => ReservationGroup::count(),
+                    'reservations' => Reservation::count(),
+                    'calls' => Note::calls()->count(),
                     'clients_called' => Note::calls()->distinct()->count('client_id'),
-                    'clients_oui'    => Note::where('type', Note::TYPE_YES)->distinct()->count('client_id'),
-                    'blacklisted'    => Client::where('is_blacklisted', true)->count(),
+                    'clients_oui' => Note::where('type', Note::TYPE_YES)->distinct()->count('client_id'),
+                    'blacklisted' => Client::where('is_blacklisted', true)->count(),
                 ],
-                'calls_by_day'    => $this->callsByDay(),
+                'calls_by_day' => $this->callsByDay(),
                 'top_commercials' => $this->topCommercials(),
             ],
         ]);
@@ -62,13 +62,13 @@ class DashboardController extends Controller
             'data' => [
                 'role' => $user->role,
                 'stats' => [
-                    'groups'         => ReservationGroup::where('comercial_id', $id)->count(),
-                    'reservations'   => Reservation::where('comercial_id', $id)->count(),
-                    'calls'          => Note::where('sender_id', $id)->calls()->count(),
+                    'groups' => ReservationGroup::where('comercial_id', $id)->count(),
+                    'reservations' => Reservation::where('comercial_id', $id)->count(),
+                    'calls' => Note::where('sender_id', $id)->calls()->count(),
                     'clients_called' => Note::where('sender_id', $id)->calls()->distinct()->count('client_id'),
-                    'clients_oui'    => Note::where('sender_id', $id)->where('type', Note::TYPE_YES)->distinct()->count('client_id'),
+                    'clients_oui' => Note::where('sender_id', $id)->where('type', Note::TYPE_YES)->distinct()->count('client_id'),
                 ],
-                'calls_by_day'    => $this->callsByDay($id),
+                'calls_by_day' => $this->callsByDay($id),
                 'top_commercials' => [],
             ],
         ]);
@@ -98,14 +98,14 @@ class DashboardController extends Controller
         $days = [];
         for ($i = 13; $i >= 0; $i--) {
             $date = Carbon::today()->subDays($i);
-            $key  = $date->toDateString();
-            $row  = $rows->get($key);
+            $key = $date->toDateString();
+            $row = $rows->get($key);
 
             $days[] = [
-                'date'  => $key,
+                'date' => $key,
                 'label' => $date->format('d/m'),
                 'total' => (int) ($row->total ?? 0),
-                'oui'   => (int) ($row->oui ?? 0),
+                'oui' => (int) ($row->oui ?? 0),
             ];
         }
 
@@ -120,16 +120,16 @@ class DashboardController extends Controller
         return User::where('role', 'COMERCIAL')->with('employee')->get()
             ->map(function (User $u) {
                 $clientsCalled = Note::where('sender_id', $u->id)->calls()->distinct()->count('client_id');
-                $clientsOui    = Note::where('sender_id', $u->id)->where('type', Note::TYPE_YES)->distinct()->count('client_id');
+                $clientsOui = Note::where('sender_id', $u->id)->where('type', Note::TYPE_YES)->distinct()->count('client_id');
 
                 return [
-                    'id'             => $u->id,
-                    'name'           => trim(($u->employee?->first_name ?? $u->first_name ?? '') . ' ' . ($u->employee?->last_name ?? $u->last_name ?? '')) ?: $u->email,
-                    'email'          => $u->email,
-                    'calls'          => Note::where('sender_id', $u->id)->calls()->count(),
-                    'reservations'   => Reservation::where('comercial_id', $u->id)->count(),
+                    'id' => $u->id,
+                    'name' => trim(($u->employee?->first_name ?? $u->first_name ?? '').' '.($u->employee?->last_name ?? $u->last_name ?? '')) ?: $u->email,
+                    'email' => $u->email,
+                    'calls' => Note::where('sender_id', $u->id)->calls()->count(),
+                    'reservations' => Reservation::where('comercial_id', $u->id)->count(),
                     'clients_called' => $clientsCalled,
-                    'clients_oui'    => $clientsOui,
+                    'clients_oui' => $clientsOui,
                 ];
             })
             ->sortByDesc('clients_oui')

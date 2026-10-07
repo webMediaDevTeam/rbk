@@ -13,7 +13,7 @@ return new class extends Migration
                 // drop foreign if exists
                 try {
                     $table->dropForeign(['assigned_comercial_id']);
-                } catch (\Throwable $e) {
+                } catch (Throwable $e) {
                     // ignore if constraint missing
                 }
                 $table->dropColumn('assigned_comercial_id');
@@ -22,7 +22,7 @@ return new class extends Migration
             if (Schema::hasColumn('clients', 'enterprise_id')) {
                 try {
                     $table->dropForeign(['enterprise_id']);
-                } catch (\Throwable $e) {
+                } catch (Throwable $e) {
                 }
                 $table->dropColumn('enterprise_id');
             }

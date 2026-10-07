@@ -49,7 +49,7 @@ return new class extends Migration
     }
 
     /**
-     * @param array<string, string> $map valeur d'origine => valeur cible
+     * @param  array<string, string>  $map  valeur d'origine => valeur cible
      */
     private function mapValues(string $table, string $column, array $map): void
     {

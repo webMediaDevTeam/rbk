@@ -7,10 +7,10 @@ use App\Models\Note;
 use App\Models\Rappel;
 use App\Models\Reservation;
 use App\Models\User;
+use App\Services\Client\ClientImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
-use App\Services\Client\ClientImportService;
 
 /**
  * Endpoint public **temporaire** de conversion en liste noire par nom

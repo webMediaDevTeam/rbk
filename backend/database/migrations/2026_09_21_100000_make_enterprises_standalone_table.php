@@ -12,7 +12,7 @@ return new class extends Migration
             if (Schema::hasColumn('enterprises', 'user_id')) {
                 try {
                     $table->dropForeign(['user_id']);
-                } catch (\Throwable $e) {
+                } catch (Throwable $e) {
                 }
                 $table->dropColumn('user_id');
             }

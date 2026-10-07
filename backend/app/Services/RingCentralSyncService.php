@@ -51,7 +51,7 @@ class RingCentralSyncService
      *   unmatched: list<array{user_id: string, email: string, name: string}>
      * }
      *
-     * @throws Exception  API injoignable (le contrôleur renvoie 502)
+     * @throws Exception API injoignable (le contrôleur renvoie 502)
      */
     public function syncEmployees(): array
     {
@@ -77,8 +77,8 @@ class RingCentralSyncService
             if ($match === null) {
                 $report['unmatched'][] = [
                     'user_id' => (string) $employee->user_id,
-                    'email'   => (string) ($employee->user?->email ?? ''),
-                    'name'    => trim(($employee->first_name ?? '').' '.($employee->last_name ?? '')),
+                    'email' => (string) ($employee->user?->email ?? ''),
+                    'name' => trim(($employee->first_name ?? '').' '.($employee->last_name ?? '')),
                 ];
 
                 continue;
@@ -130,7 +130,7 @@ class RingCentralSyncService
 
     /**
      * @return array{0: array<string, mixed>, 1: array<string, mixed>}
-     *         [appareils par id, premier appareil par extension]
+     *                                                                 [appareils par id, premier appareil par extension]
      */
     private function indexDevices(iterable $devices): array
     {
@@ -156,8 +156,8 @@ class RingCentralSyncService
 
     /**
      * @return array{0: array<string, list<string>>, 1: array<string, string>, 2: array<string, string>}
-     *         [numéros par extension, extension par numéro, numéro primaire
-     *          par extension]
+     *                                                                                                   [numéros par extension, extension par numéro, numéro primaire
+     *                                                                                                   par extension]
      */
     private function indexPhoneNumbers(iterable $phoneNumbers): array
     {
@@ -209,8 +209,8 @@ class RingCentralSyncService
 
             if ($extensionId !== '') {
                 return $extById[$extensionId] ?? [
-                    'id'               => $extensionId,
-                    'extensionNumber'  => (string) data_get($device, 'extensionNumber', ''),
+                    'id' => $extensionId,
+                    'extensionNumber' => (string) data_get($device, 'extensionNumber', ''),
                 ];
             }
         }
@@ -275,7 +275,7 @@ class RingCentralSyncService
      * Poste RingCentral de l'employé — sans appel API si la fiche en porte
      * déjà un (`syncEmployees()`), sinon appareil puis e-mail.
      *
-     * @return array{string, ?string, string}|null  [extension id, numéro, résolu via]
+     * @return array{string, ?string, string}|null [extension id, numéro, résolu via]
      */
     public function resolveExtension(Employee $employee): ?array
     {
@@ -333,7 +333,7 @@ class RingCentralSyncService
      *   fetched: int, created: int, updated: int
      * }|null  `null` si aucun poste n'est rattaché (le contrôleur renvoie 422)
      *
-     * @throws Throwable  API injoignable (502 côté contrôleur)
+     * @throws Throwable API injoignable (502 côté contrôleur)
      */
     public function syncCalls(Employee $employee, array $filters = []): ?array
     {
@@ -355,7 +355,7 @@ class RingCentralSyncService
         }
 
         $records = $this->ringCentral->getCallHistoryByUser($extensionId, array_merge([
-            'view'   => 'Detailed', // `recording.id` + `contentUri` viennent avec
+            'view' => 'Detailed', // `recording.id` + `contentUri` viennent avec
             'perPage' => 100,
         ], $filters));
 
@@ -367,12 +367,12 @@ class RingCentralSyncService
         }
 
         return [
-            'extension_id'     => $extensionId,
+            'extension_id' => $extensionId,
             'extension_number' => $extensionNumber,
-            'resolved_by'      => $resolvedBy,
-            'fetched'          => count($records),
-            'created'          => $created,
-            'updated'          => $updated,
+            'resolved_by' => $resolvedBy,
+            'fetched' => count($records),
+            'created' => $created,
+            'updated' => $updated,
         ];
     }
 
@@ -452,12 +452,12 @@ class RingCentralSyncService
         return CallRecording::query()->updateOrCreate(
             ['ringcentral_recording_id' => $recordingId],
             [
-                'call_log_id'  => $call->id,
-                'type'         => $this->stringOrNull(data_get($recording, 'type')),
-                'duration'     => $this->seconds(data_get($recording, 'duration')),
-                'file_name'    => $this->stringOrNull(data_get($recording, 'fileName')),
-                'content_uri'  => $this->stringOrNull(data_get($recording, 'contentUri')),
-                'synced_at'    => now(),
+                'call_log_id' => $call->id,
+                'type' => $this->stringOrNull(data_get($recording, 'type')),
+                'duration' => $this->seconds(data_get($recording, 'duration')),
+                'file_name' => $this->stringOrNull(data_get($recording, 'fileName')),
+                'content_uri' => $this->stringOrNull(data_get($recording, 'contentUri')),
+                'synced_at' => now(),
             ]
         );
     }

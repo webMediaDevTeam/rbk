@@ -46,7 +46,7 @@ class RingCentralSyncTest extends TestCase
 
         $user->employee()->create(array_merge([
             'first_name' => 'Jean',
-            'last_name'  => 'Tremblay',
+            'last_name' => 'Tremblay',
         ], $attributes));
 
         return $user;
@@ -79,7 +79,7 @@ class RingCentralSyncTest extends TestCase
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
         $employe = $this->employe([
-            'ringcentral_device_id'   => 'dev-9',
+            'ringcentral_device_id' => 'dev-9',
             'ringcentral_from_number' => '+15146120498',
         ]);
 
@@ -163,7 +163,7 @@ class RingCentralSyncTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
         $employe = $this->employe([
             'ringcentral_device_id' => 'dev-inconnu',
-            'phone'                 => '+15145550001',
+            'phone' => '+15145550001',
         ]);
 
         $this->stubLists(
@@ -205,7 +205,7 @@ class RingCentralSyncTest extends TestCase
     public function test_outbound_call_opens_the_journal_and_stores_the_recording(): void
     {
         $employe = $this->employe([
-            'ringcentral_device_id'   => 'dev-9',
+            'ringcentral_device_id' => 'dev-9',
             'ringcentral_from_number' => '+15146120498',
         ]);
         Sanctum::actingAs($employe);
@@ -215,8 +215,8 @@ class RingCentralSyncTest extends TestCase
             ->once()
             ->with('+15145550001', '+15146120498', 'dev-9', null)
             ->andReturn(['session' => [
-                'id'       => 's-9',
-                'parties'  => [['id' => 'p-1', 'status' => ['code' => 'Setup']]],
+                'id' => 's-9',
+                'parties' => [['id' => 'p-1', 'status' => ['code' => 'Setup']]],
             ]]);
         $mock->shouldReceive('startRecording')
             ->once()
@@ -224,7 +224,7 @@ class RingCentralSyncTest extends TestCase
             ->andReturn(['id' => 'REC-9', 'uri' => 'https://platform.ringcentral.com/…/recording/REC-9']);
 
         $response = $this->postJson('/api/v1/call-logs/my-call', [
-            'to'     => '+15145550001',
+            'to' => '+15145550001',
             'record' => true,
         ])->assertOk();
 
@@ -248,7 +248,7 @@ class RingCentralSyncTest extends TestCase
     public function test_outbound_call_still_succeeds_when_the_journal_cannot_be_written(): void
     {
         $employe = $this->employe([
-            'ringcentral_device_id'   => 'dev-9',
+            'ringcentral_device_id' => 'dev-9',
             'ringcentral_from_number' => '+15146120498',
         ]);
         Sanctum::actingAs($employe);

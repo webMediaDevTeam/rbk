@@ -43,9 +43,9 @@ class EmployeeCallLogsTest extends TestCase
         $user = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
 
         $user->employee()->create([
-            'first_name'              => 'Jean',
-            'last_name'               => 'Tremblay',
-            'ringcentral_device_id'   => $deviceId,
+            'first_name' => 'Jean',
+            'last_name' => 'Tremblay',
+            'ringcentral_device_id' => $deviceId,
             'ringcentral_from_number' => '+15146120498',
         ]);
 
@@ -56,16 +56,16 @@ class EmployeeCallLogsTest extends TestCase
     private function appel(User $employe, array $over = []): CallLog
     {
         return CallLog::create(array_merge([
-            'employee_id'           => $employe->employee->id,
-            'ringcentral_call_id'   => 'c1',
+            'employee_id' => $employe->employee->id,
+            'ringcentral_call_id' => 'c1',
             'ringcentral_session_id' => 's-1',
-            'direction'             => 'Outbound',
-            'type'                  => 'Voice',
-            'from_number'           => '+15146120498',
-            'to_number'             => '+15145550001',
-            'started_at'            => '2026-10-06T10:08:10Z',
-            'duration'              => 45,
-            'result'                => 'Accepted',
+            'direction' => 'Outbound',
+            'type' => 'Voice',
+            'from_number' => '+15146120498',
+            'to_number' => '+15145550001',
+            'started_at' => '2026-10-06T10:08:10Z',
+            'duration' => 45,
+            'result' => 'Accepted',
         ], $over));
     }
 
@@ -96,10 +96,10 @@ class EmployeeCallLogsTest extends TestCase
 
         $call = $this->appel($employe);
         CallRecording::create([
-            'call_log_id'              => $call->id,
+            'call_log_id' => $call->id,
             'ringcentral_recording_id' => 'REC-1',
-            'type'                     => 'Automatic',
-            'duration'                 => 40,
+            'type' => 'Automatic',
+            'duration' => 40,
         ]);
         // Une seconde ligne **sans** enregistrement reste affichable.
         $this->appel($employe, [

@@ -4,15 +4,12 @@ namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
 use App\Mail\OtpVerificationMail;
-use App\Models\Employee;
 use App\Models\User;
 use App\Support\AccountVerificationLinks;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
@@ -20,9 +17,13 @@ use Illuminate\Validation\Rules\Password;
 class AuthController extends Controller
 {
     private const VERIFICATION_LINK_TTL_HOURS = 24;
+
     private const PASSWORD_OTP_TTL_MINUTES = 10;
+
     private const PASSWORD_UPDATE_TOKEN_TTL_MINUTES = 10;
+
     private const LOGIN_OTP_TTL_MINUTES = 10;
+
     private const PASSWORD_RESET_TOKEN_TTL_MINUTES = 10;
 
     public function login(Request $request): JsonResponse
@@ -34,7 +35,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password_hash)) {
+        if (! $user || ! Hash::check($request->password, $user->password_hash)) {
             return response()->json(['message' => 'Identifiants incorrects.'], 401);
         }
 
@@ -81,14 +82,14 @@ class AuthController extends Controller
 
         $otp = Cache::get($this->forgotPasswordOtpCacheKey($request->email));
 
-        if (!$otp) {
+        if (! $otp) {
             return response()->json([
                 'message' => 'Le code de réinitialisation a expiré. Vous pouvez demander un nouveau code.',
                 'code' => 'FORGOT_PASSWORD_OTP_EXPIRED',
             ], 400);
         }
 
-        if (!Hash::check($request->code, $otp['code_hash'])) {
+        if (! Hash::check($request->code, $otp['code_hash'])) {
             return response()->json([
                 'message' => 'Code de réinitialisation invalide.',
             ], 422);
@@ -119,7 +120,7 @@ class AuthController extends Controller
 
         $cacheKey = $this->forgotPasswordResetTokenCacheKey($request->email, $request->password_reset_token);
 
-        if (!Cache::pull($cacheKey)) {
+        if (! Cache::pull($cacheKey)) {
             return response()->json([
                 'message' => 'La vérification a expiré. Demandez un nouveau code.',
                 'code' => 'PASSWORD_RESET_TOKEN_EXPIRED',
@@ -169,14 +170,14 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->firstOrFail();
         $otp = Cache::get($this->loginOtpCacheKey($user->email));
 
-        if (!$otp) {
+        if (! $otp) {
             return response()->json([
                 'message' => 'Le code de connexion a expiré. Vous pouvez demander un nouveau code.',
                 'code' => 'LOGIN_OTP_EXPIRED',
             ], 400);
         }
 
-        if (!Hash::check($request->code, $otp['code_hash'])) {
+        if (! Hash::check($request->code, $otp['code_hash'])) {
             return response()->json([
                 'message' => 'Code de connexion invalide.',
             ], 422);
@@ -240,14 +241,14 @@ class AuthController extends Controller
         $user = $request->user();
         $otp = Cache::get($this->passwordOtpCacheKey($user));
 
-        if (!$otp) {
+        if (! $otp) {
             return response()->json([
                 'message' => 'Le code de vérification a expiré. Vous pouvez demander un nouveau code.',
                 'code' => 'PASSWORD_OTP_EXPIRED',
             ], 400);
         }
 
-        if (!Hash::check($request->code, $otp['code_hash'])) {
+        if (! Hash::check($request->code, $otp['code_hash'])) {
             return response()->json([
                 'message' => 'Code de vérification invalide.',
             ], 422);
@@ -278,7 +279,7 @@ class AuthController extends Controller
         $user = $request->user();
         $cacheKey = $this->passwordUpdateTokenCacheKey($user, $request->password_update_token);
 
-        if (!Cache::pull($cacheKey)) {
+        if (! Cache::pull($cacheKey)) {
             return response()->json([
                 'message' => 'La vérification a expiré. Demandez un nouveau code.',
                 'code' => 'PASSWORD_UPDATE_TOKEN_EXPIRED',
@@ -303,7 +304,7 @@ class AuthController extends Controller
 
         $user = User::where('verification_token', $request->token)->first();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'message' => 'Jeton de vérification invalide ou expiré.',
                 'code' => 'VERIFICATION_TOKEN_INVALID_OR_EXPIRED',
@@ -348,7 +349,7 @@ class AuthController extends Controller
 
         $user = User::where('verification_token', $request->token)->first();
 
-        if (!$user || $user->email_verified_at) {
+        if (! $user || $user->email_verified_at) {
             return response()->json([
                 'message' => 'Impossible de renvoyer un lien pour ce compte.',
             ], 400);
@@ -393,17 +394,17 @@ class AuthController extends Controller
 
     private function loginOtpCacheKey(string $email): string
     {
-        return 'login_otp:' . mb_strtolower($email);
+        return 'login_otp:'.mb_strtolower($email);
     }
 
     private function forgotPasswordOtpCacheKey(string $email): string
     {
-        return 'forgot_password_otp:' . mb_strtolower($email);
+        return 'forgot_password_otp:'.mb_strtolower($email);
     }
 
     private function forgotPasswordResetTokenCacheKey(string $email, string $token): string
     {
-        return 'forgot_password_reset_token:' . mb_strtolower($email) . ":{$token}";
+        return 'forgot_password_reset_token:'.mb_strtolower($email).":{$token}";
     }
 
     private function formatUser(User $user): array

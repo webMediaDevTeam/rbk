@@ -36,7 +36,7 @@ class SuperAdminController extends Controller
 
         $user = User::create($userData);
 
-        if (!$request->filled('mot_de_passe')) {
+        if (! $request->filled('mot_de_passe')) {
             $displayName = trim(implode(' ', array_filter([
                 $user->first_name,
                 $user->last_name,

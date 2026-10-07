@@ -109,7 +109,7 @@ class DemoBusinessDataSeeder extends Seeder
                         'surety_amount' => 10000 + ($clientIndex * 250),
                         'licence_start_date' => now()->subMonths($clientIndex)->toDateString(),
                         'licence_end_date' => now()->addMonths(12 + $clientIndex)->toDateString(),
-                        'representative_name' => $assignedCommercial->first_name . ' ' . $assignedCommercial->last_name,
+                        'representative_name' => $assignedCommercial->first_name.' '.$assignedCommercial->last_name,
                     ],
                 );
             }

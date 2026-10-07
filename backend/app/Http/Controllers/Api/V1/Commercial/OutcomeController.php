@@ -5,25 +5,22 @@ namespace App\Http\Controllers\Api\V1\Commercial;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Note;
-use App\Models\Reservation;
 use App\Services\CallWorkflowService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class OutcomeController extends Controller
 {
-    public function __construct(private CallWorkflowService $workflow)
-    {
-    }
+    public function __construct(private CallWorkflowService $workflow) {}
 
     public function store(Request $request, string $clientId): JsonResponse
     {
         $validated = $request->validate([
             // Issues d'appel du modèle : YES / NO / BV / CALL_BACK.
-            'outcome' => 'required|in:' . implode(',', self::outcomes()),
+            'outcome' => 'required|in:'.implode(',', self::outcomes()),
             'note' => 'nullable|string|max:5000',
             // CALL_BACK : rappel à la date/heure choisie par l'employé.
-            'recall_at' => 'required_if:outcome,' . Note::TYPE_CALL_BACK . '|nullable|date|after:now',
+            'recall_at' => 'required_if:outcome,'.Note::TYPE_CALL_BACK.'|nullable|date|after:now',
         ], [
             'recall_at.required_if' => 'La date et l\'heure du rappel sont obligatoires pour un client injoignable.',
             'recall_at.date' => 'La date de rappel n\'est pas valide.',

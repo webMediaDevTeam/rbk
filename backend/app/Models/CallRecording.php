@@ -33,7 +33,7 @@ class CallRecording extends Model
     ];
 
     protected $casts = [
-        'duration'  => 'integer',
+        'duration' => 'integer',
         'synced_at' => 'datetime',
     ];
 
@@ -46,10 +46,10 @@ class CallRecording extends Model
     public function toApiArray(): array
     {
         return [
-            'id'          => $this->ringcentral_recording_id,
-            'type'        => $this->type,
-            'duration'    => $this->duration,
-            'file_name'   => $this->file_name,
+            'id' => $this->ringcentral_recording_id,
+            'type' => $this->type,
+            'duration' => $this->duration,
+            'file_name' => $this->file_name,
             'content_uri' => $this->content_uri,
         ];
     }

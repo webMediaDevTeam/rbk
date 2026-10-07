@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * Création de la table `rappels` (classe Rappel du modèle) :
@@ -41,7 +42,7 @@ return new class extends Migration
 
         foreach ($recalls as $recall) {
             DB::table('rappels')->insert([
-                'id' => (string) \Illuminate\Support\Str::uuid(),
+                'id' => (string) Str::uuid(),
                 'client_id' => $recall->client_id,
                 'comercial_id' => $recall->comercial_id,
                 'reservation_id' => $recall->id,

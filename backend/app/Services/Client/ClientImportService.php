@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use Throwable;
+
 /**
  * Import prospects — API **publique** n8n / scraper (docs/RULES.md §12).
  *
@@ -750,7 +751,7 @@ class ClientImportService
     {
         return Client::query()
             ->where(function (Builder $query) use ($name) {
-                $searchTerm = '%' . strtolower($name) . '%';
+                $searchTerm = '%'.strtolower($name).'%';
                 $query->whereRaw('LOWER(enterprise_name) LIKE ?', [$searchTerm])
                     ->orWhereRaw('LOWER(name) LIKE ?', [$searchTerm]);
             })
@@ -1087,7 +1088,7 @@ class ClientImportService
      *  2. vérification exacte en PHP par `normalizePhone()` (extension,
      *     indicatif 1, formes non couvertes par les REPLACE SQL).
      *
-     * @return \Illuminate\Support\Collection<int, Client>
+     * @return Collection<int, Client>
      */
     private static function clientsByPhone(string $normalized)
     {
@@ -1713,7 +1714,7 @@ class ClientImportService
         }
 
         foreach (preg_split('/[,;]|\s+/', $text) ?: [] as $candidate) {
-            $candidate = trim($candidate, ".,;()<>");
+            $candidate = trim($candidate, '.,;()<>');
 
             if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_EMAIL)) {
                 return $candidate;

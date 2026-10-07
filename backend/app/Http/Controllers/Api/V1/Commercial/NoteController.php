@@ -39,7 +39,7 @@ class NoteController extends Controller
         $validated = $request->validate([
             'client_id' => 'required|uuid|exists:clients,id',
             // Les événements du workflow ne se créent pas par HTTP.
-            'type' => 'sometimes|nullable|in:' . Note::TYPE_NOTE,
+            'type' => 'sometimes|nullable|in:'.Note::TYPE_NOTE,
             'description' => 'required|string',
         ]);
 

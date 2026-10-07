@@ -46,7 +46,7 @@ class SuperAdminCreatesAdminVerificationMailTest extends TestCase
             return $mail->hasTo($admin->email)
                 && $mail->token === $admin->verification_token
                 && $mail->userName === 'New Admin'
-                && str_contains($mail->verificationUrl, '/verify-account?token=' . $admin->verification_token);
+                && str_contains($mail->verificationUrl, '/verify-account?token='.$admin->verification_token);
         });
     }
 }

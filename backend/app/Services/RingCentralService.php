@@ -219,7 +219,7 @@ class RingCentralService
      *
      * GET /restapi/v1.0/account/~/phone-number
      *
-     * @return array  records : `{phoneNumber, extension: {id, extensionNumber}, primary, …}`
+     * @return array records : `{phoneNumber, extension: {id, extensionNumber}, primary, …}`
      *
      * @throws Exception
      */
@@ -280,9 +280,9 @@ class RingCentralService
      * @param  ?string  $fromPhoneNumber  caller ID (doit appartenir à l'extension)
      * @param  ?string  $deviceId  appareil — **seul recours** si aucune extension
      * @param  ?string  $extensionId  extension source (résolue sinon)
-     * @return array  réponse brute : `session` (`id` + `parties`)
+     * @return array réponse brute : `session` (`id` + `parties`)
      *
-     * @throws Exception  source illisible, ou réponse vide
+     * @throws Exception source illisible, ou réponse vide
      */
     public function makeCallOut(
         string $to,
@@ -430,7 +430,7 @@ class RingCentralService
     {
         return [
             'content_type' => $response->getHeaderLine('Content-Type') ?: 'audio/mpeg',
-            'body'         => (string) $response->getBody(),
+            'body' => (string) $response->getBody(),
         ];
     }
 
@@ -457,7 +457,7 @@ class RingCentralService
      *
      * DELETE /restapi/v1.0/account/~/telephony/sessions/{sessionId}
      *
-     * @return array  réponse brute (`[]` si corps vide — 204)
+     * @return array réponse brute (`[]` si corps vide — 204)
      *
      * @throws Exception
      */

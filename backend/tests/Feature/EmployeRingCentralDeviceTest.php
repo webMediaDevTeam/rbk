@@ -26,7 +26,7 @@ class EmployeRingCentralDeviceTest extends TestCase
 
         $user->employee()->create([
             'first_name' => 'Jean',
-            'last_name'  => 'Tremblay',
+            'last_name' => 'Tremblay',
         ]);
 
         return $user->fresh('employee');
@@ -37,10 +37,10 @@ class EmployeRingCentralDeviceTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
 
         $this->postJson('/api/v1/users', [
-            'email'                 => 'nouveau@employe.local',
-            'role'                  => 'COMERCIAL',
-            'first_name'            => 'Nouvel',
-            'last_name'             => 'Employe',
+            'email' => 'nouveau@employe.local',
+            'role' => 'COMERCIAL',
+            'first_name' => 'Nouvel',
+            'last_name' => 'Employe',
             'ringcentral_device_id' => '35664208024',
             'ringcentral_from_number' => '+15146120498',
         ])
@@ -49,7 +49,7 @@ class EmployeRingCentralDeviceTest extends TestCase
             ->assertJsonPath('data.utilisateur.profil.ringcentral_from_number', '+15146120498');
 
         $this->assertDatabaseHas('employees', [
-            'user_id'               => User::where('email', 'nouveau@employe.local')->value('id'),
+            'user_id' => User::where('email', 'nouveau@employe.local')->value('id'),
             'ringcentral_device_id' => '35664208024',
             'ringcentral_from_number' => '+15146120498',
         ]);
@@ -62,7 +62,7 @@ class EmployeRingCentralDeviceTest extends TestCase
 
         // 1. Enregistrement d'un appareil + numéro.
         $this->putJson("/api/v1/users/{$employe->id}", [
-            'ringcentral_device_id'   => '35682803024',
+            'ringcentral_device_id' => '35682803024',
             'ringcentral_from_number' => '+16473603035',
         ])
             ->assertOk()
@@ -70,22 +70,22 @@ class EmployeRingCentralDeviceTest extends TestCase
             ->assertJsonPath('data.utilisateur.profil.ringcentral_from_number', '+16473603035');
 
         $this->assertDatabaseHas('employees', [
-            'user_id'                 => $employe->id,
-            'ringcentral_device_id'   => '35682803024',
+            'user_id' => $employe->id,
+            'ringcentral_device_id' => '35682803024',
             'ringcentral_from_number' => '+16473603035',
         ]);
 
         // 2. Retrait de la source (`null` explicite = colonnes vidées).
         $this->putJson("/api/v1/users/{$employe->id}", [
-            'ringcentral_device_id'   => null,
+            'ringcentral_device_id' => null,
             'ringcentral_from_number' => null,
         ])
             ->assertOk()
             ->assertJsonPath('data.utilisateur.profil.ringcentral_device_id', null);
 
         $this->assertDatabaseHas('employees', [
-            'user_id'                 => $employe->id,
-            'ringcentral_device_id'   => null,
+            'user_id' => $employe->id,
+            'ringcentral_device_id' => null,
             'ringcentral_from_number' => null,
         ]);
     }
@@ -95,11 +95,11 @@ class EmployeRingCentralDeviceTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']));
 
         $this->postJson('/api/v1/users', [
-            'email'                   => 'trop@long.local',
-            'role'                    => 'COMERCIAL',
-            'first_name'              => 'Trop',
-            'last_name'               => 'Long',
-            'ringcentral_device_id'   => str_repeat('a', 65),
+            'email' => 'trop@long.local',
+            'role' => 'COMERCIAL',
+            'first_name' => 'Trop',
+            'last_name' => 'Long',
+            'ringcentral_device_id' => str_repeat('a', 65),
             'ringcentral_from_number' => '+15145550123',
         ])
             ->assertStatus(422)
@@ -149,18 +149,18 @@ class EmployeRingCentralDeviceTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']));
 
         $this->postJson('/api/v1/users', [
-            'email'        => 'sans@source.local',
-            'role'         => 'COMERCIAL',
-            'first_name'             => 'Sans',
-            'last_name'              => 'Source',
-            'mot_de_passe'           => 'secret-pass',
+            'email' => 'sans@source.local',
+            'role' => 'COMERCIAL',
+            'first_name' => 'Sans',
+            'last_name' => 'Source',
+            'mot_de_passe' => 'secret-pass',
             'mot_de_passe_confirmation' => 'secret-pass',
         ])
             ->assertCreated()
             ->assertJsonPath('data.utilisateur.profil.ringcentral_device_id', null);
 
         $this->assertDatabaseHas('employees', [
-            'user_id'               => User::where('email', 'sans@source.local')->value('id'),
+            'user_id' => User::where('email', 'sans@source.local')->value('id'),
             'ringcentral_device_id' => null,
             'ringcentral_from_number' => null,
         ]);

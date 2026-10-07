@@ -8,9 +8,9 @@ Route::get('/', function () {
 });
 
 Route::get('/static/{path?}', function (?string $path = null) {
-    $filePath = public_path('static/' . ($path ?: 'index.html'));
+    $filePath = public_path('static/'.($path ?: 'index.html'));
 
-    if (!File::exists($filePath)) {
+    if (! File::exists($filePath)) {
         $filePath = public_path('static/index.html');
     }
 
