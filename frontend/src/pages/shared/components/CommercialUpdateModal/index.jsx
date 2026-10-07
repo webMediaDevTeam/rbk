@@ -15,7 +15,7 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
   if (!open || !user) return null
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-foreground">Modifier l'employé</h2>
@@ -32,6 +32,17 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
+              <label className="block text-sm font-bold mb-1">Nouveau mot de passe (optionnel)</label>
+              <Input type="password" minLength={8} autoComplete="new-password" value={form.mot_de_passe} onChange={(e) => set('mot_de_passe', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-1">Confirmer le mot de passe</label>
+              <Input type="password" minLength={8} autoComplete="new-password" value={form.mot_de_passe_confirmation} onChange={(e) => set('mot_de_passe_confirmation', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <label className="block text-sm font-bold mb-1">Prénom *</label>
               <Input type="text" required value={form.first_name} onChange={(e) => set('first_name', e.target.value)} />
             </div>
@@ -43,13 +54,13 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-1">Téléphone</label>
+              <label className="block text-sm font-bold mb-1">Téléphone personnel (optionnel)</label>
               <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-bold mb-1">Entreprise</label>
-              <Select value={form.enterprise_id} onChange={(e) => set('enterprise_id', e.target.value)}>
-                <option value="">Aucune entreprise</option>
+              <label className="block text-sm font-bold mb-1">Entreprise *</label>
+              <Select required value={form.enterprise_id} onChange={(e) => set('enterprise_id', e.target.value)}>
+                <option value="">Sélectionner une entreprise</option>
                 {enterprises.map((ent) => (
                   <option key={ent.id} value={ent.id}>{ent.name ?? ent.profil?.nom ?? ent.email}</option>
                 ))}

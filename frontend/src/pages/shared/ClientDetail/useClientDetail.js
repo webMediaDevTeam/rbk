@@ -42,12 +42,9 @@ export function useClientDetail() {
   const qc = useQueryClient()
 
   const [actionOpen, setActionOpen] = useState(false)
-  // `?tab=history` : ouverture directe sur l'onglet « Historique » — c'est
-  // l'entrée du bouton « Voir » des pages Rappels / Auto-rappels.
-  const [activeTab, setActiveTab] = useState(() => {
-    const tab = new URLSearchParams(location.search).get('tab')
-    return tab === 'history' ? 'history' : 'details'
-  })
+  const [activeTab, setActiveTab] = useState(() => (
+    new URLSearchParams(location.search).get('tab') === 'history' ? 'history' : 'details'
+  ))
   const [blacklistOpen, setBlacklistOpen] = useState(false)
   const [blacklistNote, setBlacklistNote] = useState('')
   const [blacklistError, setBlacklistError] = useState(null)
@@ -105,7 +102,6 @@ export function useClientDetail() {
 
   const openAction = () => setActionOpen(true)
   const closeAction = () => setActionOpen(false)
-
   const handleActionSuccess = () => setActiveTab('history')
 
   const openBlacklist = () => setBlacklistOpen(true)

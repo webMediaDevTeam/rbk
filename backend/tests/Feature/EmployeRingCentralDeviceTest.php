@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\Enterprise;
 use App\Services\RingCentralService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -34,13 +35,21 @@ class EmployeRingCentralDeviceTest extends TestCase
 
     public function test_admin_stores_device_and_from_number_when_creating_an_employe(): void
     {
-        Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
+        $admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
+        Sanctum::actingAs($admin);
+        $enterprise = Enterprise::forceCreate([
+            'user_id' => $admin->id,
+            'name' => 'RingCentral Test Enterprise',
+        ]);
 
         $this->postJson('/api/v1/users', [
             'email' => 'nouveau@employe.local',
             'role' => 'COMERCIAL',
             'first_name' => 'Nouvel',
             'last_name' => 'Employe',
+            'mot_de_passe' => 'secret-pass',
+            'mot_de_passe_confirmation' => 'secret-pass',
+            'enterprise_id' => $enterprise->id,
             'ringcentral_device_id' => '35664208024',
             'ringcentral_from_number' => '+15146120498',
         ])
@@ -146,7 +155,12 @@ class EmployeRingCentralDeviceTest extends TestCase
     /** Panne RingCentral : la création d'un employé ne doit pas échouer. */
     public function test_missing_device_fields_do_not_break_creation(): void
     {
-        Sanctum::actingAs(User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']));
+        $admin = User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']);
+        Sanctum::actingAs($admin);
+        $enterprise = Enterprise::forceCreate([
+            'user_id' => $admin->id,
+            'name' => 'No Device Test Enterprise',
+        ]);
 
         $this->postJson('/api/v1/users', [
             'email' => 'sans@source.local',
@@ -155,6 +169,7 @@ class EmployeRingCentralDeviceTest extends TestCase
             'last_name' => 'Source',
             'mot_de_passe' => 'secret-pass',
             'mot_de_passe_confirmation' => 'secret-pass',
+            'enterprise_id' => $enterprise->id,
         ])
             ->assertCreated()
             ->assertJsonPath('data.utilisateur.profil.ringcentral_device_id', null);

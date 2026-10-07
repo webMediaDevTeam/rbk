@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Enterprise;
 use App\Models\User;
+use App\Mail\UserAccountVerificationMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -14,6 +16,8 @@ class EnterpriseCrudAndCommercialLinkTest extends TestCase
 
     public function test_admin_can_create_list_update_and_delete_enterprise_without_creating_user(): void
     {
+        Mail::fake();
+
         $admin = User::factory()->create([
             'role' => 'ADMIN',
         ]);
@@ -74,6 +78,8 @@ class EnterpriseCrudAndCommercialLinkTest extends TestCase
             'first_name' => 'John',
             'last_name' => 'Doe',
             'phone' => '514-555-1111',
+            'mot_de_passe' => 'employee-secret',
+            'mot_de_passe_confirmation' => 'employee-secret',
             'enterprise_id' => $enterpriseId,
         ]);
 
@@ -82,6 +88,10 @@ class EnterpriseCrudAndCommercialLinkTest extends TestCase
             'email' => 'commercial@acme.local',
             'role' => 'COMERCIAL',
         ]);
+        $commercial = User::where('email', 'commercial@acme.local')->firstOrFail();
+        $this->assertNotNull($commercial->email_verified_at);
+        $this->assertNull($commercial->verification_token);
+        Mail::assertNotSent(UserAccountVerificationMail::class);
         $this->assertDatabaseHas('employees', [
             'enterprise_id' => $enterpriseId,
             'first_name' => 'John',

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Middleware\CheckPermission;
 use App\Models\Client;
+use App\Models\Enterprise;
 use App\Models\Reservation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -29,12 +30,18 @@ class ReleasePermissionTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+    private string $enterpriseId;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
+        $enterprise = Enterprise::forceCreate([
+            'user_id' => $this->admin->id,
+            'name' => 'Release Permission Enterprise',
+        ]);
+        $this->enterpriseId = $enterprise->id;
     }
 
     private function makeCommercial(array $attrs = []): User
@@ -74,6 +81,7 @@ class ReleasePermissionTest extends TestCase
             'role' => 'COMERCIAL',
             'first_name' => 'Priva',
             'last_name' => 'Lège',
+            'enterprise_id' => $this->enterpriseId,
         ], $overrides);
     }
 

@@ -32,6 +32,17 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
+              <label className="block text-sm font-bold mb-1">Mot de passe *</label>
+              <Input type="password" required minLength={8} autoComplete="new-password" value={form.mot_de_passe} onChange={(e) => set('mot_de_passe', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-1">Confirmer le mot de passe *</label>
+              <Input type="password" required minLength={8} autoComplete="new-password" value={form.mot_de_passe_confirmation} onChange={(e) => set('mot_de_passe_confirmation', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
               <label className="block text-sm font-bold mb-1">Prénom *</label>
               <Input type="text" required value={form.first_name} onChange={(e) => set('first_name', e.target.value)} placeholder="Prénom" />
             </div>
@@ -43,12 +54,12 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-1">Téléphone</label>
+              <label className="block text-sm font-bold mb-1">Téléphone personnel (optionnel)</label>
               <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="418-555-0200" />
             </div>
             <div>
-              <label className="block text-sm font-bold mb-1">Entreprise</label>
-              <Select value={form.enterprise_id} onChange={(e) => set('enterprise_id', e.target.value)}>
+              <label className="block text-sm font-bold mb-1">Entreprise *</label>
+              <Select required value={form.enterprise_id} onChange={(e) => set('enterprise_id', e.target.value)}>
                 <option value="">Sélectionner une entreprise</option>
                 {enterprises.map((ent) => (
                   <option key={ent.id} value={ent.id}>{ent.name ?? ent.profil?.nom ?? ent.email}</option>

@@ -34,6 +34,7 @@ export function useCommercialUpdateModal(props) {
   const profil = user?.profil
   const [form, setForm] = useState({
     email: '', first_name: '', last_name: '', phone: '',
+    mot_de_passe: '', mot_de_passe_confirmation: '',
     enterprise_id: '', additional_info: '',
     ringcentral_device_id: '', ringcentral_from_number: '',
     has_permission: false,
@@ -46,6 +47,8 @@ export function useCommercialUpdateModal(props) {
         first_name: user.first_name ?? profil?.prenom ?? '',
         last_name: user.last_name ?? profil?.nom ?? '',
         phone: user.phone ?? profil?.telephone ?? '',
+        mot_de_passe: '',
+        mot_de_passe_confirmation: '',
         enterprise_id: profil?.entreprise_id ? String(profil.entreprise_id) : '',
         additional_info: profil?.info_supp ?? '',
         ringcentral_device_id: profil?.ringcentral_device_id ?? '',
@@ -101,6 +104,18 @@ export function useCommercialUpdateModal(props) {
       setError('Le prénom et le nom sont requis.')
       return
     }
+    if (!form.enterprise_id) {
+      setError('Veuillez sélectionner une entreprise.')
+      return
+    }
+    if (form.mot_de_passe && form.mot_de_passe.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.')
+      return
+    }
+    if (form.mot_de_passe !== form.mot_de_passe_confirmation) {
+      setError('Les mots de passe ne correspondent pas.')
+      return
+    }
     // Numéro « from » : celui de l'appareil choisi (valeur fraîche de
     // l'API), en secours celui déjà enregistré. `null` explicite pour
     // pouvoir **retirer** la source (`sometimes|nullable` côté API).
@@ -113,8 +128,12 @@ export function useCommercialUpdateModal(props) {
       email: form.email,
       first_name: form.first_name,
       last_name: form.last_name,
+      ...(form.mot_de_passe ? {
+        mot_de_passe: form.mot_de_passe,
+        mot_de_passe_confirmation: form.mot_de_passe_confirmation,
+      } : {}),
       phone: form.phone || null,
-      enterprise_id: form.enterprise_id ? Number(form.enterprise_id) : null,
+      enterprise_id: form.enterprise_id,
       additional_info: form.additional_info || null,
       ringcentral_device_id: form.ringcentral_device_id || null,
       ringcentral_from_number: fromNumber,

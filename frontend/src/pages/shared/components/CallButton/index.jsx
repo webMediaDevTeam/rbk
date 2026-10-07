@@ -10,12 +10,12 @@ import { useDirectCall } from '@/hooks/use-direct-call.js'
  * Sans numéro sur la ligne, le bouton n'est pas rendu. L'appel en cours est
  * signalé par le spinner (désactivation du bouton le temps de la requête).
  */
-export default function CallButton({ phone, name = '', className }) {
+export default function CallButton({ phone, name = '', label, className }) {
   const { callClient, isCalling } = useDirectCall()
 
   if (!phone) return null
 
-  const label = name ? `Appeler ${name}` : 'Appeler'
+  const accessibleLabel = label ?? (name ? `Appeler ${name}` : 'Appeler')
 
   return (
     <button
@@ -25,18 +25,16 @@ export default function CallButton({ phone, name = '', className }) {
         callClient(phone)
       }}
       disabled={isCalling}
-      className={cn(
-        'p-1.5 rounded-lg hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
-        className
-      )}
-      aria-label={`${label} (${phone})`}
-      title={`${label} (${phone})`}
+      className={cn('inline-flex items-center justify-center gap-2 rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60', className)}
+      aria-label={`${accessibleLabel} (${phone})`}
+      title={`${accessibleLabel} (${phone})`}
     >
       {isCalling ? (
-        <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+        <Loader2 className={cn('h-4 w-4 animate-spin', label ? 'text-white' : 'text-emerald-600')} />
       ) : (
-        <Phone className="h-4 w-4 text-emerald-600" />
+        <Phone className={cn('h-4 w-4', label ? 'text-white' : 'text-emerald-600')} />
       )}
+      {label && <span>{label}</span>}
     </button>
   )
 }

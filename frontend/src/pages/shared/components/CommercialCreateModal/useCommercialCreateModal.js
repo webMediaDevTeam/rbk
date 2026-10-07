@@ -33,6 +33,7 @@ export function useCommercialCreateModal(props) {
 
   const [form, setForm] = useState({
     email: '', first_name: '', last_name: '', phone: '',
+    mot_de_passe: '', mot_de_passe_confirmation: '',
     enterprise_id: '', additional_info: '',
     ringcentral_device_id: '', ringcentral_from_number: '',
     has_permission: false,
@@ -43,6 +44,7 @@ export function useCommercialCreateModal(props) {
     if (open) {
       setForm({
         email: '', first_name: '', last_name: '', phone: '',
+        mot_de_passe: '', mot_de_passe_confirmation: '',
         enterprise_id: '',
         additional_info: '',
         ringcentral_device_id: '', ringcentral_from_number: '',
@@ -96,6 +98,18 @@ export function useCommercialCreateModal(props) {
       setError('Le prénom et le nom sont requis.')
       return
     }
+    if (!form.enterprise_id) {
+      setError('Veuillez sélectionner une entreprise.')
+      return
+    }
+    if (!form.mot_de_passe || form.mot_de_passe.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.')
+      return
+    }
+    if (form.mot_de_passe !== form.mot_de_passe_confirmation) {
+      setError('Les mots de passe ne correspondent pas.')
+      return
+    }
     // Numéro « from » : celui de l'appareil choisi (valeur fraîche de
     // l'API), en secours celui déjà sélectionné dans le formulaire.
     const selected = devices.find((d) => String(d.id) === String(form.ringcentral_device_id))
@@ -106,8 +120,10 @@ export function useCommercialCreateModal(props) {
       email: form.email,
       first_name: form.first_name,
       last_name: form.last_name,
+      mot_de_passe: form.mot_de_passe,
+      mot_de_passe_confirmation: form.mot_de_passe_confirmation,
       phone: form.phone || undefined,
-      enterprise_id: form.enterprise_id ? Number(form.enterprise_id) : undefined,
+      enterprise_id: form.enterprise_id,
       additional_info: form.additional_info || undefined,
       ringcentral_device_id: form.ringcentral_device_id || undefined,
       ringcentral_from_number: form.ringcentral_device_id ? fromNumber : undefined,

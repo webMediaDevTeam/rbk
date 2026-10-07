@@ -261,7 +261,7 @@ class UserController extends Controller
 
         $base = $request->validate([
             'email' => 'required|email|unique:users,email',
-            'mot_de_passe' => 'nullable|string|min:8|confirmed',
+            'mot_de_passe' => 'required_if:role,COMERCIAL|nullable|string|min:8|confirmed',
             'role' => 'required|in:ADMIN,COMERCIAL',
         ]);
 
@@ -277,7 +277,7 @@ class UserController extends Controller
                 'last_name' => 'required|string|max:255',
                 'phone' => 'nullable|string|max:255',
                 'additional_info' => 'nullable|string',
-                'enterprise_id' => 'nullable|uuid|exists:enterprises,id',
+                'enterprise_id' => 'required|uuid|exists:enterprises,id',
                 // « Privilège de libération » : switch de la modale
                 // Commercial (création) — colonne `users.has_permission`.
                 'has_permission' => 'sometimes|boolean',
@@ -400,7 +400,7 @@ class UserController extends Controller
             'last_name' => 'sometimes|nullable|string|max:255',
             'phone' => 'sometimes|nullable|string|max:255',
             'additional_info' => 'sometimes|nullable|string',
-            'enterprise_id' => 'sometimes|nullable|uuid|exists:enterprises,id',
+            'enterprise_id' => 'sometimes|required|uuid|exists:enterprises,id',
             // Source d'appel RingCentral de l'employé (select d'appareils).
             'ringcentral_device_id' => 'sometimes|nullable|string|max:64',
             'ringcentral_from_number' => 'sometimes|nullable|string|max:32',
@@ -408,6 +408,9 @@ class UserController extends Controller
 
         if (! empty($data['mot_de_passe'])) {
             $data['password_hash'] = Hash::make($data['mot_de_passe']);
+            $data['email_verified_at'] = now();
+            $data['verification_token'] = null;
+            $data['verification_sent_at'] = null;
         }
         unset($data['mot_de_passe']);
 
