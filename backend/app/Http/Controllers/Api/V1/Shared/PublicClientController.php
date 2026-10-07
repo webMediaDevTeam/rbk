@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Services\Client\ClientImportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
@@ -78,7 +79,7 @@ class PublicClientController extends Controller
             return $items;
         }
 
-        $result = Client::bulkUpsertFromScraperPayload($items);
+        $result = ClientImportService::bulkUpsertFromScraperPayload($items);
 
         return response()->json([
             // `success = false` uniquement si **aucune** ligne n'a pu être
@@ -104,7 +105,7 @@ class PublicClientController extends Controller
             return $items;
         }
 
-        $result = Client::bulkDeleteFromScraper($items);
+        $result = ClientImportService::bulkDeleteFromScraper($items);
 
         return response()->json([
             'success' => $result['processed'] > 0,
@@ -147,17 +148,17 @@ class PublicClientController extends Controller
     {
         $decoded = json_decode((string) $request->getContent(), true);
 
-        $mode = Client::BLACKLIST_MODE_AUTO;
+        $mode = ClientImportService::BLACKLIST_MODE_AUTO;
 
         if (is_array($decoded) && ! array_is_list($decoded)) {
             if (array_key_exists('licence', $decoded) || array_key_exists('licences', $decoded)) {
-                $mode = Client::BLACKLIST_MODE_LICENCE;
+                $mode = ClientImportService::BLACKLIST_MODE_LICENCE;
             } elseif (array_key_exists('name', $decoded) || array_key_exists('names', $decoded)) {
-                $mode = Client::BLACKLIST_MODE_NAME;
+                $mode = ClientImportService::BLACKLIST_MODE_NAME;
             }
         }
 
-        $items = $mode === Client::BLACKLIST_MODE_LICENCE
+        $items = $mode === ClientImportService::BLACKLIST_MODE_LICENCE
             ? $this->licenceItems($request)
             : $this->nameItems($request);
 
@@ -166,9 +167,9 @@ class PublicClientController extends Controller
         }
 
         $result = match ($mode) {
-            Client::BLACKLIST_MODE_LICENCE => Client::convertToBlacklistFromLicence($items),
-            Client::BLACKLIST_MODE_NAME => Client::convertToBlacklistFromName($items),
-            default => Client::convertToBlacklistFromPayload($items),
+            ClientImportService::BLACKLIST_MODE_LICENCE => ClientImportService::convertToBlacklistFromLicence($items),
+            ClientImportService::BLACKLIST_MODE_NAME => ClientImportService::convertToBlacklistFromName($items),
+            default => ClientImportService::convertToBlacklistFromPayload($items),
         };
 
         return response()->json([
@@ -267,7 +268,7 @@ class PublicClientController extends Controller
         $decoded = json_decode((string) $request->getContent(), true);
         $comercial = (string) config(
             'public_api.no_reservations_comercial_email',
-            Client::NO_RESERVATIONS_COMERCIAL_EMAIL
+            ClientImportService::NO_RESERVATIONS_COMERCIAL_EMAIL
         );
 
         // Mode « périmètre » : le script connaît le statut, pas les clients.
@@ -289,7 +290,7 @@ class PublicClientController extends Controller
             }
 
             try {
-                $result = Client::noReservationsFromStatus(
+                $result = ClientImportService::noReservationsFromStatus(
                     $decoded['status'],
                     $comercial,
                     isset($decoded['after']) ? $decoded['after'] : null
@@ -311,7 +312,7 @@ class PublicClientController extends Controller
         }
 
         try {
-            $result = Client::noReservationsFromItems($items, $comercial);
+            $result = ClientImportService::noReservationsFromItems($items, $comercial);
         } catch (InvalidArgumentException $e) {
             // Employé absent de la base : configuration, pas requête invalide.
             return $this->invalid($e->getMessage());
@@ -399,7 +400,7 @@ class PublicClientController extends Controller
             return $items;
         }
 
-        $result = Client::bulkUnavailableFromPhone($items);
+        $result = ClientImportService::bulkUnavailableFromPhone($items);
 
         return response()->json([
             // `success = false` uniquement si **aucun** numéro n'a pu être

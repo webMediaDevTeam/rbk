@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * (remonté sous le message générique « Conflit de données : numéro de licence
  * déjà utilisé par un autre client » par
- * `Client::bulkUpsertFromScraperPayload`, qui attrape tout `QueryException`).
+ * `ClientImportService::bulkUpsertFromScraperPayload`, qui attrape tout `QueryException`).
  *
  * L'index UNIQUE `clients_licence_propre_numero_unique` est conservé tel quel
  * (un ALTER ... MODIFY ne touche pas aux index). Les valeurs déjà stockées

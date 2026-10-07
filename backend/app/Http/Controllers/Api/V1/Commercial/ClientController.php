@@ -7,20 +7,25 @@ use App\Models\Client;
 use App\Models\Note;
 use App\Models\Reservation;
 use App\Services\CallWorkflowService;
+use App\Services\Client\ClientSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
 {
-    public function __construct(private CallWorkflowService $workflow) {}
+    public function __construct(
+        private CallWorkflowService $workflow,
+        private ClientSearchService $search,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
         // Filtres + exclusions + tri **partagés** avec la réservation d'un
-        // lot (`Client::scopeProspectList`) : la page et le lot réservé
+        // lot (`ClientSearchService::applyFilters`) : la page et le lot
+        // réservé
         // décrivent exactement les mêmes clients, dans le même ordre.
-        $query = Client::query()->prospectList($request->all());
+        $query = $this->search->applyFilters(Client::query(), $request->all());
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);

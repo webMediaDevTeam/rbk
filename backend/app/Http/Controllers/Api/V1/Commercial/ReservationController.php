@@ -8,13 +8,17 @@ use App\Models\Note;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Services\ReservationService;
+use App\Services\Client\ClientSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ReservationController extends Controller
 {
-    public function __construct(private ReservationService $workflow) {}
+    public function __construct(
+        private ReservationService $workflow,
+        private ClientSearchService $search,
+    ) {}
 
     /**
      * Réservations du commercial connecté (compteur header) + garde de
@@ -51,7 +55,7 @@ class ReservationController extends Controller
      *   4. note système `RESERVED` rattachée à la réservation.
      *
      * Le lot est pré-sélectionné avec **la même requête que la page
-     * Prospects** (`Client::scopeProspectList`) : mêmes filtres, mêmes
+     * Prospects** (`ClientSearchService::applyFilters`) : mêmes filtres, mêmes
      * exclusions, même tri que ce que l'employé voit à l'écran.
      *
      * Garde de traitement : `409 unfinished_treatment` tant que l'employé a
@@ -77,7 +81,7 @@ class ReservationController extends Controller
             'municipality' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:255',
             'administrative_region' => 'nullable|string|max:255',
-            'sort_by' => 'nullable|string|in:'.implode(',', array_keys(Client::SORTABLE)),
+            'sort_by' => 'nullable|string|in:'.implode(',', array_keys(ClientSearchService::SORTABLE)),
             'sort_order' => 'nullable|in:asc,desc',
         ]);
 
@@ -118,8 +122,7 @@ class ReservationController extends Controller
         // Pré-sélection = requête de la page Prospects (filtres + exclusions
         // + tri) complétée des règles métier de réservation : pas de
         // prospect déjà traité en NO / BV par cet employé.
-        $candidates = Client::query()
-            ->prospectList($validated)
+        $candidates = $this->search->applyFilters(Client::query(), $validated)
             ->whereDoesntHave('notes', fn ($q) => $q
                 ->where('sender_id', $user->id)
                 ->whereIn('type', [Note::TYPE_NO, Note::TYPE_BV]))

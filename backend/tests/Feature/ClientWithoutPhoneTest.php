@@ -7,13 +7,14 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
+use App\Services\Client\ClientImportService;
 
 /**
  * Statut dérivé « Sans téléphone » (`Client::STATUS_SANS_TELEPHONE`,
  * RULES §2 / §9) :
  *
  *  - 8e badge + filtre admin (`status=SANS_TELEPHONE`, compteur = lignes) ;
- *  - **exclusion** de la liste commerciale (`Client::scopeProspectList`) ;
+ *  - **exclusion** de la liste commerciale (`ClientSearchService::applyFilters`) ;
  *  - saisie / modification du numéro depuis l'accès Admin
  *    (`PATCH commercials/clients/{id}/phone`) ;
  *  - import n8n qui n'efface **pas** un numéro saisi à la main.
@@ -180,14 +181,14 @@ class ClientWithoutPhoneTest extends TestCase
 
         // Payload n8n sans numéro (ou « Téléphone » vide) : le numéro saisi
         // à la main est conservé — l'enrichissement ne fait que compléter.
-        Client::upsertFromScraperPayload(['Licence' => 'L-1000', 'Téléphone' => '']);
+        ClientImportService::upsertFromScraperPayload(['Licence' => 'L-1000', 'Téléphone' => '']);
         $this->assertSame('418-555-0001', $client->fresh()->phone);
 
-        Client::upsertFromScraperPayload(['Licence' => 'L-1000']);
+        ClientImportService::upsertFromScraperPayload(['Licence' => 'L-1000']);
         $this->assertSame('418-555-0001', $client->fresh()->phone);
 
         // Un numéro fourni par l'import remplace bien l'ancien.
-        Client::upsertFromScraperPayload(['Licence' => 'L-1000', 'Téléphone' => '555']);
+        ClientImportService::upsertFromScraperPayload(['Licence' => 'L-1000', 'Téléphone' => '555']);
         $this->assertSame('555', $client->fresh()->phone);
     }
 }

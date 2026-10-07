@@ -9,13 +9,17 @@ use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
 use App\Services\CallWorkflowService;
+use App\Services\Client\ClientSearchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class CommercialAdminController extends Controller
 {
-    public function __construct(private CallWorkflowService $workflow) {}
+    public function __construct(
+        private CallWorkflowService $workflow,
+        private ClientSearchService $search,
+    ) {}
 
     public function index()
     {
@@ -64,8 +68,8 @@ class CommercialAdminController extends Controller
 
             if ($search = $request->input('search')) {
                 // Même recherche « toutes colonnes » + téléphone normalisé
-                // que les Grande listes (Client::scopeSearchAll).
-                $query->searchAll($search);
+                // que les Grande listes (ClientSearchService::search()).
+                $this->search->search($query, $search);
             }
 
             return $query;
@@ -191,9 +195,9 @@ class CommercialAdminController extends Controller
             ]);
 
         if ($search = $request->input('search')) {
-            // Recherche « toutes colonnes » (§8) — voir Client::scopeSearchAll :
+            // Recherche « toutes colonnes » (§8) — voir ClientSearchService::search() :
             // téléphone indifféremment formaté, licence propre incluse.
-            $query->searchAll($search);
+            $this->search->search($query, $search);
         }
 
         // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
@@ -204,15 +208,15 @@ class CommercialAdminController extends Controller
         // Filtres de listes (scopes Eloquent) : mêmes paramètres que la liste
         // commerciale — municipalité, catégorie et région administrative.
         if ($municipality = $request->input('municipality')) {
-            $query->filterByMunicipalities($municipality);
+            $this->search->filterByMunicipalities($query, $municipality);
         }
 
         if ($category = $request->input('category')) {
-            $query->filterByCategories($category);
+            $this->search->filterByCategories($query, $category);
         }
 
         if ($region = $request->input('administrative_region')) {
-            $query->filterByAdministrativeRegions($region);
+            $this->search->filterByAdministrativeRegions($query, $region);
         }
 
         $sortable = [
@@ -293,10 +297,10 @@ class CommercialAdminController extends Controller
      * Badges de la colonne « Statut » → **deux paramètres serveur** (RULES §9).
      *
      *   - `status`             → statut **client** (Disponible / Blacklist),
-     *     même définition que `by_status`, `Client::scopeFilterByStatuses()` ;
+     *     même définition que `by_status`, `ClientSearchService::filterByStatuses()` ;
      *   - `reservation_status` → statut de la **réservation courante**
      *     (Oui / Non / BV / À rappeler / « - »), c'est-à-dire la valeur que la
-     *     colonne « Statut » affiche, `scopeFilterByReservationStatuses()`.
+     *     colonne « Statut » affiche, `filterByReservationStatuses()`.
      *
      * Les deux jeux sont **disjoints** (un client `AVAILABLE` ou blacklisté
      * n'entre jamais dans la dimension réservation) et combinés en **union
@@ -305,7 +309,7 @@ class CommercialAdminController extends Controller
      */
     private function applyStatusFilters(Builder $query, Request $request): Builder
     {
-        return Client::applyDisplayStatusFilters(
+        return $this->search->applyDisplayStatusFilters(
             $query,
             $request->input('status'),
             $request->input('reservation_status'),
@@ -314,7 +318,7 @@ class CommercialAdminController extends Controller
 
     /**
      * Compteurs des **8 badges** pour un périmètre donné — délégation à
-     * `Client::displayStatusCounts()` (partagé avec le détail d'une
+     * `ClientSearchService::displayStatusCounts()` (partagé avec le détail d'une
      * entreprise).
      *
      * @param  callable(): Builder  $base
@@ -322,7 +326,7 @@ class CommercialAdminController extends Controller
      */
     private function displayStatusCounts(callable $base): array
     {
-        return Client::displayStatusCounts($base);
+        return $this->search->displayStatusCounts($base);
     }
 
     /**

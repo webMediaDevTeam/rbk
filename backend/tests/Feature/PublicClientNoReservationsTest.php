@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
+use App\Services\Client\ClientImportService;
 
 /**
  * Endpoint public **temporaire** de fausses réservations « NON » (`POST
@@ -106,7 +107,7 @@ class PublicClientNoReservationsTest extends TestCase
             ->assertJsonPath('data.not_found', 0)
             ->assertJsonPath('data.failed', 0)
             ->assertJsonPath('data.comercial_email', 'mohamed.khemir@apex-structures.tn')
-            ->assertJsonPath('data.created_items.0.type', Client::NO_RESERVATION_TARGET_LICENCE)
+            ->assertJsonPath('data.created_items.0.type', ClientImportService::NO_RESERVATION_TARGET_LICENCE)
             ->assertJsonPath('data.created_items.0.key', '1100357101')
             ->assertJsonPath('data.created_items.0.client_id', $client->id)
             ->assertJsonPath('data.created_items.0.enterprise_name', 'Ville De Drummondville');
@@ -158,7 +159,7 @@ class PublicClientNoReservationsTest extends TestCase
         $this->postJson(self::URI, ['client_ids' => [$alpha->id, $beta->id]])
             ->assertOk()
             ->assertJsonPath('data.created', 2)
-            ->assertJsonPath('data.created_items.0.type', Client::NO_RESERVATION_TARGET_ID);
+            ->assertJsonPath('data.created_items.0.type', ClientImportService::NO_RESERVATION_TARGET_ID);
 
         // Liste JSON nue : un uuid **et** une licence, sans enveloppe.
         $gamma = $this->makeClient(['enterprise_name' => 'Gamma Inc.', 'licence_propre_numero' => 1105228909]);

@@ -10,10 +10,11 @@ use App\Models\User;
 use App\Services\CallWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
+use App\Services\Client\ClientImportService;
 
 /**
  * Indisponibilité en masse **par numéro de téléphone**
- * (`Client::bulkUnavailableFromPhone()`) et détection de numéro
+ * (`ClientImportService::bulkUnavailableFromPhone()`) et détection de numéro
  * (`Client::normalizePhone()`).
  *
  * Fil conducteur : les formes `819-418-6550`, `8194186550`,
@@ -85,7 +86,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
         $other = $this->makeClient(['phone' => '514-353-5820']);
 
         // Saisie dans une toute autre forme que la colonne stockée.
-        $report = Client::bulkUnavailableFromPhone(['+1-819-418-6550']);
+        $report = ClientImportService::bulkUnavailableFromPhone(['+1-819-418-6550']);
 
         $this->assertSame(1, $report['received']);
         $this->assertSame(1, $report['processed']);
@@ -125,7 +126,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
         $country = $this->makeClient(['phone' => '1 819-418-6550']);
         $withExt = $this->makeClient(['phone' => '819-418-6550 ext. 5417']);
 
-        $report = Client::bulkUnavailableFromPhone(['8194186550']);
+        $report = ClientImportService::bulkUnavailableFromPhone(['8194186550']);
 
         $this->assertSame(4, $report['matched']);
         $this->assertSame(4, $report['blocked']);
@@ -141,7 +142,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
         $twin = $this->makeClient(['phone' => '819-418-6550']);
         $other = $this->makeClient(['phone' => '418-555-1212']);
 
-        $report = Client::bulkUnavailableFromPhone(['+1-819-418-6550']);
+        $report = ClientImportService::bulkUnavailableFromPhone(['+1-819-418-6550']);
 
         $this->assertSame(2, $report['matched']);
         $this->assertSame(2, $report['blocked']);
@@ -169,7 +170,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
             'reminder_date' => now()->addDays(3),
         ]);
 
-        $report = Client::bulkUnavailableFromPhone(['819-418-6550']);
+        $report = ClientImportService::bulkUnavailableFromPhone(['819-418-6550']);
         $this->assertSame(1, $report['blocked']);
 
         // Sinon le cron des rappels expirés ré-appliquerait son blocage 21 j
@@ -190,7 +191,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
             'is_blacklisted' => true,
         ]);
 
-        $report = Client::bulkUnavailableFromPhone([
+        $report = ClientImportService::bulkUnavailableFromPhone([
             '819-418-6550',        // → bloqué
             '418-555-1212',        // → ignoré (blacklisted, jamais rétrogradé)
             '514-555-0000',        // → ignoré (not_found), **pas** une erreur
@@ -225,7 +226,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
         $client->forceFill(['updated_at' => now()->subDay()])->save();
         $frozen = $client->refresh()->updated_at;
 
-        $report = Client::bulkUnavailableFromPhone(['819-418-6550']);
+        $report = ClientImportService::bulkUnavailableFromPhone(['819-418-6550']);
 
         $this->assertSame(1, $report['matched']);
         $this->assertSame(0, $report['blocked']);
@@ -249,7 +250,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
             'returned_at' => null,
         ]);
 
-        $report = Client::bulkUnavailableFromPhone(['819-418-6550']);
+        $report = ClientImportService::bulkUnavailableFromPhone(['819-418-6550']);
 
         $this->assertSame(1, $report['matched']);
         $this->assertSame(0, $report['blocked']);
@@ -266,7 +267,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
         $client = $this->makeClient(['phone' => '819-418-6550']);
 
         // 1er passage.
-        $first = Client::bulkUnavailableFromPhone(['819-418-6550', '514-555-0000']);
+        $first = ClientImportService::bulkUnavailableFromPhone(['819-418-6550', '514-555-0000']);
         $this->assertSame(2, $first['processed']);
         $this->assertSame(1, $first['blocked']);
         $this->assertSame(1, $first['ignored']);
@@ -276,7 +277,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
         $this->assertSame(Client::STATUS_UNAVAILABLE, $client->refresh()->status);
 
         // 2e passage : rien à bloquer, tout est ignoré, **zéro erreur**.
-        $second = Client::bulkUnavailableFromPhone(['819-418-6550', '514-555-0000']);
+        $second = ClientImportService::bulkUnavailableFromPhone(['819-418-6550', '514-555-0000']);
         $this->assertSame(2, $second['processed']);
         $this->assertSame(0, $second['blocked']);
         $this->assertSame(2, $second['ignored']);
@@ -293,9 +294,9 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
         $beta = $this->makeClient(['phone' => '418-555-1212']);
 
         // Chaîne nue.
-        Client::bulkUnavailableFromPhone(['819-418-6550']);
+        ClientImportService::bulkUnavailableFromPhone(['819-418-6550']);
         // Objet (clé française / anglaise).
-        Client::bulkUnavailableFromPhone([
+        ClientImportService::bulkUnavailableFromPhone([
             ['phone' => '418-555-1212'],
             ['Téléphone' => '819-418-6550'],  // déjà bloqué : ignoré, pas d'erreur
         ]);
@@ -308,7 +309,7 @@ class ClientBulkUnavailableFromPhoneTest extends TestCase
     {
         $ok = $this->makeClient(['phone' => '819-418-6550']);
 
-        $report = Client::bulkUnavailableFromPhone([
+        $report = ClientImportService::bulkUnavailableFromPhone([
             ['municipality' => 'sans numéro'],   // → échec (aucune clé de téléphone)
             '819-418-6550',                      // → traité
         ]);

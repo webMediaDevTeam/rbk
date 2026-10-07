@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Client;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use App\Services\Client\ClientImportService;
 
 /**
  * Remplace l'intégralité des clients par les enregistrements d'un export RBQ
@@ -94,7 +95,7 @@ class ClientsFromJsonSeeder extends Seeder
             unset($row['']);
         }
 
-        $attributes = array_merge(Client::attributesFromPayload($row), [
+        $attributes = array_merge(ClientImportService::attributesFromPayload($row), [
             'status' => 'AVAILABLE',
             'is_blacklisted' => false,
             'returned_at' => null,

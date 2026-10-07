@@ -5,10 +5,13 @@ namespace App\Http\Controllers\Api\V1\Shared;
 use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Reservation;
+use App\Services\Client\ClientSearchService;
 use Illuminate\Http\JsonResponse;
 
 class ProspectOverviewController extends Controller
 {
+    public function __construct(private ClientSearchService $search) {}
+
     /**
      * GET /clients/overview — cartes KPI « Overview » des deux listes de
      * prospects (panel commercial et panel admin).
@@ -114,11 +117,11 @@ class ProspectOverviewController extends Controller
         ];
 
         foreach ($clientBuckets as $bucket) {
-            $displayCounts[$bucket] = Client::query()->filterByStatuses($bucket)->count();
+            $displayCounts[$bucket] = $this->search->filterByStatuses(Client::query(), $bucket)->count();
         }
 
         foreach ($reservationBuckets as $bucket) {
-            $displayCounts[$bucket] = Client::query()->filterByReservationStatuses($bucket)->count();
+            $displayCounts[$bucket] = $this->search->filterByReservationStatuses(Client::query(), $bucket)->count();
         }
 
         return response()->json([

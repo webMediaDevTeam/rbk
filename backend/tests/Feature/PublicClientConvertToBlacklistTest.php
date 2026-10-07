@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
+use App\Services\Client\ClientImportService;
 
 /**
  * Endpoint public **temporaire** de conversion en liste noire par nom
@@ -345,7 +346,7 @@ class PublicClientConvertToBlacklistTest extends TestCase
             ->assertJsonPath('data.failed', 0)
             // Ligne de rapport : cible = licence, `name` neutre.
             ->assertJsonPath('data.zapped_items.0.index', 0)
-            ->assertJsonPath('data.zapped_items.0.type', Client::BLACKLIST_MODE_LICENCE)
+            ->assertJsonPath('data.zapped_items.0.type', ClientImportService::BLACKLIST_MODE_LICENCE)
             ->assertJsonPath('data.zapped_items.0.key', '1100357101')
             ->assertJsonPath('data.zapped_items.0.licence', '1100357101')
             ->assertJsonPath('data.zapped_items.0.name', null)
@@ -444,7 +445,7 @@ class PublicClientConvertToBlacklistTest extends TestCase
             ['Licence' => '1100-3571-01', 'Nom de l\'intervenant / Entreprise' => 'Inexistante Inc.'],
         ], JSON_UNESCAPED_UNICODE))
             ->assertOk()
-            ->assertJsonPath('data.zapped_items.0.type', Client::BLACKLIST_MODE_LICENCE)
+            ->assertJsonPath('data.zapped_items.0.type', ClientImportService::BLACKLIST_MODE_LICENCE)
             ->assertJsonPath('data.zapped_items.0.licence', '1100-3571-01')
             ->assertJsonPath('data.matched', 1);
 

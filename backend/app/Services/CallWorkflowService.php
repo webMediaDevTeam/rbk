@@ -38,7 +38,11 @@ class CallWorkflowService
     /** Rappel automatique par défaut (BV : 3 jours ; repli CALL_BACK). */
     public const RECALL_DAYS = 3;
 
-    /** Indisponibilité après NO. */
+    /**
+     * Indisponibilité après NO — **valeur par défaut** de
+     * `config('rules.non_block_months')` (celle qui est lue à l'exécution ;
+     * la constante reste pour les assertions de test et la doc).
+     */
     public const NON_BLOCK_MONTHS = 3;
 
     /** Indisponibilité après NO (3 mois) ou après épuisement des BV (21 jours). */
@@ -186,7 +190,7 @@ class CallWorkflowService
     {
         $client->update([
             'status' => Client::STATUS_UNAVAILABLE,
-            'returned_at' => Carbon::now()->addMonths(self::NON_BLOCK_MONTHS),
+            'returned_at' => Carbon::now()->addMonths((int) config('rules.non_block_months', self::NON_BLOCK_MONTHS)),
         ]);
 
         if ($reservation) {

@@ -9,6 +9,7 @@ use App\Models\Note;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
+use App\Services\Client\ClientSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
 
 class EnterpriseController extends Controller
 {
+    public function __construct(private ClientSearchService $search) {}
+
     protected function formatEnterprise(Enterprise $enterprise): array
     {
         $base = request()->getSchemeAndHttpHost();
@@ -395,7 +398,7 @@ class EnterpriseController extends Controller
                 ->whereHas('notes', fn ($q) => $q->whereIn('sender_id', $userIds)->calls());
 
             if ($search = $request->input('search')) {
-                $query->searchAll($search);
+                $this->search->search($query, $search);
             }
 
             return $query;
@@ -408,7 +411,7 @@ class EnterpriseController extends Controller
             'currentReservation:id,status',
         ]);
 
-        Client::applyDisplayStatusFilters(
+        $this->search->applyDisplayStatusFilters(
             $historyQuery,
             $request->input('status'),
             $request->input('reservation_status')
@@ -418,7 +421,7 @@ class EnterpriseController extends Controller
 
         $badges = [
             'prospects' => ['system' => $historyBase()->count()],
-            'by_display_status' => Client::displayStatusCounts($historyBase),
+            'by_display_status' => $this->search->displayStatusCounts($historyBase),
         ];
 
         Client::loadLatestReservations($clientsPage->getCollection());
