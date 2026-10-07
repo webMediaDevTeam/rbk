@@ -1,2 +1,5 @@
+# API Laravel — le domaine racine sert le SPA (frontend/public/
+# robots.txt fait foi depuis le gateway) ; ce fichier reste aligné :
+# le projet est retiré de Google, rien à crawler ici.
 User-agent: *
-Disallow:
+Disallow: /

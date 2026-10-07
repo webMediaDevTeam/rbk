@@ -1,0 +1,13 @@
+# CRM interne RBK — site non destiné au référencement.
+# Blocage total des robots (Google inclus), comme demandé.
+#
+# Couche complémentaire pour le retrait des URLs DÉJÀ indexées :
+#   * gateway nginx : en-tête `X-Robots-Tag: noindex, nofollow` sur
+#     toutes les réponses (nginx/conf.d/default.conf)
+#   * index.html    : <meta name="robots" content="noindex, nofollow">
+#
+# ⚠️ Un blocage robots.txt seul ne retire pas une page déjà dans
+# l'index : pour un retrait immédiat, passer par Google Search
+# Console -> Suppressions.
+User-agent: *
+Disallow: /
