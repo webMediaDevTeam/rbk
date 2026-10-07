@@ -13,8 +13,10 @@ use InvalidArgumentException;
  * Webhook **public** d'import / de suppression de prospects — scraper / n8n
  * (docs/RULES.md §12, spec : docs/public_api.md).
  *
- * `POST clients/bulk-upsert` : **aucune authentification** (aucun middleware
- * `auth:sanctum`), CORS ouvert via `config/cors.php` (`paths` : `api/*`).
+ * `POST clients/bulk-upsert` : **sans utilisateur** (aucun middleware
+ * `auth:sanctum`) mais sous la clé partagée `X-Api-Key`
+ * (`VerifyExternalSystemKey`, `EXTERNAL_SYSTEM_API_KEY`), CORS ouvert via
+ * `config/cors.php` (`paths` : `api/*`).
  * Deux formes de corps acceptées :
  *
  *   {"clients": [{"Licence": "…", "Nom de l'intervenant / Entreprise": "…"}]}

@@ -1,8 +1,8 @@
 # API publique — Fausses réservations « NON » (données de préparation)
 
-> ⚠️ **Endpoint public temporaire** — aucune authentification, appelable par
-> n'importe qui depuis le navigateur (CORS ouvert sur `api/*`). Il est prévu
-> pour être **retiré** : procédure de suppression en §8.
+> ⚠️ **Endpoint M2M temporaire** — protégé par la clé partagée `X-Api-Key`
+> (`EXTERNAL_SYSTEM_API_KEY`, échec fermé = `401`), CORS ouvert sur `api/*`.
+> Il est prévu pour être **retiré** : procédure de suppression en §8.
 
 Même surface publique que `clients/bulk-upsert`, `clients/bulk-delete`,
 `clients/convert-to-blacklist` et `clients/convert-to-unavailable` (spec :
@@ -198,6 +198,7 @@ Une licence :
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/create-no-reservations \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
   -d '{"licence": "5747508901"}'
@@ -211,11 +212,13 @@ Tout un périmètre (campagne « indisponibles »), paginé :
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/create-no-reservations \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"status": "UNAVAILABLE"}'
 # {"success":true,"data":{"received":20000,…,"created":20000,…,"truncated":true,"next_after":"01a0fbc5-…"}}
 # puis, jusqu'à "next_after": null :
 curl -X POST https://HOST/api/v1/clients/create-no-reservations \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"status": "UNAVAILABLE", "after": "01a0fbc5-…"}'
 ```

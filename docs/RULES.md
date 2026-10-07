@@ -833,11 +833,11 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 | PATCH | `commercials/clients/{id}/phone` — saisie / correction du numéro (§2) | ADMIN/SUPER_ADMIN |
 | GET | `entreprises/{id}/stats` — analytics + employés + historique (§9) | ADMIN/SUPER_ADMIN |
 | POST | `liste-noire/{id}/debloquer` | ADMIN/SUPER_ADMIN |
-| POST | `clients/bulk-upsert` | **public** (aucune auth) — import scraper / n8n, §12 |
-| POST/DELETE | `clients/bulk-delete` | **public** (aucune auth) — suppression en masse, données liées ignorées, §12 |
-| POST | `clients/convert-to-blacklist` | **public temporaire** (aucune auth) — liste noire par **nom ou licence**, §12 |
-| POST | `clients/convert-to-unavailable` | **public temporaire** (aucune auth) — indisponible 3 mois par téléphone, §12 |
-| POST | `clients/create-no-reservations` | **public temporaire** (aucune auth) — fausses réservations `NO` (1 employé attributaire), §12 |
+| POST | `clients/bulk-upsert` | **M2M** (clé `X-Api-Key`) — import scraper / n8n, §12 |
+| POST/DELETE | `clients/bulk-delete` | **M2M** (clé `X-Api-Key`) — suppression en masse, données liées ignorées, §12 |
+| POST | `clients/convert-to-blacklist` | **M2M temporaire** (clé `X-Api-Key`) — liste noire par **nom ou licence**, §12 |
+| POST | `clients/convert-to-unavailable` | **M2M temporaire** (clé `X-Api-Key`) — indisponible 3 mois par téléphone, §12 |
+| POST | `clients/create-no-reservations` | **M2M temporaire** (clé `X-Api-Key`) — fausses réservations `NO` (1 employé attributaire), §12 |
 | GET | `clients/overview` | tous rôles — cartes KPI globales (prospects / réservés / traités) |
 | GET | `filters` | tous rôles — `{categories, municipalities, administrative_regions}` distincts |
 | GET | `categories` | tous rôles — libellés distincts de `clients.categories` |
@@ -982,8 +982,9 @@ enfantsées (`reservations`, `rappels`, `notes`) partent en cascade. Ce
 seeder n'est **pas** appelé par `DatabaseSeeder` : il se lance à la main.
 
 **Endpoint public — import en continu** (`POST /api/v1/clients/bulk-upsert`,
-spec : `docs/public_api.md`) : écriture **sans aucune authentification** pour
-le webhook scraper / n8n, CORS ouvert par `config/cors.php` (`paths` :
+spec : `docs/public_api.md`) : écriture **sans utilisateur** mais sous la
+clé partagée `X-Api-Key` (`EXTERNAL_SYSTEM_API_KEY`, middleware
+`VerifyExternalSystemKey`, échec fermé = 401) pour le webhook scraper / n8n, CORS ouvert par `config/cors.php` (`paths` :
 `api/*`, chemin du endpoint ajouté explicitement).
 
 * **corps** : `{"clients": [...]}` (recommandé) **ou** liste JSON nue
@@ -1062,7 +1063,7 @@ mêmes clés françaises que l'import avec repli `Licence (propre)`).
 **Endpoint public — conversion en liste noire (par nom ou par licence)**
 (`POST /api/v1/clients/convert-to-blacklist`, spec **temporaire** :
 `docs/convert_to_blacklist_api.md`) : même surface que les deux endpoints
-ci-dessus (aucune authentification, CORS `api/*`, lot borné par
+ci-dessus (clé `X-Api-Key`, CORS `api/*`, lot borné par
 `PUBLIC_API_MAX_ITEMS`). **L'enveloppe choisit le mode** : `{"licence": "…"}`
 / `{"licences": [...]}` → licence, `{"name": "…"}` / `{"names": [...]}` →
 nom, `{"clients": [...]}` ou liste JSON nue → **auto** (licence si l'item en
@@ -1102,7 +1103,7 @@ porte une, sinon nom).
 **Endpoint public — indisponibilité en masse par numéro de téléphone**
 (`POST /api/v1/clients/convert-to-unavailable`, spec **temporaire** :
 `docs/convert_to_unavailable_api.md`) : même surface que les endpoints
-ci-dessus (aucune authentification, CORS `api/*`, lot borné par
+ci-dessus (clé `X-Api-Key`, CORS `api/*`, lot borné par
 `PUBLIC_API_MAX_ITEMS`). Corps acceptés : `{"phone": "…"}`,
 `{"phones": [...]}` (ou enveloppe `{"clients": [...]}`) et une liste JSON
 nue de chaînes.
@@ -1142,7 +1143,7 @@ nue de chaînes.
 **Endpoint public — fausses réservations « NON »** (`POST
 /api/v1/clients/create-no-reservations`, spec **temporaire** :
 `docs/create_no_reservations_api.md`) : même surface que les endpoints
-ci-dessus (aucune authentification, CORS `api/*`). Il écrit **une ligne
+ci-dessus (clé `X-Api-Key`, CORS `api/*`). Il écrit **une ligne
 `reservations` au statut `NO` par client visé**, attribuée à **un seul
 employé** — une donnée de préparation, **pas** le workflow d'appel.
 

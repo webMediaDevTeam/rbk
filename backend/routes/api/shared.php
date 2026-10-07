@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Shared\PublicClientController;
 use App\Http\Controllers\Api\V1\Shared\RingCentralController;
 use App\Http\Controllers\Api\V1\Shared\UserController;
 use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\VerifyExternalSystemKey;
 use Illuminate\Support\Facades\Route;
 
 // ── Public Auth ──────────────────────────────────────────────
@@ -21,41 +22,45 @@ Route::post('auth/forgot-password/reset', [AuthController::class, 'resetForgotPa
 Route::post('auth/verify-account', [AuthController::class, 'verifyAccount']);
 Route::post('auth/resend-verification', [AuthController::class, 'resendVerification']);
 
-// ── Public : import de prospects (webhook scraper / n8n) ────
-// AUCUNE authentification (spec docs/public_api.md, règles RULES.md §12) :
-// CORS couvert par `config/cors.php` (`paths` = `api/*`), lot borné par
-// `public_api.max_items`. Déclarée avant toute route `clients/{…}` pour
-// ne jamais être capturée par un paramètre de route.
-Route::post('clients/bulk-upsert', [PublicClientController::class, 'bulkUpsert']);
+// ── Webhooks M2M : import / suppression de prospects ─────────
+// AUCUN utilisateur ni `auth:sanctum` (spec docs/public_api.md, règles
+// RULES.md §12) : la barrière est la clé partagée `X-Api-Key`
+// (`VerifyExternalSystemKey`, échec fermé, 401 sans clé valide). CORS couvert
+// par `config/cors.php` (`paths` = `api/*`, `allowed_headers` = `*`), lot
+// borné par `public_api.max_items`. Déclarées avant toute route
+// `clients/{…}` pour ne jamais être capturées par un paramètre de route.
+Route::middleware(VerifyExternalSystemKey::class)->group(function () {
+    Route::post('clients/bulk-upsert', [PublicClientController::class, 'bulkUpsert']);
 
-// Suppression en masse, même règle de sécurité de bout en bout : un client
-// qui porte des données liées (réservations / notes / rappels, toutes en
-// `cascadeOnDelete`) est **ignoré**, la boucle passe au client suivant
-// (RULES §12). `POST` et `DELETE` pointent sur la même action.
-Route::match(['post', 'delete'], 'clients/bulk-delete', [PublicClientController::class, 'bulkDelete']);
+    // Suppression en masse, même règle de sécurité de bout en bout : un client
+    // qui porte des données liées (réservations / notes / rappels, toutes en
+    // `cascadeOnDelete`) est **ignoré**, la boucle passe au client suivant
+    // (RULES §12). `POST` et `DELETE` pointent sur la même action.
+    Route::match(['post', 'delete'], 'clients/bulk-delete', [PublicClientController::class, 'bulkDelete']);
 
-// Conversion en liste noire par nom — endpoint public **temporaire**
-// (spec docs/convert_to_blacklist_api.md) : même surface que les deux
-// routes ci-dessus, aucune authentification, lot borné par
-// `PUBLIC_API_MAX_ITEMS`. Recherche par `enterprise_name` / `name`
-// insensible à la casse.
-Route::post('clients/convert-to-blacklist', [PublicClientController::class, 'convertToBlacklist']);
+    // Conversion en liste noire par nom — endpoint public **temporaire**
+    // (spec docs/convert_to_blacklist_api.md) : même surface que les deux
+    // routes ci-dessus, clé `X-Api-Key` exigée, lot borné par
+    // `PUBLIC_API_MAX_ITEMS`. Recherche par `enterprise_name` / `name`
+    // insensible à la casse.
+    Route::post('clients/convert-to-blacklist', [PublicClientController::class, 'convertToBlacklist']);
 
-// Indisponibilité en masse **par numéro de téléphone** — endpoint public
-// **temporaire** (spec docs/convert_to_unavailable_api.md) : même surface
-// que les routes ci-dessus, aucune authentification, lot borné par
-// `PUBLIC_API_MAX_ITEMS`. Numéro détecté quel que soit son format
-// (`819-418-6550` / `+1-819-418-6550` / `8194186550`…), chaque ligne
-// visée → `UNAVAILABLE` + `returned_at = now + 3 mois` (geste NO).
-Route::post('clients/convert-to-unavailable', [PublicClientController::class, 'convertToUnavailable']);
+    // Indisponibilité en masse **par numéro de téléphone** — endpoint public
+    // **temporaire** (spec docs/convert_to_unavailable_api.md) : même surface
+    // que les routes ci-dessus, clé `X-Api-Key` exigée, lot borné par
+    // `PUBLIC_API_MAX_ITEMS`. Numéro détecté quel que soit son format
+    // (`819-418-6550` / `+1-819-418-6550` / `8194186550`…), chaque ligne
+    // visée → `UNAVAILABLE` + `returned_at = now + 3 mois` (geste NO).
+    Route::post('clients/convert-to-unavailable', [PublicClientController::class, 'convertToUnavailable']);
 
-// Fausses réservations « NON » (endpoint public **temporaire**, spec
-// docs/create_no_reservations_api.md) : même surface que les routes
-// ci-dessus, aucune authentification, lot borné par
-// `PUBLIC_API_MAX_ITEMS` (mode `{"status": …}` : borné par
-// `NO_RESERVATIONS_STATUS_LIMIT`). Une ligne `reservations` `NO` par client
-// visé, attribuée à **un seul employé**, sans effet de bord métier.
-Route::post('clients/create-no-reservations', [PublicClientController::class, 'createNoReservations']);
+    // Fausses réservations « NON » (endpoint public **temporaire**, spec
+    // docs/create_no_reservations_api.md) : même surface que les routes
+    // ci-dessus, clé `X-Api-Key` exigée, lot borné par
+    // `PUBLIC_API_MAX_ITEMS` (mode `{"status": …}` : borné par
+    // `NO_RESERVATIONS_STATUS_LIMIT`). Une ligne `reservations` `NO` par client
+    // visé, attribuée à **un seul employé**, sans effet de bord métier.
+    Route::post('clients/create-no-reservations', [PublicClientController::class, 'createNoReservations']);
+});
 
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {

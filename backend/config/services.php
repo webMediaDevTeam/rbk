@@ -42,4 +42,13 @@ return [
         'jwt' => env('RINGCENTRAL_JWT'),
     ],
 
+    // Clé partagée M2M : webhooks publics `clients/bulk-*` / `clients/
+    // convert-*` / `clients/create-no-reservations` protégés par l'en-tête
+    // `X-Api-Key` (App\Http\Middleware\VerifyExternalSystemKey). Même valeur
+    // sur les deux VPS : le serveur qui reçoit (secret GitHub -> .env) et
+    // l'appelant qui envoie. Absente = tout est refusé (échec fermé).
+    'external_system' => [
+        'key' => env('EXTERNAL_SYSTEM_API_KEY'),
+    ],
+
 ];

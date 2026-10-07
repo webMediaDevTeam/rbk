@@ -39,6 +39,9 @@ class PublicClientConvertToBlacklistTest extends TestCase
     {
         parent::setUp();
 
+        // Webhooks publics protégés : en-tête X-Api-Key (VerifyExternalSystemKey).
+        $this->withHeaders(['X-Api-Key' => (string) config('services.external_system.key')]);
+
         $this->commercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
     }
 
@@ -55,6 +58,8 @@ class PublicClientConvertToBlacklistTest extends TestCase
         return $this->call('POST', self::URI, [], [], [], [
             'CONTENT_TYPE' => 'application/json',
             'HTTP_ACCEPT' => 'application/json',
+            // `$this->call()` n'applique PAS les defaultHeaders de withHeaders().
+            'HTTP_X_API_KEY' => (string) config('services.external_system.key'),
         ], $body);
     }
 

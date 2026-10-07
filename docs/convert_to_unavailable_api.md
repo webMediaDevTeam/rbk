@@ -1,8 +1,8 @@
 # API publique — Indisponibilité en masse par numéro de téléphone
 
-> ⚠️ **Endpoint public temporaire** — aucune authentification, appelable par
-> n'importe qui depuis le navigateur (CORS ouvert sur `api/*`). Il est prévu
-> pour être **retiré** : procédure de suppression en §7.
+> ⚠️ **Endpoint M2M temporaire** — protégé par la clé partagée `X-Api-Key`
+> (`EXTERNAL_SYSTEM_API_KEY`, échec fermé = `401`), CORS ouvert sur `api/*`.
+> Il est prévu pour être **retiré** : procédure de suppression en §7.
 
 Même surface publique que `clients/bulk-upsert`, `clients/bulk-delete` et
 `clients/convert-to-blacklist` (spec : `docs/public_api.md`,
@@ -218,6 +218,7 @@ Trois niveaux, du plus grave au plus bénin :
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/convert-to-unavailable \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
   -d '{"phone": "+1-819-418-6550"}'
@@ -237,6 +238,7 @@ Réponse `200` :
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/convert-to-unavailable \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"phones": ["8194186550", "514-555-0000", "418-555-1212", "abc"]}'
 ```
@@ -253,6 +255,7 @@ curl -X POST https://HOST/api/v1/clients/convert-to-unavailable \
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/convert-to-unavailable \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"phones": ["abc", ";;;"]}'
 ```
@@ -265,6 +268,7 @@ curl -X POST https://HOST/api/v1/clients/convert-to-unavailable \
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/convert-to-unavailable \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"phones": []}'
 ```

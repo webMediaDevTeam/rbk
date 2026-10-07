@@ -1,8 +1,10 @@
 # API publique des clients — import (upsert) & suppression (delete)
 
-> ⚠️ **Surface publique** — ces deux endpoints ne demandent **aucune**
-> authentification (`auth:sanctum` absent) et sont appelables depuis un
-> navigateur (CORS ouvert sur `api/*`).
+> ⚠️ **Surface M2M** — pas d'utilisateur ni de session (`auth:sanctum`
+> absent) : la barrière est la **clé partagée** `X-Api-Key`
+> (`EXTERNAL_SYSTEM_API_KEY`, middleware `VerifyExternalSystemKey`,
+> échec fermé = `401` sans clé valide, y compris serveur non configuré).
+> CORS ouvert sur `api/*` (`allowed_headers` = `*`).
 
 Ils forment le webhook **scraper / n8n** : import par lots d'un côté,
 suppression propre de l'autre, avec la même garantie de bout en bout (un
@@ -192,6 +194,7 @@ temporaires (voir « Voir aussi » §7).
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/clients/bulk-upsert \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' -H 'Accept: application/json' \
   -d '{"clients":[
         {"Licence":"5747-5089-01","Licence (propre)":5747508901,
@@ -265,6 +268,7 @@ comptage des liens) :
 
 ```bash
 curl -X DELETE http://localhost:8000/api/v1/clients/bulk-delete \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' -H 'Accept: application/json' \
   -d '{"licences":["5747-5089-01","1100-3571-01"]}'
 ```

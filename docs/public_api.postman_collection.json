@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b7f0a2c4-6d1e-4a83-9c55-2f8e1d0b4a97",
     "name": "RBK — API publique clients (upsert / delete)",
-    "description": "Endpoints **publics** (aucune authentification, CORS ouvert sur `api/*`) du webhook scraper / n8n.\n\n- `POST /api/v1/clients/bulk-upsert` — import / mise à jour par lots\n- `POST` · `DELETE` `/api/v1/clients/bulk-delete` — suppression, **données liées jamais supprimées**\n\nLimite de lot : `PUBLIC_API_MAX_ITEMS` (défaut 1000) → `422` au-delà.\n\n**Variables**\n- `base_url` : `http://localhost:8000` par défaut. Passer à `http://zdigia.com` (ou l'hôte de prod) pour cibler l'API déployée.\n- `licence_1`, `licence_2`, `licence_absente` : licences à utiliser dans les requêtes.\n\nChaque requête porte des tests (`pm.test`) sur le code HTTP et les compteurs du rapport.\n\nSpec : `docs/public_api.md` — Règles métier : `docs/RULES.md` §12.",
+    "description": "Endpoints **M2M** du webhook scraper / n8n — protégés par la clé partagée `X-Api-Key` (variable `external_system_key` = `EXTERNAL_SYSTEM_API_KEY`, échec fermé = 401), CORS ouvert sur `api/*`.\n\n- `POST /api/v1/clients/bulk-upsert` — import / mise à jour par lots\n- `POST` · `DELETE` `/api/v1/clients/bulk-delete` — suppression, **données liées jamais supprimées**\n\nLimite de lot : `PUBLIC_API_MAX_ITEMS` (défaut 1000) → `422` au-delà.\n\n**Variables**\n- `base_url` : `http://localhost:8000` par défaut. Passer à `http://zdigia.com` (ou l'hôte de prod) pour cibler l'API déployée.\n- `licence_1`, `licence_2`, `licence_absente` : licences à utiliser dans les requêtes.\n\nChaque requête porte des tests (`pm.test`) sur le code HTTP et les compteurs du rapport.\n\nSpec : `docs/public_api.md` — Règles métier : `docs/RULES.md` §12.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -25,6 +25,12 @@
       "key": "licence_absente",
       "value": "9999-0000-01",
       "type": "string"
+    },
+    {
+      "key": "external_system_key",
+      "value": "",
+      "type": "string",
+      "description": "Clé partagée M2M — à remplir avec EXTERNAL_SYSTEM_API_KEY (en-tête X-Api-Key)."
     }
   ],
   "event": [
@@ -128,8 +134,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -137,8 +154,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-upsert"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-upsert"
+              ]
             },
             "description": "Forme recommandée. Mélange accepté : clés françaises **et** colonnes `snake_case` (casse / ponctuation ignorées).\n\nÀ rejouer : la 2e exécution bascule les 2 lignes en `unchanged`."
           }
@@ -172,8 +196,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -181,8 +216,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-upsert"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-upsert"
+              ]
             },
             "description": "Tableau d'objets nu, sans enveloppe `clients`. Le 3e item n'a que la clé de repli `Licence (propre)`."
           }
@@ -213,8 +255,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -222,8 +275,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-upsert"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-upsert"
+              ]
             },
             "description": "1001 items > `PUBLIC_API_MAX_ITEMS` (1000) → `422 {success:false, error}`.\n\nLe corps est généré par `repeat` (1001 lignes) : Postman doit résoudre 1001 interpolations, c'est un peu lent mais reste jouable — 1001 items suffisent à dépasser la limite."
           }
@@ -250,8 +310,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -259,8 +330,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-upsert"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-upsert"
+              ]
             },
             "description": "Tableau vide → `422 « Aucun client à importer (tableau vide). »`."
           }
@@ -294,14 +372,30 @@
           "request": {
             "method": "OPTIONS",
             "header": [
-              { "key": "Origin", "value": "http://localhost:5173" },
-              { "key": "Access-Control-Request-Method", "value": "POST" },
-              { "key": "Access-Control-Request-Headers", "value": "content-type" }
+              {
+                "key": "Origin",
+                "value": "http://localhost:5173"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "POST"
+              },
+              {
+                "key": "Access-Control-Request-Headers",
+                "value": "content-type"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-upsert",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-upsert"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-upsert"
+              ]
             },
             "description": "Preflight navigateur (CORS ouvert sur `api/*`, `config/cors.php`). Sans corps."
           }
@@ -357,8 +451,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -366,8 +471,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-delete",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-delete"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-delete"
+              ]
             },
             "description": "Le 3e item est volontairement absent → `missing`.\n\nÀ tester dans l'ordre : importer d'abord (dossier ci-dessus), puis supprimer — un client tout juste importé est *vierge* et sera réellement `deleted`."
           }
@@ -401,8 +513,19 @@
           "request": {
             "method": "DELETE",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -410,8 +533,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-delete",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-delete"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-delete"
+              ]
             },
             "description": "Objets : `Licence` → `licence_number`, sinon `Licence (propre)` → `licence_propre_numero`.\n\nUn corps JSON sur `DELETE` est accepté par cette route (`Route::match`)."
           }
@@ -445,8 +575,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -454,8 +595,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-delete",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-delete"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-delete"
+              ]
             },
             "description": "Chaînes nues → lues comme `licence_number`."
           }
@@ -486,8 +634,19 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Accept", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Api-Key",
+                "value": "{{external_system_key}}",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -495,8 +654,15 @@
             },
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-delete",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-delete"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-delete"
+              ]
             },
             "description": "1001 licences > `PUBLIC_API_MAX_ITEMS` (1000) → `422`, **aucun client supprimé**."
           }
@@ -523,14 +689,30 @@
           "request": {
             "method": "OPTIONS",
             "header": [
-              { "key": "Origin", "value": "http://localhost:5173" },
-              { "key": "Access-Control-Request-Method", "value": "DELETE" },
-              { "key": "Access-Control-Request-Headers", "value": "content-type" }
+              {
+                "key": "Origin",
+                "value": "http://localhost:5173"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "DELETE"
+              },
+              {
+                "key": "Access-Control-Request-Headers",
+                "value": "content-type"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/v1/clients/bulk-delete",
-              "host": ["{{base_url}}"],
-              "path": ["api", "v1", "clients", "bulk-delete"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clients",
+                "bulk-delete"
+              ]
             },
             "description": "Preflight navigateur sur la route de suppression."
           }

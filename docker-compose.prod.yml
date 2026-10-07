@@ -62,6 +62,13 @@ x-app-env: &app-env
   RINGCENTRAL_SERVER_URL: ${RINGCENTRAL_SERVER_URL:-https://platform.ringcentral.com}
   RINGCENTRAL_JWT: ${RINGCENTRAL_JWT:-}
 
+  # --- Webhooks M2M publics (clients/bulk-*, clients/convert-*, ... ) -------
+  # Même raison que RingCentral : pas de bind mount en prod, la clé ne peut
+  # venir que du conteneur (secret GitHub EXTERNAL_SYSTEM_API_KEY, écrit dans
+  # le .env racine par le CI). Absente -> VerifyExternalSystemKey refuse
+  # **tout** (401, échec fermé) : un serveur mal configuré reste fermé.
+  EXTERNAL_SYSTEM_API_KEY: ${EXTERNAL_SYSTEM_API_KEY:-}
+
 services:
   # ---------- 1. Base de données ----------
   mysql:

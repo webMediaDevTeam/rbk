@@ -22,6 +22,14 @@ class PublicClientDataCleanupTest extends TestCase
 
     private const URI = '/api/v1/clients/bulk-upsert';
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Webhooks publics protégés : en-tête X-Api-Key (VerifyExternalSystemKey).
+        $this->withHeaders(['X-Api-Key' => (string) config('services.external_system.key')]);
+    }
+
     private function import(array $client): Client
     {
         $this->postJson(self::URI, ['clients' => [$client]])

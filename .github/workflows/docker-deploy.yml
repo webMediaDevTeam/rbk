@@ -63,7 +63,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 20m
 
-          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,MAIL_USERNAME,MAIL_PASSWORD,MAIL_FROM_ADDRESS,MAIL_FROM_NAME,RINGCENTRAL_CLIENT_ID,RINGCENTRAL_CLIENT_SECRET,RINGCENTRAL_SERVER_URL,RINGCENTRAL_JWT,GITHUB_REPOSITORY,GITHUB_SHA
+          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,MAIL_USERNAME,MAIL_PASSWORD,MAIL_FROM_ADDRESS,MAIL_FROM_NAME,RINGCENTRAL_CLIENT_ID,RINGCENTRAL_CLIENT_SECRET,RINGCENTRAL_SERVER_URL,RINGCENTRAL_JWT,EXTERNAL_SYSTEM_API_KEY,GITHUB_REPOSITORY,GITHUB_SHA
 
           script: |
             set -e
@@ -97,6 +97,15 @@ jobs:
                 echo "ATTENTION: secret $name absent -> téléphonie (/api/v1/call-logs*) indisponible"
               fi
             done
+
+            # Clé M2M des webhooks publics (VerifyExternalSystemKey) :
+            # absente = 401 partout (échec fermé) sur clients/bulk-*,
+            # clients/convert-* et create-no-reservations. Avertissement
+            # seul : le déploiement n'est JAMAIS bloqué, mais l'import
+            # scraper / n8n reste refusé tant que le secret n'est pas déclaré.
+            if [ -z "$(printenv EXTERNAL_SYSTEM_API_KEY 2>/dev/null || true)" ]; then
+              echo "ATTENTION: secret EXTERNAL_SYSTEM_API_KEY absent -> webhooks publics (clients/bulk-*, clients/convert-*, create-no-reservations) repondront 401 (echec ferme)"
+            fi
 
             mkdir -p "$APP_DIR"
             cd "$APP_DIR"
@@ -192,6 +201,11 @@ jobs:
             RINGCENTRAL_CLIENT_SECRET=${RINGCENTRAL_CLIENT_SECRET}
             RINGCENTRAL_SERVER_URL=${RINGCENTRAL_SERVER_URL:-https://platform.ringcentral.com}
             RINGCENTRAL_JWT=${RINGCENTRAL_JWT}
+
+            # Clé partagée M2M des webhooks publics (en-tête X-Api-Key,
+            # middleware VerifyExternalSystemKey) : injectée dans le
+            # conteneur via x-app-env de docker-compose.prod.yml.
+            EXTERNAL_SYSTEM_API_KEY=${EXTERNAL_SYSTEM_API_KEY}
 
             # URL de l'API compilée dans le bundle Vite : le front parle au
             # gateway sur :80 (le backend n'est plus publié sur :8000).

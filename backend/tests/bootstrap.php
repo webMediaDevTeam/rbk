@@ -23,6 +23,10 @@ $forcedEnvironment = [
     'DB_CONNECTION' => 'sqlite',
     'DB_DATABASE' => ':memory:',
     'DB_URL' => '',
+    // Clé M2M des webhooks publics (VerifyExternalSystemKey) : imposée pour
+    // que `config('services.external_system.key')` soit toujours renseigné
+    // en test — les tests l'envoient ensuite en en-tête `X-Api-Key`.
+    'EXTERNAL_SYSTEM_API_KEY' => 'test-external-system-key',
 ];
 
 foreach ($forcedEnvironment as $key => $value) {

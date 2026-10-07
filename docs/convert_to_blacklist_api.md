@@ -1,8 +1,8 @@
 # API publique — Conversion en liste noire (par nom **ou** par licence)
 
-> ⚠️ **Endpoint public temporaire** — aucune authentification, appelable par
-> n'importe qui depuis le navigateur (CORS ouvert sur `api/*`). Il est prévu
-> pour être **retiré** : procédure de suppression en §7.
+> ⚠️ **Endpoint M2M temporaire** — protégé par la clé partagée `X-Api-Key`
+> (`EXTERNAL_SYSTEM_API_KEY`, échec fermé = `401`), CORS ouvert sur `api/*`.
+> Il est prévu pour être **retiré** : procédure de suppression en §7.
 
 Même surface publique que `clients/bulk-upsert` et `clients/bulk-delete`
 (spec : `docs/public_api.md`, règles métier : `docs/RULES.md` §12) : pas de
@@ -202,6 +202,7 @@ dans le lot (les deux champs sont `null` pour un item inexploitable).
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/convert-to-blacklist \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
   -d '{"name": "Entreprises Richard Forget & Fils Inc."}'
@@ -217,6 +218,7 @@ Réponse `200` :
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/convert-to-blacklist \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"names": ["Entreprises Richard Forget & Fils Inc.", "Inexistant Inc.", "Déjà noir Inc."]}'
 ```
@@ -232,6 +234,7 @@ curl -X POST https://HOST/api/v1/clients/convert-to-blacklist \
 
 ```bash
 curl -X POST https://HOST/api/v1/clients/convert-to-blacklist \
+  -H 'X-Api-Key: $EXTERNAL_SYSTEM_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{"licences": ["5747508901", "5747-5089-01", "9999999999"]}'
 ```

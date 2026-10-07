@@ -31,6 +31,9 @@ class ClientWithoutPhoneTest extends TestCase
     {
         parent::setUp();
 
+        // Webhooks publics protégés : en-tête X-Api-Key (VerifyExternalSystemKey).
+        $this->withHeaders(['X-Api-Key' => (string) config('services.external_system.key')]);
+
         $this->admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
         $this->commercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
     }
