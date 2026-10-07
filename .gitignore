@@ -10,3 +10,7 @@
 
 # Knowledge graph local (graphify) — regeneration: `graphify extract . --code-only`
 /graphify-out/
+
+# Artefacts de build (jamais suivis) — voir Item 6 de docs/TODOS.md.
+frontend/_old_dist_*/
+backend/public/static/assets/
