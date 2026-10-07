@@ -5,7 +5,7 @@ import { createUserApi } from '@/api/shared.api.js'
 import { getApiErrorMessage } from '@/lib/api-errors.js'
 
 export function useAdminCreateModal(props) {
-  const { open, onClose, queryKey } = props
+  const { onClose, queryKey } = props
   const qc = useQueryClient()
   const [form, setForm] = useState({
     email: '', first_name: '', last_name: '', phone: '',

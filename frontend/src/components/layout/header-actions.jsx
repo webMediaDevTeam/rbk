@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, LogOut, Moon, Monitor, Sun, UserRound } from "lucide-react";
 import { useTheme } from "@/context/theme-provider";
 import { useAuth } from "@/context/AuthContext";
-import { buildAvatarUrl, getAvatarInitials } from "@/lib/avatar.js";
+import { getAvatarInitials } from "@/lib/avatar.js";
 import { ROLE_LABELS } from "@/pages/shared/profil/components/SettingsSidebar.jsx";
 
 function useDropdown() {

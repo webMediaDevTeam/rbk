@@ -1,0 +1,16 @@
+# PHPStan niveau 6 — dette de lint CI (docs/TODOS.md « CI Linter Debt »).
+# Exécution : vendor/bin/phpstan analyse   (voir aussi : composer lint:static)
+# larastan apporte les extensions Eloquent (static calls, relations, casts) ;
+# sans lui, le niveau 6 part en milliers de faux positifs.
+includes:
+    - vendor/larastan/larastan/extension.neon
+    # Dette historique figée : le CI reste vert tant qu'aucun NOUVEAU
+    # problème n'apparaît. Génération : --generate-baseline
+    - phpstan-baseline.neon
+
+parameters:
+    level: 6
+    paths:
+        - app
+        - routes
+    reportUnmatchedIgnoredErrors: false

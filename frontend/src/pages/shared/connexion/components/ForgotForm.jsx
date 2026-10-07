@@ -7,7 +7,6 @@ export default function ForgotForm({ vm }) {
   const {
     localError,
     forgotStep,
-    forgotError,
     resetEmail,
     onResetEmailChange,
     forgotEmailError,

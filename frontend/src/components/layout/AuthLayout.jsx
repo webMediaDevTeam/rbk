@@ -1,5 +1,3 @@
-import { CircleHelp } from "lucide-react";
-
 export default function AuthLayout({ children }) {
   return (
     <div className="auth">

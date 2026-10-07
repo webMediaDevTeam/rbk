@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useFilterOptions } from '@/hooks/use-filter-options.js'
 
 export function useProspectToolbar({

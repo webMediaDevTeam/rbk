@@ -20,7 +20,7 @@ export default function ProspectListPage() {
     rowsPerPage, handleRowsPerPageChange,
     sortBy, sortOrder, handleSort,
     clients, isLoading,
-    total, totalPages,
+    totalPages,
     showReserve, openReserve, closeReserve,
     pendingReservations, canReserve, isLoadingCounts,
     handleViewDetail,

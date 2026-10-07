@@ -4,7 +4,6 @@ import ReminderTable from './components/ReminderTable.jsx'
 import ReminderCard from './components/ReminderCard.jsx'
 import ReminderToolbar from './components/ReminderToolbar.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
-import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 /**
  * Liste des rappels du commercial connecté — **même trame que la page

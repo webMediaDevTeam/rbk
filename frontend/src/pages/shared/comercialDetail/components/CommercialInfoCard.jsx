@@ -4,7 +4,6 @@ import { ROLE_LABELS } from '@/pages/shared/profil/components/SettingsSidebar.js
 
 export default function CommercialInfoCard(props) {
   const {
-    employee,
     entreprise,
     name,
     email,

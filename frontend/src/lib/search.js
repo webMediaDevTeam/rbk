@@ -23,5 +23,5 @@ export function isSearchActive(value) {
   if (query.length >= 3) return true
   if (query.length < 2) return false
 
-  return /^[\d\s()+.\/-]+$/.test(query)
+  return /^[\d\s()+./-]+$/.test(query)
 }

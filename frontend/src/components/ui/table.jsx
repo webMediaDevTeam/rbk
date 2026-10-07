@@ -26,7 +26,7 @@ function TableBody({ className, ...props }) {
   return (
     <tbody
       data-slot="table-body"
-      className="[&_tr:last-child]:border-0"
+      className={cn("[&_tr:last-child]:border-0", className)}
       {...props}
     />
   );
