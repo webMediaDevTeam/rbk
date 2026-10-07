@@ -9,7 +9,7 @@ import {
   getCommercialProspectApi,
   getAdminClientApi,
 } from '@/api/commercial.api.js'
-import { useActiveReservationsCount } from '@/pages/comercial/ClientDetail/useOutcomes.js'
+import { useActiveReservationsCount } from '@/pages/shared/ClientDetail/useOutcomes.js'
 
 export function useCommercialProspectList() {
   const navigate = useNavigate()

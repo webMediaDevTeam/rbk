@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
-import { useReminders } from '@/pages/comercial/ClientDetail/useOutcomes.js'
+import { useReminders } from '@/pages/shared/ClientDetail/useOutcomes.js'
 
 export const UNIT_LABELS = {
   MINUTE: 'min',

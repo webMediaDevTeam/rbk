@@ -782,8 +782,9 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   `Client::upsertFromScraperPayload()`).
 * **Fiche client — « Contact » en tête** : le bandeau affiche les
   **répondants** (sous le nom d'entreprise) et l'onglet *Détails* s'ouvre sur
-  un bloc **Contact** où **téléphone**, **e-mail**, **représentant** et
-  **répondants** sont rendus en **badges info** colorés
+  un bloc **Contact** où **téléphone**, **e-mail**, **représentant**,
+  **répondants** et **adresse** (badge `MapPin` `full_address`, placé juste
+  sous les répondants) sont rendus en **badges info** colorés
   (`Badge variant="info"`) : ce sont les deux premières informations
   recherchées sur une fiche. Suivent *Identification* (NEQ / municipalité /
   région / adresse) puis *Licence* — e-mail et téléphone n'ont plus de

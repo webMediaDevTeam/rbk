@@ -10,7 +10,7 @@ import VerifyAccountPage from '@/pages/shared/verify-account/index.jsx'
 import ConnexionPage from '@/pages/shared/connexion/index.jsx'
 import UnauthorizedPage from '@/pages/shared/unauthorized/index.jsx'
 import ProspectListPage from '@/pages/comercial/ProspectList/index.jsx'
-import ClientDetailPage from '@/pages/comercial/ClientDetail/index.jsx'
+import ClientDetailPage from '@/pages/shared/ClientDetail/index.jsx'
 import MesListesPage from '@/pages/comercial/MesListes/index.jsx'
 import GroupDetailPage from '@/pages/comercial/MesListes/GroupDetail.jsx'
 import RemindersPage from '@/pages/comercial/Reminders/index.jsx'
@@ -43,9 +43,17 @@ export default function AppRoutes() {
       <Route path="/comercialDetail/:id" element={guard(ROLES.MANAGERS, <ComercialDetailPage />)} />
       <Route path="/clients-historique" element={guard(ROLES.MANAGERS, <ClientsHistoryPage />)} />
 
+      {/* Fiche client **partagée** (pages/shared) — `ROLES.ALL` : le
+          composant est role-aware (`useClientDetail` bascule l'API selon le
+          rôle : `useCommercialProspect` pour COMERCIAL, `useAdminClientDetail`
+          pour ADMIN/SUPER_ADMIN), et les pages gestionnaires (clients-
+          historique, fiche entreprise, fiche commerciale) y mènent par un
+          lien « Voir ». Le garde reste en écho aux middleware `CheckRole` du
+          backend, qui restent la source de vérité côté API. */}
+      <Route path="/prospects/:id" element={guard(ROLES.ALL, <ClientDetailPage />)} />
+
       {/* COMERCIAL uniquement — routes/api/commercial.php (CheckRole:COMERCIAL) */}
       <Route path="/prospects" element={guard(ROLES.COMERCIAL, <ProspectListPage />)} />
-      <Route path="/prospects/:id" element={guard(ROLES.COMERCIAL, <ClientDetailPage />)} />
       <Route path="/mes-listes" element={guard(ROLES.COMERCIAL, <MesListesPage />)} />
       <Route path="/mes-listes/:id" element={guard(ROLES.COMERCIAL, <GroupDetailPage />)} />
       <Route path="/reminders" element={guard(ROLES.COMERCIAL, <RemindersPage />)} />

@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/context/theme-provider";
-import { useRemindersCount, useActiveReservationsCount } from "@/pages/comercial/ClientDetail/useOutcomes.js";
+import { useRemindersCount, useActiveReservationsCount } from "@/pages/shared/ClientDetail/useOutcomes.js";
 import faviconLight from "@/assets/icons/light_logo.svg";
 import faviconDark from "@/assets/icons/dark_logo.svg";
 

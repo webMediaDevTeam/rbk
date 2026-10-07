@@ -1,4 +1,4 @@
-import { Mail, Phone } from 'lucide-react'
+import { Mail, MapPin, Phone } from 'lucide-react'
 import Badge from '@/components/ui/badge.jsx'
 import { useClientDetailsTab } from './useClientDetailsTab.js'
 
@@ -90,20 +90,39 @@ export default function ClientDetailsTab({ client }) {
             </div>
           </div>
         )}
+
+        {/* Adresse — badge sous les répondants, même traitement « info »
+            que les autres badges Contact. Champ n8n `adresse_complete`
+            exposé par l'API sous `full_address` (déjà affiché en DetailRow
+            dans « Identification » : ici c'est l'accès rapide en tête). */}
+        {client.full_address && (
+          <>
+             <p className="text-xs text-muted-foreground">Adresse complète</p>
+          <div className="flex flex-wrap gap-1.5">
+           
+            <Badge variant="info" title="Adresse complète">
+              <MapPin className="h-3.5 w-3.5 mr-1" />
+              {client.full_address}
+            </Badge>
+          </div>
+        </>)}
       </div>
 
       <DetailSection title="Identification">
         {/* E-mail et téléphone remontés en badges « Contact » ci-dessus. */}
-        <DetailRow label="NEQ" value={client.neq} />
+       
         <DetailRow label="Municipalité" value={client.municipality} />
-        <DetailRow label="Région administrative" value={client.administrative_region} />
-        <DetailRow label="Adresse complète" value={client.full_address} />
+         <DetailRow label="Région administrative" value={client.administrative_region} />
+          <DetailRow label="NEQ" value={client.neq} />
+        <DetailRow label="Statut" value={client.licence_status} />
       </DetailSection>
 
       <DetailSection title="Licence">
+      
+         
         <DetailRow label="Numéro de licence" value={client.licence_number} />
         <DetailRow label="Licence (propre) n°" value={licencePropreNumero} />
-        <DetailRow label="Statut" value={client.licence_status} />
+       
         <DetailRow label="Intervenant / Entreprise" value={client.intervenant_name} />
         <DetailRow label="Licence propre" value={licencePropre} />
         <DetailRow label="Date de début / délivrance" value={licenceStartDate} />
