@@ -2,6 +2,7 @@ import { AlertCircle, Loader2, X } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
 import Select from '@/components/ui/select.jsx'
+import Switch from '@/components/ui/switch.jsx'
 import { deviceLabel } from '@/utils/ringcentral.js'
 import { useCommercialUpdateModal } from './useCommercialUpdateModal.js'
 
@@ -83,6 +84,24 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
           <div>
             <label className="block text-sm font-bold mb-1">Informations supplémentaires</label>
             <Input type="text" value={form.additional_info} onChange={(e) => set('additional_info', e.target.value)} />
+          </div>
+
+          {/* Privilège de libération — `users.has_permission` : ouvre la
+              liste noire et la libération de liste au COMERCIAL (403 sans,
+              middleware CheckPermission, docs/RULES.md §7.1). Édition :
+              état initial = `user.has_permission`. */}
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-3">
+            <div>
+              <p className="text-sm font-bold">Privilège de libération</p>
+              <p className="text-xs text-muted-foreground">
+                Autorise ce commercial à mettre en liste noire un client et à libérer ses réservations.
+              </p>
+            </div>
+            <Switch
+              checked={form.has_permission}
+              onCheckedChange={(checked) => set('has_permission', checked)}
+              aria-label="Privilège de libération"
+            />
           </div>
 
           {error && (

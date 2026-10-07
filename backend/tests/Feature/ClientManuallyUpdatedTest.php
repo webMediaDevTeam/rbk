@@ -44,7 +44,14 @@ class ClientManuallyUpdatedTest extends TestCase
         $this->withHeaders(['X-Api-Key' => (string) config('services.external_system.key')]);
 
         $this->admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
-        $this->commercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
+        // Privilège de libération : ce test vérifie le cycle d'édition de
+        // fiche (is_manually_updated), pas le portail — le commercial doit
+        // pouvoir atteindre `clients/{id}/blacklist` (CheckPermission).
+        $this->commercial = User::factory()->create([
+            'role' => 'COMERCIAL',
+            'status' => 'ACTIVE',
+            'has_permission' => true,
+        ]);
     }
 
     /** @param  list<array<string, mixed>>  $items */

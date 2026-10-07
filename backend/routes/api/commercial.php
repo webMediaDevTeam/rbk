@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Commercial\ReminderController;
 use App\Http\Controllers\Api\V1\Commercial\ReservationController;
 use App\Http\Controllers\Api\V1\Commercial\ReservationGroupController;
 use App\Http\Controllers\Api\V1\Shared\RingCentralController;
+use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
 
@@ -14,7 +15,11 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
     Route::get('clients', [ClientController::class, 'index']);
     Route::get('clients/mes', [ClientController::class, 'mine']);
     Route::get('clients/{id}', [ClientController::class, 'show']);
-    Route::post('clients/{id}/blacklist', [ClientController::class, 'blacklist']);
+    // Mise en liste noire = mise à jour d'une fiche client : réservée aux
+    // commerciaux **autorisés** (`users.has_permission`, « Privilège de
+    // libération ») — 403 sinon (middleware CheckPermission, §7.1).
+    Route::post('clients/{id}/blacklist', [ClientController::class, 'blacklist'])
+        ->middleware(CheckPermission::class);
     Route::get('clients/{clientId}/notes', [NoteController::class, 'index']);
     Route::post('notes', [NoteController::class, 'store']);
     Route::delete('notes/{id}', [NoteController::class, 'destroy']);
@@ -34,7 +39,9 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
     Route::get('reservations/active-count', [ReservationController::class, 'activeCount']);
     // « Libérer la liste » : les prospects encore « en attente »
     // redeviennent AVAILABLE (modale « Réserver » d'un nouveau lot).
-    Route::post('reservations/release-pending', [ReservationController::class, 'releasePending']);
+    // Privilège de libération requis (`users.has_permission`) — 403 sinon.
+    Route::post('reservations/release-pending', [ReservationController::class, 'releasePending'])
+        ->middleware(CheckPermission::class);
 
     // Appel sortant de l'employé (bouton « Appeler » Mes listes / Rappels / BV) :
     // `from` est résolu côté API dans `employees.ringcentral_from_number`,

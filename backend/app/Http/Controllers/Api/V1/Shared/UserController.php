@@ -125,6 +125,8 @@ class UserController extends Controller
             'email' => $user->email,
             'role' => $user->role,
             'status' => $user->status,
+            // Privilège de libération (formater en bool : tinyint brut sinon).
+            'has_permission' => (bool) $user->has_permission,
             'avatar' => $user->avatar,
             'avatar_url' => $user->avatar
                 ? "{$base}/storage/avatars/{$user->avatar}"
@@ -276,6 +278,9 @@ class UserController extends Controller
                 'phone' => 'nullable|string|max:255',
                 'additional_info' => 'nullable|string',
                 'enterprise_id' => 'nullable|uuid|exists:enterprises,id',
+                // « Privilège de libération » : switch de la modale
+                // Commercial (création) — colonne `users.has_permission`.
+                'has_permission' => 'sometimes|boolean',
                 // Source d'appel RingCentral choisie dans le select d'appareils.
                 'ringcentral_device_id' => 'nullable|string|max:64',
                 'ringcentral_from_number' => 'nullable|string|max:32',
@@ -295,6 +300,9 @@ class UserController extends Controller
                 'first_name' => $profile['first_name'] ?? null,
                 'last_name' => $profile['last_name'] ?? null,
                 'phone' => $profile['phone'] ?? null,
+                // Privilège de libération : absent du payload → false
+                // (identique au défaut de colonne 0).
+                'has_permission' => (bool) ($profile['has_permission'] ?? false),
             ];
 
             if (! empty($base['mot_de_passe'])) {
@@ -385,6 +393,9 @@ class UserController extends Controller
             'mot_de_passe' => 'nullable|string|min:8',
             'role' => 'sometimes|in:ADMIN,COMERCIAL',
             'status' => 'sometimes|in:'.implode(',', self::VALID_STATUSES),
+            // « Privilège de libération » : switch de la modale Commercial
+            // (édition) — colonne `users.has_permission` (jamais `employees`).
+            'has_permission' => 'sometimes|boolean',
             'first_name' => 'sometimes|nullable|string|max:255',
             'last_name' => 'sometimes|nullable|string|max:255',
             'phone' => 'sometimes|nullable|string|max:255',

@@ -491,6 +491,17 @@ traités), `POST clients/reserver` répond **`409`** :
   La modale « Réserver des prospects » propose ce bouton quand
   `pending > 0` (le 409 n'est plus une impasse).
 
+### 7.1 Privilège de libération (`users.has_permission`)
+
+* Colonne ajoutée `users.has_permission` (défaut `0` / `false`) ;
+  posée par l'admin dans la modale Commercial **créer / éditer**.
+* Un COMERCIAL **sans** le drapeau reçoit `403 Forbidden` sur :
+  `POST clients/{id}/blacklist` et `POST reservations/release-pending`
+  (middleware `CheckPermission`, §10) — l'API reste la source de
+  vérité, le garde frontend (`ROLES.ALL` sur `/prospects/:id`) ne
+  fait que refléter le droit.
+* `ADMIN` / `SUPER_ADMIN` passent toujours (hiérarchie de gestion).
+
 ### 7.2 Groupes
 
 * Création : `POST clients/reserver` avec `{count}` — **sans nom** : le champ
@@ -612,7 +623,8 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   prospect (le bouton « Voir » de la dernière colonne le fait encore) ; une
   **bascule liste noire / débloquer** s'y ajoute : **action directe, sans
   modale ni confirmation** — un clic enchaîne
-  `POST commercials/clients/{id}/blacklist` (icône `Ban`, rouge) ou
+  `POST commercials/clients/{id}/blacklist` (icône `Ban`, rouge) — **nécessite
+  le privilège `users.has_permission` (403 sinon, §7.1)** — ou
   `POST liste-noire/{id}/debloquer` (icône `Unlock`, vert) selon l'état du
   client (`is_blacklisted` / `status = BLACKLISTED`, §2). Spinner pendant
   l'appel (une seule bascule à la fois), toast du résultat puis liste
@@ -825,15 +837,17 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 |---|---|---|
 | GET | `reservations/active-count` | COMERCIAL |
 | POST | `clients/reserver` | COMERCIAL |
-| POST | `reservations/release-pending` — **Libérer la liste** (§7.1) | COMERCIAL |
+| POST | `reservations/release-pending` — **Libérer la liste** (§7.1) — privilège requis (`users.has_permission`, 403 sinon) | COMERCIAL |
 | PATCH | `reservation-groups/{id}` | propriétaire ou ADMIN/SUPER_ADMIN |
 | GET | `reservation-groups` (compteurs par statut + `employe`) | COMERCIAL |
-| GET | `reservation-groups/{id}` (détail + `clients_count` / `traites_count` / `restant_count` / `oui_count` / `non_count` / `bv_count` / `injoinable_count`) | COMERCIAL |
+| GET | `reservation-groups/{id}` (détail + `clients_count` / …) | COMERCIAL |
 | GET | `reminders?type=CALL_BACK\|BV`, `reminders/count?type=…` | COMERCIAL |
 | POST | `clients/{clientId}/outcome` (`recall_at` requis si `CALL_BACK`) | COMERCIAL |
-| POST | `clients/{id}/blacklist` | COMERCIAL |
+| POST | `clients/{id}/blacklist` — privilège requis (`users.has_permission`, 403 sinon) | COMERCIAL |
 | POST | `commercials/clients/{id}/blacklist` | ADMIN/SUPER_ADMIN |
 | PATCH | `commercials/clients/{id}/phone` — saisie / correction du numéro (§2) | ADMIN/SUPER_ADMIN |
+| POST | `users` — création (ADMIN/SUPER_ADMIN ; `has_permission` autorisé) | ADMIN/SUPER_ADMIN |
+| PUT | `users/{id}` — édition (`has_permission` autorisé) | ADMIN/SUPER_ADMIN |
 | GET | `entreprises/{id}/stats` — analytics + employés + historique (§9) | ADMIN/SUPER_ADMIN |
 | POST | `liste-noire/{id}/debloquer` | ADMIN/SUPER_ADMIN |
 | POST | `clients/bulk-upsert` | **M2M** (clé `X-Api-Key`) — import scraper / n8n, §12 |

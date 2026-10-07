@@ -130,7 +130,10 @@ class ReservationWorkflowApiTest extends TestCase
      */
     public function test_release_pending_frees_untreated_clients_and_keeps_treated_ones(): void
     {
-        $commercial = $this->makeCommercial();
+        // Privilège de libération requis par `CheckPermission` (§7.1) :
+        // cette section teste le workflow, le portail est couvert par
+        // `ReleasePermissionTest`.
+        $commercial = $this->makeCommercial(['has_permission' => true]);
         $other = $this->makeCommercial();
 
         // Deux prospects « en attente », dont un avec rappel planifié.

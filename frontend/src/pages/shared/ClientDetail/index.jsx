@@ -52,105 +52,82 @@ export default function ClientDetailPage() {
         <div className="h-48 flex items-center justify-center text-muted-foreground">Prospect introuvable.</div>
       ) : (
         <>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0">
-              <Button variant="ghost" size="icon-sm" onClick={handleBack}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{client.name ?? '—'}</h1>
-                  {/* Badge du bandeau, selon le rôle :
-                      - ADMIN / SUPER_ADMIN → statut **client** (`ClientStatus`,
-                        liste noire et compte à rebours compris) ;
-                      - COMERCIAL → statut de sa **réservation en cours**
-                        (`my_reservation.status`) ; **aucun badge** si le client
-                        est en liste noire, et aucun s'il n'a pas de réservation
-                        active à lui (ReservationStatusBadge rend `null`). */}
-                  {isAdmin ? (
-                    <ClientStatus
-                      status={client.display_status ?? client.status}
-                      isBlacklisted={client.is_blacklisted}
-                      returnedAt={client.returned_at}
-                    />
-                  ) : client.is_blacklisted ? null : (
-                    <ReservationStatusBadge status={client.my_reservation?.status} />
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">{client.enterprise_name ?? '—'}</p>
-                {/* Répondants **remontés dans le bandeau** : la première
-                    information recherchée sur une fiche, avec le téléphone. */}
-                {respondentsText(client) && (
-                  <p
-                    className="text-sm text-muted-foreground"
-                    title={respondentsText(client)}
-                  >
-                    <span className="font-medium text-foreground">Répondant(s)</span>{' '}
-                    : {respondentsText(client)}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-muted-foreground">
-                  <span>{client.representative_name ?? '—'}</span>
-                  {client.email && (
-                    <a href={`mailto:${client.email}`} className="hover:text-foreground transition-colors">{client.email}</a>
-                  )}
-                  {client.phone ? (
-                    <span className="inline-flex items-center gap-1">
-                      {client.phone}
-                      <button
-                        type="button"
-                        onClick={handleCopyPhone}
-                        className="p-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
-                        aria-label="Copier le numéro"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                      {/* Saisie / modification réservée à l'accès Admin. */}
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={openPhoneEdit}
-                          className="p-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
-                          aria-label="Modifier le numéro"
-                          title="Modifier le numéro"
-                        >
-                          <SquarePen className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </span>
-                  ) : isAdmin ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="inline-flex items-center rounded-full border border-transparent bg-rose-500/10 px-2.5 py-0.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
-                        Sans téléphone
-                      </span>
-                      <button
-                        type="button"
-                        onClick={openPhoneEdit}
-                        className="p-0.5 rounded hover:bg-muted hover:text-foreground transition-colors"
-                        aria-label="Ajouter un numéro"
-                        title="Ajouter un numéro"
-                      >
-                        <SquarePen className="h-3.5 w-3.5" />
-                      </button>
-                    </span>
-                  ) : null}
-                </div>
+          {/* Header design — gray card with title/status badge row, 
+              underline tabs (Détails / Historique), call buttons 
+              visible only for COMERCIAL with call access 
+              (client reserved by the connected user, same condition 
+              as the design requirement). */}
+          <div className="rounded-xl bg-[#f8f9fa] border border-gray-200 overflow-hidden shadow-sm">
+            {/* Top row: back arrow + title + status badge */}
+            <div className="px-6 pt-5 pb-4">
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" size="icon-sm" onClick={handleBack} aria-label="Retour">
+                  <ArrowLeft className="h-5 w-5 text-gray-700" />
+                </Button>
+                <h1 className="text-xl font-bold tracking-tight text-gray-900 truncate">{client.name ?? '—'}</h1>
+                {!isAdmin
+                  ? client.is_blacklisted
+                    ? null
+                    : (
+                        <span className="inline-flex items-center rounded-full bg-gray-200/80 text-gray-700 text-xs font-medium px-2.5 py-0.5 border border-gray-300/60">
+                          {client.my_reservation?.status ?? 'En attente'}
+                        </span>
+                      )
+                  : (
+                      <ClientStatus
+                        status={client.display_status ?? client.status}
+                        isBlacklisted={client.is_blacklisted}
+                        returnedAt={client.returned_at}
+                      />
+                    )}
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Appel direct (**même bouton que dans les tableaux**) : il
-                  disparaît **exactement** avec « Suite appel », car les deux
-                  sont rendus dans la même condition — client réservé par le
-                  connecté. CallButton ne rend rien sans numéro. */}
-              {!isAdmin && hasReservation && (
-                <>
-                  <CallButton phone={client.phone} name={client.name} />
-                  <Button onClick={openAction}>
-                    <Phone className="h-4 w-4 mr-1" />
-                    Suite appel
-                  </Button>
-                </>
-              )}
+
+            {/* Bottom row: underline tabs + action buttons */}
+            <div className="px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-gray-200 gap-4 sm:gap-0">
+              <nav className="flex space-x-6 -mb-px" aria-label="Onglets" role="tablist">
+                <button
+                  onClick={() => setActiveTab('details')}
+                  role="tab"
+                  aria-selected={activeTab === 'details'}
+                  className={
+                    'border-b-2 pb-3 px-1 text-sm font-semibold flex items-center gap-1.5 transition-all ' +
+                    (activeTab === 'details'
+                      ? 'border-purple-700 text-purple-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')
+                  }
+                >
+                  Détails
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  role="tab"
+                  aria-selected={activeTab === 'history'}
+                  className={
+                    'border-b-2 pb-3 px-1 text-sm font-medium flex items-center gap-1.5 transition-all ' +
+                    (activeTab === 'history'
+                      ? 'border-purple-700 text-purple-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300')
+                  }
+                >
+                  Historique ({historyCount})
+                </button>
+              </nav>
+
+              <div className="flex items-center gap-3 pb-3 sm:pb-2">
+                {!isAdmin && hasReservation ? (
+                  <>
+                    <CallButton phone={client.phone} name={client.name} />
+                    <Button
+                      onClick={openAction}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm"
+                    >
+                      <Phone className="h-4 w-4 mr-1" />
+                      Suite appel
+                    </Button>
+                  </>
+                ) : null}
+              </div>
             </div>
           </div>
 

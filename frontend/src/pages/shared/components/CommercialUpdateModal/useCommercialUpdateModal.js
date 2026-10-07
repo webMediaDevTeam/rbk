@@ -36,6 +36,7 @@ export function useCommercialUpdateModal(props) {
     email: '', first_name: '', last_name: '', phone: '',
     enterprise_id: '', additional_info: '',
     ringcentral_device_id: '', ringcentral_from_number: '',
+    has_permission: false,
   })
 
   useEffect(() => {
@@ -49,6 +50,8 @@ export function useCommercialUpdateModal(props) {
         additional_info: profil?.info_supp ?? '',
         ringcentral_device_id: profil?.ringcentral_device_id ?? '',
         ringcentral_from_number: profil?.ringcentral_from_number ?? '',
+        // Privilège de libération courant (`formatUser` → `has_permission`).
+        has_permission: Boolean(user.has_permission),
       })
       setError(null)
     }
@@ -115,6 +118,8 @@ export function useCommercialUpdateModal(props) {
       additional_info: form.additional_info || null,
       ringcentral_device_id: form.ringcentral_device_id || null,
       ringcentral_from_number: fromNumber,
+      // Privilège de libération (switch) → colonne `users.has_permission`.
+      has_permission: form.has_permission,
     }
     mutation.mutate(payload)
   }

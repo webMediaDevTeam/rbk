@@ -35,6 +35,7 @@ export function useCommercialCreateModal(props) {
     email: '', first_name: '', last_name: '', phone: '',
     enterprise_id: '', additional_info: '',
     ringcentral_device_id: '', ringcentral_from_number: '',
+    has_permission: false,
   })
   const [error, setError] = useState(null)
 
@@ -45,6 +46,7 @@ export function useCommercialCreateModal(props) {
         enterprise_id: '',
         additional_info: '',
         ringcentral_device_id: '', ringcentral_from_number: '',
+        has_permission: false,
       })
       setError(null)
     }
@@ -109,6 +111,8 @@ export function useCommercialCreateModal(props) {
       additional_info: form.additional_info || undefined,
       ringcentral_device_id: form.ringcentral_device_id || undefined,
       ringcentral_from_number: form.ringcentral_device_id ? fromNumber : undefined,
+      // Privilège de libération (switch) → colonne `users.has_permission`.
+      has_permission: form.has_permission,
     }
     mutation.mutate(payload)
   }

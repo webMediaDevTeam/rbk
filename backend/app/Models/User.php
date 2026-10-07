@@ -24,6 +24,10 @@ class User extends Authenticatable
         'phone',
         'role',
         'status',
+        // « Privilège de libération » : posé par l'admin (modale Commercial),
+        // lu par le middleware `CheckPermission` — un COMERCIAL sans le
+        // drapeau ne peut ni mettre en liste noire ni libérer sa liste.
+        'has_permission',
         'avatar',
         'email_verified_at',
         'verification_token',
@@ -38,6 +42,7 @@ class User extends Authenticatable
     {
         return [
             'password_hash' => 'hashed',
+            'has_permission' => 'boolean',
             'email_verified_at' => 'datetime',
             'verification_sent_at' => 'datetime',
         ];
