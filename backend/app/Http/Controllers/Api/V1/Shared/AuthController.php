@@ -26,14 +26,22 @@ class AuthController extends Controller
 
     private const PASSWORD_RESET_TOKEN_TTL_MINUTES = 10;
 
+    /**
+     * Connexion par **e-mail ou nom d'utilisateur** (« login »).
+     *
+     * Le champ reste nommé `email` côté API (compatibilité), mais accepte
+     * aussi la colonne `users.username` : la valeur sans « @ » est cherchée
+     * comme login (stocké en minuscules). Une identification inconnue reste
+     * synonyme d'« identifiants incorrects » (401, sans fuite d'existence).
+     */
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string|max:255',
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = $this->findUserByIdentifier($request->email);
 
         if (! $user || ! Hash::check($request->password, $user->password_hash)) {
             return response()->json(['message' => 'Identifiants incorrects.'], 401);
@@ -51,6 +59,10 @@ class AuthController extends Controller
 
     public function forgotPassword(Request $request): JsonResponse
     {
+        if (! $this->resolveLoginIdentifier($request)) {
+            return $this->unknownIdentifierResponse();
+        }
+
         $request->validate([
             'email' => 'required|email|exists:users,email',
         ]);
@@ -75,6 +87,10 @@ class AuthController extends Controller
 
     public function verifyForgotPasswordOtp(Request $request): JsonResponse
     {
+        if (! $this->resolveLoginIdentifier($request)) {
+            return $this->unknownIdentifierResponse();
+        }
+
         $request->validate([
             'email' => 'required|email|exists:users,email',
             'code' => 'required|string|size:6',
@@ -112,6 +128,10 @@ class AuthController extends Controller
 
     public function resetForgotPassword(Request $request): JsonResponse
     {
+        if (! $this->resolveLoginIdentifier($request)) {
+            return $this->unknownIdentifierResponse();
+        }
+
         $request->validate([
             'email' => 'required|email|exists:users,email',
             'password_reset_token' => 'required|string',
@@ -138,6 +158,10 @@ class AuthController extends Controller
 
     public function sendLoginOtp(Request $request): JsonResponse
     {
+        if (! $this->resolveLoginIdentifier($request)) {
+            return $this->unknownIdentifierResponse();
+        }
+
         $request->validate([
             'email' => 'required|email|exists:users,email',
         ]);
@@ -162,6 +186,10 @@ class AuthController extends Controller
 
     public function verifyLoginOtp(Request $request): JsonResponse
     {
+        if (! $this->resolveLoginIdentifier($request)) {
+            return $this->unknownIdentifierResponse();
+        }
+
         $request->validate([
             'email' => 'required|email|exists:users,email',
             'code' => 'required|string|size:6',
@@ -397,6 +425,67 @@ class AuthController extends Controller
         return 'login_otp:'.mb_strtolower($email);
     }
 
+    /**
+     * Trouve le compte correspondant à un identifiant de connexion :
+     * adresse e-mail (contient « @ ») **ou** nom d'utilisateur.
+     *
+     * @return User|null `null` si l'identifiant ne correspond à aucun compte
+     */
+    private function findUserByIdentifier(string $identifier): ?User
+    {
+        $identifier = trim($identifier);
+
+        if ($identifier === '') {
+            return null;
+        }
+
+        // `users.username` n'accepte pas « @ » : la valeur en contenant est
+        // forcément une adresse e-mail.
+        if (! str_contains($identifier, '@')) {
+            return User::where('username', mb_strtolower($identifier))->first();
+        }
+
+        return User::where('email', $identifier)->first();
+    }
+
+    /**
+     * Remplace dans la requête un identifiant « login » par l'e-mail du
+     * compte correspondant, pour que les flux OTP (envoi du code, validation)
+     * restent écrits en termes d'e-mail.
+     *
+     * @return bool `false` = login inconnu (aucun compte ne correspond)
+     */
+    private function resolveLoginIdentifier(Request $request): bool
+    {
+        // Un tableau (requête malformée) est laissé tel quel : la validation
+        // `email` qui suit le rejette en 422, sans cast « Array to string ».
+        $identifier = $request->input('email');
+        $identifier = is_string($identifier) ? trim($identifier) : '';
+
+        // Vide (erreur « required » habituelle) ou e-mail : inchangé.
+        if ($identifier === '' || str_contains($identifier, '@')) {
+            return true;
+        }
+
+        $email = User::where('username', mb_strtolower($identifier))->value('email');
+
+        if (! is_string($email) || $email === '') {
+            return false;
+        }
+
+        $request->merge(['email' => $email]);
+
+        return true;
+    }
+
+    private function unknownIdentifierResponse(): JsonResponse
+    {
+        return response()->json([
+            'message' => 'Identifiant inconnu.',
+            'errors' => ['email' => ['Identifiant inconnu.']],
+        ], 422);
+    }
+
     private function forgotPasswordOtpCacheKey(string $email): string
     {
         return 'forgot_password_otp:'.mb_strtolower($email);
@@ -412,6 +501,7 @@ class AuthController extends Controller
         return [
             'id' => $user->id,
             'email' => $user->email,
+            'username' => $user->username,
             'role' => $user->role,
             'status' => $user->status,
             'avatar' => $user->avatar,

@@ -241,7 +241,7 @@ class ClientSearchService
     }
 
     /**
-     * Compteurs des **8 badges** de la colonne « Statut » pour un périmètre
+     * Compteurs des **10 badges** de la colonne « Statut » pour un périmètre
      * donné : `$base` reconstruit une requête **fraîche** (même base, sans
      * filtre de statut) et chaque compteur est produit **par le filtre qui
      * pilote le badge** — le chiffre affiché vaut donc le nombre de lignes
@@ -263,6 +263,8 @@ class ClientSearchService
             Reservation::STATUS_NO,
             Reservation::STATUS_BV_VOICEMAIL,
             Reservation::STATUS_CALL_BACK,
+            Reservation::STATUS_DOUBLE,
+            Reservation::STATUS_INFO,
             Reservation::STATUS_PENDING,
         ] as $bucket) {
             $counts[$bucket] = $this->filterByReservationStatuses($base(), $bucket)->count();
@@ -303,7 +305,7 @@ class ClientSearchService
             $this->searchByContact($q, $like);
             $this->searchByAddress($q, $like);
             $this->searchByReference($q, $like);
-            $this->searchByJson($q, $like);
+            $this->searchByJson($q, $like, $search);
             $this->searchByPhone($q, $search);
         });
     }
@@ -386,11 +388,22 @@ class ClientSearchService
      * `authorized_categories`) — sous-chaîne via `orWhereJsonTextLike()`.
      *
      * @param  string  $like  Motif déjà entouré de `%`.
+     * @param  string|null  $raw  Terme brut saisi pour gérer l'échappement unicode en JSON.
      */
-    public function searchByJson(Builder $query, string $like): Builder
+    public function searchByJson(Builder $query, string $like, ?string $raw = null): Builder
     {
+        $patterns = [$like];
+        if ($raw !== null) {
+            $encoded = trim(json_encode($raw, JSON_UNESCAPED_SLASHES), '"');
+            if ($encoded !== '' && $encoded !== $raw) {
+                $patterns[] = '%'.$encoded.'%';
+            }
+        }
+
         foreach (['respondents', 'categories', 'authorized_categories'] as $column) {
-            $this->orWhereJsonTextLike($query, $column, $like);
+            foreach ($patterns as $pattern) {
+                $this->orWhereJsonTextLike($query, $column, $pattern);
+            }
         }
 
         return $query;
@@ -426,9 +439,17 @@ class ClientSearchService
      * même tri que la page »). `page` / `per_page` sont ignorés : la
      * réservation prend le premier lot de candidats de cette liste.
      *
+     * **Held `DOUBLE` / `INFO`** (issues « Double » / « Info », régime
+     * `RESERVED`) : `$heldByUserId` (connecté) les rend visibles **à leur
+     * seul titulaire** dans la Grande liste, et eux seuls — tout autre
+     * employé ne les voit jamais. `null` (réservation d'un lot) garde le
+     * comportement strict : ces clients sont exclus pour tout le monde, ils
+     * ne sont donc **jamais** réservables une seconde fois.
+     *
      * @param  array<string, mixed>  $input  Paramètres de requête de la page.
+     * @param  int|string|null  $heldByUserId  identifiant de l'employé connecté.
      */
-    public function applyFilters(Builder $query, array $input = []): Builder
+    public function applyFilters(Builder $query, array $input = [], int|string|null $heldByUserId = null): Builder
     {
         if ($municipality = $input['municipality'] ?? null) {
             $this->filterByMunicipalities($query, $municipality);
@@ -453,10 +474,28 @@ class ClientSearchService
         // appelé — statut dérivé `SANS_TELEPHONE`, invisible côté commercial),
         // aucune réservation active en cours (ni la sienne ni celle d'un
         // autre employé).
+        //
+        // Repli `DOUBLE` / `INFO` : un prospect **tenu** par l'employé
+        // connecté (issues « Double » / « Info », régime `RESERVED`)
+        // réapparaît dans **sa** Grande liste — et nulle part ailleurs.
+        // Sans `$heldByUserId` (réservation d'un lot) la branche n'existe
+        // pas : ces clients restent exclus pour tout le monde et ne sont
+        // donc jamais réservables une seconde fois.
         $query->where('is_blacklisted', false)
-            ->available()
             ->withPhone()
-            ->whereDoesntHave('reservations', fn ($q) => $q->active());
+            ->where(function (Builder $nested) use ($heldByUserId) {
+                $nested
+                    ->where(fn (Builder $available) => $available
+                        ->available()
+                        ->whereDoesntHave('reservations', fn (Builder $r) => $r->active()))
+                    ->when(
+                        $heldByUserId !== null,
+                        fn (Builder $held) => $held
+                            ->orWhere(fn (Builder $mine) => $mine
+                                ->whereIn('status', [Client::STATUS_DOUBLE, Client::STATUS_INFO])
+                                ->where('current_comercial_id', $heldByUserId))
+                    );
+            });
 
         // Même tri que la page (défaut : `created_at` desc).
         $sortBy = (string) ($input['sort_by'] ?? 'created_at');

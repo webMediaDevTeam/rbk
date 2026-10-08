@@ -17,7 +17,6 @@ import RemindersPage from '@/pages/comercial/Reminders/index.jsx'
 import AutoRappelsPage from '@/pages/comercial/AutoRappels/index.jsx'
 import ComercialDetailPage from '@/pages/shared/comercialDetail/index.jsx'
 import ClientsHistoryPage from '@/pages/shared/clientsHistory/index.jsx'
-import CallLogTestPage from '@/pages/superAdmin/CallLogTest/index.jsx'
 
 // Association rôle ↔ route, calquée sur le middleware `CheckRole` du backend
 // (voir backend/routes/api/*.php) : le garde frontend reflète les droits API
@@ -61,12 +60,6 @@ export default function AppRoutes() {
 
       {/* SUPER_ADMIN uniquement — routes/api/superAdmin.php + shared.php */}
       <Route path="/admins" element={guard(ROLES.SUPER_ADMIN, <AdminListPage />)} />
-      {/* Console d'appel RingCentral — dev uniquement : `vite build` fige
-          import.meta.env.DEV à false, la route n'existe pas en prod
-          (l'URL inconnue retombe sur /dashboard via le catch-all). */}
-      {import.meta.env.DEV && (
-        <Route path="/call-logs-test" element={guard(ROLES.SUPER_ADMIN, <CallLogTestPage />)} />
-      )}
 
       {/* Pages hôte (déjà filtrées par GuestRoute dans App.jsx) */}
       <Route path="/connexion" element={<ConnexionPage />} />

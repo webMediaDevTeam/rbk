@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Mail\UserAccountVerificationMail;
 use App\Models\Enterprise;
 use App\Models\User;
-use App\Mail\UserAccountVerificationMail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;

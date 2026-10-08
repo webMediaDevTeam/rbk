@@ -35,6 +35,7 @@ class CallLog extends Model
 
     protected $fillable = [
         'employee_id',
+        'client_id',
         'ringcentral_call_id',
         'ringcentral_session_id',
         'ringcentral_extension_id',
@@ -64,6 +65,16 @@ class CallLog extends Model
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
+    }
+
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    public function notes(): HasMany
+    {
+        return $this->hasMany(Note::class);
     }
 
     public function recordings(): HasMany

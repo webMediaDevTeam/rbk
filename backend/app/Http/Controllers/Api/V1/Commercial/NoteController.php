@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Commercial;
 
 use App\Http\Controllers\Controller;
 use App\Models\Note;
+use App\Models\Reservation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,8 +24,17 @@ class NoteController extends Controller
 {
     public function index(Request $request, string $clientId): JsonResponse
     {
+        $ownsClient = Reservation::query()
+            ->where('client_id', $clientId)
+            ->where('comercial_id', $request->user()->id)
+            ->exists();
+
+        if (! $ownsClient) {
+            return response()->json(['success' => false, 'message' => 'Client introuvable.'], 404);
+        }
+
         $notes = Note::where('client_id', $clientId)
-            ->with('sender:id,first_name,last_name,email')
+            ->with(['sender:id,first_name,last_name,email', 'callLog:id,ringcentral_call_id,ringcentral_session_id'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -42,6 +52,15 @@ class NoteController extends Controller
             'type' => 'sometimes|nullable|in:'.Note::TYPE_NOTE,
             'description' => 'required|string',
         ]);
+
+        $ownsClient = Reservation::query()
+            ->where('client_id', $validated['client_id'])
+            ->where('comercial_id', $request->user()->id)
+            ->exists();
+
+        if (! $ownsClient) {
+            return response()->json(['success' => false, 'message' => 'Client introuvable.'], 404);
+        }
 
         $note = Note::create([
             'client_id' => $validated['client_id'],
@@ -78,6 +97,13 @@ class NoteController extends Controller
                 'success' => false,
                 'message' => 'Vous ne pouvez supprimer que vos propres commentaires.',
             ], 403);
+        }
+
+        if (! $isAdmin && ! Reservation::query()
+            ->where('client_id', $note->client_id)
+            ->where('comercial_id', $user->id)
+            ->exists()) {
+            return response()->json(['success' => false, 'message' => 'Client introuvable.'], 404);
         }
 
         $note->delete();

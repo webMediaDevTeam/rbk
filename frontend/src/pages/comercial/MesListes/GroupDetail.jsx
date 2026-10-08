@@ -125,7 +125,7 @@ export default function GroupDetailPage() {
     },
     {
       key: 'CALL_BACK',
-      label: 'À rappeler',
+      label: 'À rapp..',
       icon: PhoneOff,
       iconClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
       activeClass: 'border border-transparent bg-sky-600',
@@ -273,7 +273,7 @@ export default function GroupDetailPage() {
                         {/* Appel direct : `from` = numéro de l'employé
                             (résolu par l'API), `to` = numéro du client. */}
                         <div className="flex items-center justify-end gap-1">
-                          <CallButton phone={r.client?.phone} name={r.client?.name} />
+                          <CallButton phone={r.client?.phone} name={r.client?.name} clientId={r.client?.id} />
                           <button
                             onClick={openProspectStopClick(r.client?.id)}
                             className="p-1.5 rounded-lg hover:bg-muted transition-colors"
@@ -329,7 +329,7 @@ export default function GroupDetailPage() {
                       (docs/RULES.md §9) + appel direct du client. */}
                   <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-border">
                     {statusCell(r)}
-                    <CallButton phone={r.client?.phone} name={r.client?.name} />
+                    <CallButton phone={r.client?.phone} name={r.client?.name} clientId={r.client?.id} />
                   </div>
                 </div>
               ))}

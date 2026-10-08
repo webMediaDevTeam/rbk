@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Laravel\Sanctum\Sanctum;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,7 @@ class ReleasePermissionTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private string $enterpriseId;
 
     protected function setUp(): void
@@ -38,7 +40,6 @@ class ReleasePermissionTest extends TestCase
 
         $this->admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
         $enterprise = Enterprise::forceCreate([
-            'user_id' => $this->admin->id,
             'name' => 'Release Permission Enterprise',
         ]);
         $this->enterpriseId = $enterprise->id;
@@ -212,11 +213,11 @@ class ReleasePermissionTest extends TestCase
      */
     public function test_check_permission_allows_admins_and_flagged_commercials_only(): void
     {
-        $call = function (User $user): \Symfony\Component\HttpFoundation\Response {
+        $call = function (User $user): Response {
             $request = Request::create('/api/v1/clients/x/blacklist', 'POST');
             $request->setUserResolver(fn () => $user);
 
-            return (new CheckPermission())->handle(
+            return (new CheckPermission)->handle(
                 $request,
                 fn () => response()->json(['ok' => true], 200)
             );

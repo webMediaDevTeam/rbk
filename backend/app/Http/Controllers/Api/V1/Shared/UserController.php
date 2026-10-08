@@ -77,6 +77,14 @@ class UserController extends Controller
     private const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
 
     /**
+     * Règle de saisie du nom d'utilisateur (voyant « Nom d'utilisateur »
+     * des modales employé). La valeur est normalisée en minuscules par
+     * `normalizeUsername()` avant validation ; la longueur minimale de 3
+     * caractères s'applique donc à la valeur déjà retaillée.
+     */
+    private const USERNAME_RULES = 'sometimes|nullable|string|min:3|max:100|regex:/^[a-z0-9._-]+$/';
+
+    /**
      * Build a scoped query filtered by the connected user's role.
      */
     protected function scopedQuery(Request $request): Builder
@@ -123,6 +131,9 @@ class UserController extends Controller
         return [
             'id' => $user->id,
             'email' => $user->email,
+            // Nom d'utilisateur (identifiant court) — null pour les
+            // comptes créés avant la colonne `users.username`.
+            'username' => $user->username,
             'role' => $user->role,
             'status' => $user->status,
             // Privilège de libération (formater en bool : tinyint brut sinon).
@@ -150,6 +161,7 @@ class UserController extends Controller
                     'info_supp' => $user->employee->additional_info,
                     // Source d'appel RingCentral choisie à la création/édition.
                     'ringcentral_device_id' => $user->employee->ringcentral_device_id,
+                    'ringcentral_extension_id' => $user->employee->ringcentral_extension_id,
                     'ringcentral_from_number' => $user->employee->ringcentral_from_number,
                     'entreprise' => $user->employee->enterprise ? [
                         'name' => $user->employee->enterprise->name,
@@ -248,6 +260,60 @@ class UserController extends Controller
 
     /*
     |--------------------------------------------------------------------------
+    | usernameAvailable
+    |--------------------------------------------------------------------------
+    |
+    | GET /users/username-available?username=immed&id={uuid?}
+    |
+    | Contrôle en temps réel (debounce) de la modale employé : la colonne
+    | `users.username` est unique, on renvoie donc `available` avant
+    | l'envoi du formulaire. `id` = l'employé en cours d'édition, exclu de
+    | la comparaison.
+    |
+    */
+
+    public function usernameAvailable(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'username' => 'required|string|max:100',
+            'id' => 'nullable|string|max:36',
+        ]);
+
+        $username = Str::lower(trim($validated['username']));
+        // Miroir de la règle de saisie (`store` / `update`) : la syntaxe
+        // fausse est signalée comme indisponible, sans erreur 422.
+        $valid = (bool) preg_match('/^[a-z0-9._-]{3,100}$/', $username);
+
+        $taken = User::where('username', $username)
+            ->when($validated['id'] ?? '', fn ($query, $id) => $query->where('id', '!=', $id))
+            ->exists();
+
+        return $this->respondOk([
+            'username' => $username,
+            'valid' => $valid,
+            'available' => $valid && ! $taken,
+        ]);
+    }
+
+    /**
+     * Normalise le nom d'utilisateur avant validation : minuscules +
+     * espaces retirés, vide → null (la règle `nullable` accepte alors
+     * l'effacement du champ en édition).
+     */
+    private function normalizeUsername(Request $request): void
+    {
+        $username = $request->input('username');
+        if ($username === null) {
+            return;
+        }
+
+        $normalized = is_string($username) ? Str::lower(trim($username)) : $username;
+
+        $request->merge(['username' => $normalized === '' ? null : $normalized]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | CRUD: store
     |--------------------------------------------------------------------------
     |
@@ -259,10 +325,15 @@ class UserController extends Controller
     {
         $actor = $request->user();
 
+        $this->normalizeUsername($request);
+
         $base = $request->validate([
             'email' => 'required|email|unique:users,email',
             'mot_de_passe' => 'required_if:role,COMERCIAL|nullable|string|min:8|confirmed',
             'role' => 'required|in:ADMIN,COMERCIAL',
+            // Nom d'utilisateur (identifiant court) — unique en base, la
+            // modale vérifie la dispo en amont via `usernameAvailable`.
+            'username' => self::USERNAME_RULES.'|unique:users,username',
         ]);
 
         $targetRank = self::ROLE_HIERARCHY[$base['role']] ?? 99;
@@ -278,11 +349,12 @@ class UserController extends Controller
                 'phone' => 'nullable|string|max:255',
                 'additional_info' => 'nullable|string',
                 'enterprise_id' => 'required|uuid|exists:enterprises,id',
-                // « Privilège de libération » : switch de la modale
-                // Commercial (création) — colonne `users.has_permission`.
+                // Switch « Privilège commercial » (ex-« Privilège de
+                // libération ») de la modale — colonne `users.has_permission`.
                 'has_permission' => 'sometimes|boolean',
                 // Source d'appel RingCentral choisie dans le select d'appareils.
                 'ringcentral_device_id' => 'nullable|string|max:64',
+                'ringcentral_extension_id' => 'nullable|string|max:64',
                 'ringcentral_from_number' => 'nullable|string|max:32',
             ]),
             'ADMIN' => $request->validate([
@@ -296,6 +368,9 @@ class UserController extends Controller
         return DB::transaction(function () use ($base, $profile, $request, $verificationLinks) {
             $data = [
                 'email' => $base['email'],
+                // Nom d'utilisateur absent du payload → null (colonne
+                // nullable, aucun effet de bord sur les autres comptes).
+                'username' => $base['username'] ?? null,
                 'role' => $base['role'],
                 'first_name' => $profile['first_name'] ?? null,
                 'last_name' => $profile['last_name'] ?? null,
@@ -325,6 +400,7 @@ class UserController extends Controller
                     'phone' => $profile['phone'] ?? null,
                     'additional_info' => $profile['additional_info'] ?? null,
                     'ringcentral_device_id' => $profile['ringcentral_device_id'] ?? null,
+                    'ringcentral_extension_id' => $profile['ringcentral_extension_id'] ?? null,
                     'ringcentral_from_number' => $profile['ringcentral_from_number'] ?? null,
                 ]);
             }
@@ -388,13 +464,19 @@ class UserController extends Controller
             return $this->forbidden();
         }
 
+        $this->normalizeUsername($request);
+
         $data = $request->validate([
             'email' => 'sometimes|email|unique:users,email,'.$id,
-            'mot_de_passe' => 'nullable|string|min:8',
+            'mot_de_passe' => 'nullable|string|min:8|confirmed',
             'role' => 'sometimes|in:ADMIN,COMERCIAL',
             'status' => 'sometimes|in:'.implode(',', self::VALID_STATUSES),
-            // « Privilège de libération » : switch de la modale Commercial
-            // (édition) — colonne `users.has_permission` (jamais `employees`).
+            // Nom d'utilisateur (identifiant court) : unique, hors
+            // l'utilisateur en cours d'édition.
+            'username' => self::USERNAME_RULES.'|unique:users,username,'.$id,
+            // Switch « Privilège commercial » (ex-« Privilège de
+            // libération ») de la modale — colonne `users.has_permission`
+            // (jamais `employees`).
             'has_permission' => 'sometimes|boolean',
             'first_name' => 'sometimes|nullable|string|max:255',
             'last_name' => 'sometimes|nullable|string|max:255',
@@ -403,6 +485,7 @@ class UserController extends Controller
             'enterprise_id' => 'sometimes|required|uuid|exists:enterprises,id',
             // Source d'appel RingCentral de l'employé (select d'appareils).
             'ringcentral_device_id' => 'sometimes|nullable|string|max:64',
+            'ringcentral_extension_id' => 'sometimes|nullable|string|max:64',
             'ringcentral_from_number' => 'sometimes|nullable|string|max:32',
         ]);
 
@@ -415,7 +498,7 @@ class UserController extends Controller
         unset($data['mot_de_passe']);
 
         // Portés par `employees` (1:1 COMERCIAL), jamais par `users`.
-        unset($data['ringcentral_device_id'], $data['ringcentral_from_number']);
+        unset($data['ringcentral_device_id'], $data['ringcentral_extension_id'], $data['ringcentral_from_number']);
 
         if (isset($data['role']) && $data['role'] !== $target->role) {
             $actorRank = self::ROLE_HIERARCHY[$request->user()->role] ?? 99;
@@ -430,7 +513,7 @@ class UserController extends Controller
         if ($target->role === 'COMERCIAL' && $target->employee) {
             $target->employee->update($request->only([
                 'first_name', 'last_name', 'phone', 'additional_info', 'enterprise_id',
-                'ringcentral_device_id', 'ringcentral_from_number',
+                'ringcentral_device_id', 'ringcentral_extension_id', 'ringcentral_from_number',
             ]));
         }
 

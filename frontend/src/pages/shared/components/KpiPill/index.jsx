@@ -4,8 +4,10 @@ const numberFormat = new Intl.NumberFormat('fr-FR')
 export const formatCount = (n) => numberFormat.format(n ?? 0)
 
 /** Barre horizontale qui contient les badges (une ligne, passe à la ligne si étroit). */
-export function KpiBar({ children }) {
-  return <div className="flex flex-wrap items-center gap-2">{children}</div>
+export function KpiBar({ children, dense = false }) {
+  return (
+    <div className={`flex flex-wrap items-center ${dense ? 'gap-1.5' : 'gap-2'}`}>{children}</div>
+  )
 }
 
 /**
@@ -18,7 +20,8 @@ export function KpiBar({ children }) {
  * porte la couleur de fond), texte/icône passés en `activeFg` sur un halo
  * `activeIconClass`. `locked` marque un badge non cliquable dont l'état ne
  * peut pas être changé (curseur interdit). Sans `onClick`, le badge reste
- * informatif.
+ * informatif. `compact` réduit la maquette (padding, texte `xs`, pastille
+ * d'icône 20 px) pour les barres chargées à 10 badges.
  */
 export default function KpiPill({
   label,
@@ -34,9 +37,14 @@ export default function KpiPill({
   activeFg = 'text-white',
   activeIconClass = 'bg-white/20',
   locked = false,
+  compact = false,
 }) {
   const className = [
-    'inline-flex items-center gap-2 rounded-full border py-1.5 pl-2 pr-3.5 text-sm shadow-sm transition-colors',
+    // `compact` : barres à 10 badges (Grande liste) — même maquette, tout
+    // réduit d'un cran pour que les pastilles **tiennent sur une ligne**.
+    compact
+      ? 'inline-flex items-center gap-1.5 rounded-full border py-1 pl-1.5 pr-2.5 text-xs shadow-sm transition-colors'
+      : 'inline-flex items-center gap-2 rounded-full border py-1.5 pl-2 pr-3.5 text-sm shadow-sm transition-colors',
     active ? activeClass : 'border-border/60 bg-card hover:border-primary/40',
     onClick && !active ? 'cursor-pointer hover:bg-muted' : '',
     // Badge non cliquable (barre consultative : listes de rappels, sélection
@@ -46,8 +54,10 @@ export default function KpiPill({
 
   const content = (
     <>
-      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${active ? `${activeIconClass} ${activeFg}` : iconClass}`}>
-        <Icon className="h-3.5 w-3.5" />
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-full ${compact ? 'h-5 w-5' : 'h-6 w-6'} ${active ? `${activeIconClass} ${activeFg}` : iconClass}`}
+      >
+        <Icon className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
       </span>
       <span className={`whitespace-nowrap ${active ? activeFg : 'text-muted-foreground'}`}>{label}</span>
       <span className={`whitespace-nowrap font-semibold tabular-nums ${active ? activeFg : 'text-foreground'}`}>{value}</span>

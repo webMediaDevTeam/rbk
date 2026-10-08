@@ -224,6 +224,97 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
       source) + parcours réel create/update/delete vérifié contre l'API et
       la table `employees`.
 
+### ✅ Identifiants RingCentral par entreprise
+
+Chaque entreprise peut brancher **son propre compte** RingCentral (application
+OAuth + jeton) ; un champ vide retombe sur `.env`.
+
+- [x] **1. Migration** : `enterprises.ringcentral_client_id`,
+      `enterprises.ringcentral_client_secret`, `enterprises.ringcentral_token`
+      + `enterprises.source` (colonne **générique**, hors RingCentral — voir
+      « Répertoire des sources » ci-dessous) —
+      `2026_10_08_120000_add_ringcentral_credentials_to_enterprises_table`
+      (`php artisan migrate`, aucune donnée supprimée).
+- [x] **2. Modèle** : `Enterprise::$fillable` + `getRingCentralCredentials()`
+      (repli **champ par champ** sur `config('services.ringcentral.*')`) +
+      `hasOwnRingCentralAccount()`.
+- [x] **3. Service** : `RingCentralService::configure()` reconfigure la
+      requête en cours (SDK + jeton d'authentification) ; les clés de cache
+      sont dérivées des identifiants (`scoped()`) pour qu'aucun compte ne
+      partage le jeton `ringcentral:auth` ni les listes figées.
+- [x] **4. API entreprise** : règles `RINGCENTRAL_RULES` + `SOURCE_RULES` sur
+      `store` / `update` (champ **absent** = conservé, `''` = retiré, valeur
+      = remplacé, `trim` systématique) ; `formatEnterprise()` renvoie
+      `ringcentral_client_id` / `source` et seulement
+      `ringcentral_client_secret_set` / `ringcentral_token_set` — le secret
+      et le jeton ne quittent jamais l'API (ADMIN + SUPER_ADMIN).
+- [x] **5. Frontend** : 3 champs optionnels (Client ID, Client Secret,
+      Token) dans la section « RingCentral » d'`EnterpriseCreateModal` +
+      `EnterpriseUpdateModal` (« laisser vide pour conserver »).
+- [x] **6. Modales employé** : `GET /call-logs/devices?enterprise_id=` — la
+      sélection « Appareil / numéro source » liste les appareils **du compte
+      de l'entreprise choisie** (`queryKey` + `enabled` suivent
+      `form.enterprise_id`, changement d'entreprise = source remise à zéro ;
+      sans entreprise → aucun appel, pas de compte `.env` fantôme).
+- [x] **7. Tests** : `EnterpriseRingCentralCredentialsTest` (9 tests —
+      création, conservation / remplacement / effacement, validation, repli
+      `.env`, `devices` avec / sans / entreprise inconnue, RBAC).
+
+### ✅ Répertoire des sources (sélecteur « Source » des entreprises)
+
+Table `sources` **sans CRUD** : une seule route de lecture.
+
+- [x] **1. Migration** : `sources` (`id` uuid, `name` unique, `timestamps`) —
+      `2026_10_08_130000_create_sources_table` (`php artisan migrate`).
+- [x] **2. Seed** : `SourceSeeder` → **« Affaire »**, **« Angalis »**
+      (`firstOrCreate`, idempotent ; appelé par `DatabaseSeeder` et à la
+      main via `php artisan db:seed --class=SourceSeeder`).
+- [x] **3. API lecture seule** : `SourceController::index` +
+      `GET /api/v1/sources` (groupe `auth:sanctum`, tous rôles) →
+      `{success, data: [{id, name}]}` trié. **Aucune route** `POST` /
+      `PUT` / `DELETE` n'existe pour ce modèle.
+- [x] **4. Frontend** : `listSourcesApi()` + sélecteur « Source » dans
+      `EnterpriseCreateModal` / `EnterpriseUpdateModal` — la valeur déjà
+      enregistrée est **reprise dans les options** même si elle a disparu du
+      répertoire ; le champ est sorti de la section RingCentral (« source »
+      n'est pas un attribut RingCentral).
+- [x] **5. Tests** : `SourceListTest` (5 tests — liste triée pour tout
+      utilisateur authentifié, 401 sans jeton, seeder idempotent, **aucune
+      route CRUD** (405 / 404), enregistrement de la source sur l'entreprise
+      y compris conservation si le champ est omis).
+
+> **Suite éventuelle** : `POST /call-logs/call` et `POST /call-logs/sync/
+> employees` utilisent encore le compte `.env` — à reconfigurer avec
+> l'entreprise de l'appelant si un compte par entreprise doit aussi passer
+> les appels et synchroniser les postes.
+
+### ✅ Source des prospects (`clients.source`, défaut « Affaire »)
+
+Même répertoire `sources` que les entreprises (§13), **sans rapport avec
+RingCentral** et **sans aucune saisie UI** : la valeur arrive du payload n8n
+et se lit dans les réponses / la fiche client.
+
+- [x] **1. Migration** : `clients.source` — `string(255) NOT NULL DEFAULT
+      'Affaire'` (`2026_10_08_140000_add_source_to_clients_table`,
+      `php artisan migrate` uniquement) : les ~53 000 prospects déjà en base
+      passent en « Affaire » (0 ligne sans source).
+- [x] **2. Modèle** : `Client::DEFAULT_SOURCE = 'Affaire'` + `source`
+      ajouté à `$fillable`.
+- [x] **3. Import n8n** : clé `Source` ajoutée à `Client::
+      PAYLOAD_MAP` — valeur non vide nettoyée (`cleanLabel()`), valeur vide
+      ou absente **retirée des attributs** : création → défaut « Affaire »,
+      mise à jour → valeur en place **conservée** (jamais de `NULL`, jamais
+      de remise à zéro lors d'une resync sans la clé).
+- [x] **4. Exposition** : `source` ajouté à `ClientController::
+      formatClient()` (liste + détail commercial) et aux deux formateurs de
+      `CommercialAdminController` (liste + détail admin) ; affiché en
+      lecture seule (« Source ») dans l'onglet **Détails** de la fiche
+      client (`ClientDetailsTab`).
+- [x] **5. Tests** : `ClientSourceTest` (6 tests — défaut à la création
+      via le modèle et via l'import, valeur du payload, clé vide sans
+      `NULL`, conservation / remise à jour, exposition listes + détail
+      admin) ; doc `RULES.md` §12 et `public_api.md` §2.3 mises à jour.
+
 ### ✅ Appel direct du client — bouton « Appeler » (COMERCIAL)
 
 Bouton « Appeler » sur les lignes / cartes des pages **Mes listes**

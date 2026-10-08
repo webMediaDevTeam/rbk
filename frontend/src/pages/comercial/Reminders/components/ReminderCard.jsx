@@ -22,7 +22,7 @@ export default function ReminderCard({ reminder: r, num, onView, canView, format
       onClick={() => viewable && onView(r)}
     >
       <div className="absolute top-3 right-3 flex items-center gap-1">
-        <CallButton phone={r.client_phone} name={r.client_name} />
+        <CallButton phone={r.client_phone} name={r.client_name} clientId={r.client_id} />
         {viewable ? (
           <button
             onClick={(e) => { e.stopPropagation(); onView(r) }}

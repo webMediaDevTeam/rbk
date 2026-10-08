@@ -117,7 +117,7 @@ export default function ReminderTable({
                         résolue par l'API) + œil « Voir » / pastille
                         « Obsolète ». */}
                     <div className="flex items-center justify-end gap-1">
-                      <CallButton phone={r.client_phone} name={r.client_name} />
+                      <CallButton phone={r.client_phone} name={r.client_name} clientId={r.client_id} />
                       {viewable ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); onView(r) }}

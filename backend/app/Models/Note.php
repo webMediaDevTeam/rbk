@@ -56,6 +56,10 @@ class Note extends Model
 
     public const TYPE_CALL_BACK = 'CALL_BACK';
 
+    public const TYPE_DOUBLE = 'DOUBLE';
+
+    public const TYPE_INFO = 'INFO';
+
     public const TYPE_BLACKLISTED = 'BLACKLISTED';
 
     public const TYPE_RETURNED_TO_AVAILABLE = 'RETURNED_TO_AVAILABLE';
@@ -69,6 +73,8 @@ class Note extends Model
         self::TYPE_NO,
         self::TYPE_BV,
         self::TYPE_CALL_BACK,
+        self::TYPE_DOUBLE,
+        self::TYPE_INFO,
         self::TYPE_BLACKLISTED,
         self::TYPE_RETURNED_TO_AVAILABLE,
         self::TYPE_NOTE,
@@ -78,16 +84,23 @@ class Note extends Model
      * Issues d'appel : seules ces notes rendent un prospect « traité »
      * (KPI overview) et déclenchent l'auto-blacklist. `RESERVED` en est
      * exclu : elle est créée à la réservation, avant tout appel.
+     *
+     * `DOUBLE` / `INFO` sont des issues comme les autres : l'appel a eu
+     * lieu, seul le sort du prospect diffère (il reste tenu par l'employé,
+     * régime `RESERVED`).
      */
     public const CALL_TYPES = [
         self::TYPE_YES,
         self::TYPE_NO,
         self::TYPE_BV,
         self::TYPE_CALL_BACK,
+        self::TYPE_DOUBLE,
+        self::TYPE_INFO,
     ];
 
     protected $fillable = [
         'client_id',
+        'call_log_id',
         'reservation_id',
         'sender_id',
         'type',
@@ -104,6 +117,11 @@ class Note extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function callLog(): BelongsTo
+    {
+        return $this->belongsTo(CallLog::class);
     }
 
     /**

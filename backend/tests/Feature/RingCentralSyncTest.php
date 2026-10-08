@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Models\CallLog;
 use App\Models\CallRecording;
+use App\Models\Client;
+use App\Models\Reservation;
 use App\Models\User;
 use App\Services\RingCentralService;
+use App\Services\RingCentralSyncService;
 use Exception;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Mockery;
 use Tests\TestCase;
@@ -50,6 +52,22 @@ class RingCentralSyncTest extends TestCase
         ], $attributes));
 
         return $user;
+    }
+
+    private function reserveClient(User $user): Client
+    {
+        $client = Client::create([
+            'name' => 'Call target',
+            'phone' => '+15145550001',
+            'status' => Client::STATUS_RESERVED,
+        ]);
+        Reservation::create([
+            'client_id' => $client->id,
+            'comercial_id' => $user->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        return $client;
     }
 
     /** Les trois listes RingCentral requises par la synchronisation. */
@@ -207,7 +225,9 @@ class RingCentralSyncTest extends TestCase
         $employe = $this->employe([
             'ringcentral_device_id' => 'dev-9',
             'ringcentral_from_number' => '+15146120498',
+            'ringcentral_extension_id' => 'ext-9',
         ]);
+        $client = $this->reserveClient($employe);
         Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
@@ -224,6 +244,7 @@ class RingCentralSyncTest extends TestCase
             ->andReturn(['id' => 'REC-9', 'uri' => 'https://platform.ringcentral.com/…/recording/REC-9']);
 
         $response = $this->postJson('/api/v1/call-logs/my-call', [
+            'client_id' => $client->id,
             'to' => '+15145550001',
             'record' => true,
         ])->assertOk();
@@ -235,6 +256,7 @@ class RingCentralSyncTest extends TestCase
 
         $call = CallLog::query()->findOrFail($callLogId);
         $this->assertSame($employe->employee->id, $call->employee_id);
+        $this->assertSame($client->id, $call->client_id);
         $this->assertSame('Outbound', $call->direction);
         $this->assertSame('+15146120498', $call->from_number);
         $this->assertSame('+15145550001', $call->to_number);
@@ -250,7 +272,9 @@ class RingCentralSyncTest extends TestCase
         $employe = $this->employe([
             'ringcentral_device_id' => 'dev-9',
             'ringcentral_from_number' => '+15146120498',
+            'ringcentral_extension_id' => 'ext-9',
         ]);
+        $client = $this->reserveClient($employe);
         Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
@@ -259,10 +283,14 @@ class RingCentralSyncTest extends TestCase
         ]);
         // L'enregistrement démarre, mais sa persistance devient impossible.
         $mock->shouldReceive('startRecording')->once()->andReturn(['id' => 'REC-10', 'uri' => '…/REC-10']);
+        $sync = Mockery::mock(RingCentralSyncService::class);
+        $sync->shouldReceive('recordOutboundCall')->once()->andReturn(null);
+        $this->app->instance(RingCentralSyncService::class, $sync);
 
-        Schema::drop('call_logs');
-
-        $this->postJson('/api/v1/call-logs/my-call', ['to' => '+15145550001'])
+        $this->postJson('/api/v1/call-logs/my-call', [
+            'client_id' => $client->id,
+            'to' => '+15145550001',
+        ])
             ->assertOk()
             ->assertJsonPath('data.session_id', 's-10')
             ->assertJsonPath('data.call_log_id', null)

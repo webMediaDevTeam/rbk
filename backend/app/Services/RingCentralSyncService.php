@@ -249,7 +249,7 @@ class RingCentralSyncService
         $employee->ringcentral_extension_id = $extensionId === '' ? null : $extensionId;
         $employee->ringcentral_extension_number = $extensionNumber === '' ? null : $extensionNumber;
         $employee->ringcentral_phone_numbers = $numbers === [] ? null : $numbers;
-        $employee->ringcentral_synced_at = now();
+        $employee->ringcentral_synced_at = Carbon::now();
 
         // Repli sur la source d'appel quand la fiche est vide : la sélection
         // « Appareil / numéro source » des modales est préremplie par la
@@ -399,6 +399,15 @@ class RingCentralSyncService
                 ->first();
         }
 
+        // Appel ouvert « à chaud » depuis l'application : sa ligne ne porte
+        // que la session téléphonie (`s-…`), inconnue du call log (dont le
+        // `sessionId` est numérique) → on la retrouve par le numéro appelé
+        // et l'heure, faute de quoi la synchro créerait un second journal
+        // sans client ni note.
+        if ($call === null) {
+            $call = $this->matchHotCall($record, $employee);
+        }
+
         $isNew = $call === null;
 
         if ($isNew) {
@@ -440,6 +449,58 @@ class RingCentralSyncService
         return $isNew;
     }
 
+    /**
+     * Ligne d'un appel sortant ouvert « à chaud » (aucun id de call log,
+     * session téléphonie `s-…`) correspondant à un enregistrement distant :
+     * même numéro appelé, heure à ±5 min — et toujours **sans** id de call
+     * log, une ligne déjà rattachée appartenant à un autre enregistrement.
+     *
+     * C'est ce rapprochement qui empêche la synchro de dupliquer le journal
+     * d'un appel passé depuis l'application (le client et la note système
+     * restent donc sur la bonne ligne).
+     */
+    private function matchHotCall(mixed $record, Employee $employee): ?CallLog
+    {
+        $called = preg_replace('/\D+/', '', (string) data_get($record, 'to.phoneNumber'));
+        $startedAt = $this->dateTime(data_get($record, 'startTime'));
+
+        if (! is_string($called) || $called === '' || $startedAt === null) {
+            return null;
+        }
+
+        $needle = substr($called, -10);
+        $target = $startedAt->getTimestamp();
+
+        $candidates = CallLog::query()
+            ->where('employee_id', $employee->id)
+            ->whereNull('ringcentral_call_id')
+            ->where('direction', 'Outbound')
+            ->orderByDesc('started_at')
+            ->limit(50)
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if (! str_starts_with((string) $candidate->ringcentral_session_id, 's-')) {
+                continue;
+            }
+
+            $digits = preg_replace('/\D+/', '', (string) $candidate->to_number);
+
+            if (! is_string($digits) || $digits === '' || ! str_ends_with($digits, $needle)) {
+                continue;
+            }
+
+            if ($candidate->started_at === null
+                || abs($candidate->started_at->getTimestamp() - $target) > 300) {
+                continue;
+            }
+
+            return $candidate;
+        }
+
+        return null;
+    }
+
     /** Métadonnées d'enregistrement d'un appel → `call_recordings`. */
     private function upsertRecording(CallLog $call, mixed $recording): ?CallRecording
     {
@@ -475,13 +536,15 @@ class RingCentralSyncService
         ?string $partyId,
         string $from,
         string $to,
-        array $session = []
+        array $session = [],
+        ?string $clientId = null
     ): ?CallLog {
         try {
             $call = CallLog::query()->where('ringcentral_session_id', $sessionId)->first()
                 ?? new CallLog(['employee_id' => $employee->id]);
 
             $call->employee_id = $employee->id;
+            $call->client_id = $clientId ?? $call->client_id;
             $call->ringcentral_session_id = $sessionId;
             $call->ringcentral_party_id = $partyId ?? $call->ringcentral_party_id;
             $call->ringcentral_extension_id = $employee->ringcentral_extension_id;
@@ -496,7 +559,13 @@ class RingCentralSyncService
             $call->save();
 
             return $call;
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            Log::error('Échec de l’enregistrement de l’appel sortant en base locale.', [
+                'session_id' => $sessionId,
+                'client_id' => $clientId,
+                'error' => $e->getMessage(),
+            ]);
+
             return null;
         }
     }

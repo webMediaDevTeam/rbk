@@ -38,6 +38,18 @@ const NOTE_TYPE_CONFIG = {
     variant: 'info',
     nodeClass: 'bg-blue-500',
   },
+  DOUBLE: {
+    icon: PhoneOff,
+    label: 'Double',
+    variant: 'warning',
+    nodeClass: 'bg-orange-500',
+  },
+  INFO: {
+    icon: FileText,
+    label: 'Info',
+    variant: 'info',
+    nodeClass: 'bg-sky-500',
+  },
   BLACKLISTED: {
     icon: ShieldAlert,
     label: 'Liste noire',

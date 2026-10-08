@@ -53,9 +53,10 @@ export default function LoginForm({ vm }) {
 
         <AuthInput
           id="auth-email"
-          label="Courriel Professionnel"
-          type="email"
-          placeholder="agent@ZdigIA.ca"
+          label="Courriel ou Login"
+          type="text"
+          autoComplete="username"
+          placeholder="agent@ZdigIA.ca ou login"
           value={email}
           onChange={onEmailChange}
           icon={Mail}
@@ -91,7 +92,7 @@ export default function LoginForm({ vm }) {
         {loginMethod === "otp" && !loginOtpSent && (
           <div className="auth-field">
             <p className="auth-otp-hint">
-              Entrez votre courriel professionnel puis cliquez sur
+              Entrez votre courriel ou votre login puis cliquez sur
               <strong> « Envoyer le code » </strong>
               pour recevoir votre code de vérification.
             </p>
@@ -105,7 +106,8 @@ export default function LoginForm({ vm }) {
               <OtpInput value={loginOtp} onChange={onLoginOtpChange} disabled={loginOtpDisabled} />
             </div>
             <p className="auth-otp-hint">
-              Un code à 6 chiffres a été envoyé à <strong>{email}</strong>.
+              Un code à 6 chiffres a été envoyé à l'adresse e-mail associée à
+              ce compte.
             </p>
             <button
               type="button"

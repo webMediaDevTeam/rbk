@@ -42,6 +42,12 @@ class Reservation extends Model
     /** À rappeler : rappel à la date choisie par l'employé. */
     public const STATUS_CALL_BACK = 'CALL_BACK';
 
+    /** Issue « Double » — le prospect reste tenu par l'employé. */
+    public const STATUS_DOUBLE = 'DOUBLE';
+
+    /** Issue « Info » — le prospect reste tenu par l'employé. */
+    public const STATUS_INFO = 'INFO';
+
     /**
      * Valeur réservée du modèle (affaire réalisée) — **non émise** par le
      * workflow actuel, conservée pour l'évolution du cycle de vie.
@@ -55,6 +61,8 @@ class Reservation extends Model
         self::STATUS_YES,
         self::STATUS_BV_VOICEMAIL,
         self::STATUS_CALL_BACK,
+        self::STATUS_DOUBLE,
+        self::STATUS_INFO,
         self::STATUS_REALIZED,
     ];
 
@@ -64,6 +72,8 @@ class Reservation extends Model
         self::STATUS_YES,
         self::STATUS_BV_VOICEMAIL,
         self::STATUS_CALL_BACK,
+        self::STATUS_DOUBLE,
+        self::STATUS_INFO,
     ];
 
     /** Statuts comptés comme « traités » dans les listes (tout sauf PENDING). */
@@ -72,6 +82,8 @@ class Reservation extends Model
         self::STATUS_YES,
         self::STATUS_BV_VOICEMAIL,
         self::STATUS_CALL_BACK,
+        self::STATUS_DOUBLE,
+        self::STATUS_INFO,
     ];
 
     protected $fillable = [
@@ -111,16 +123,15 @@ class Reservation extends Model
 
     /**
      * Réservations actives : le couple (statut de réservation, statut client)
-     * montre que le client est toujours tenu par l'employé.
+     * montre que le client est toujours tenu par l'employé — statuts clients
+     * « tenu » : `Client::HELD_STATUSES` (RESERVED / CONFIRMED / DOUBLE /
+     * INFO).
      */
     public function scopeActive($query)
     {
         return $query
             ->whereIn('status', self::ACTIVE_STATUSES)
-            ->whereHas('client', fn ($q) => $q->whereIn('status', [
-                Client::STATUS_RESERVED,
-                Client::STATUS_CONFIRMED,
-            ]));
+            ->whereHas('client', fn ($q) => $q->whereIn('status', Client::HELD_STATUSES));
     }
 
     public function client(): BelongsTo

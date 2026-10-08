@@ -38,11 +38,19 @@ export function formatReturnCountdown(returnedAt) {
  * `styles/theme.css`, pilotées par la classe `.dark`).
  */
 const STYLES = {
-  AVAILABLE: { label: 'Disponible', variant: 'success' },
+  // Libellés courts (barre de filtres + colonne « Statut ») : « Libre »,
+  // « À rapp.. », « Sans tel.. » tiennent dans les pastilles.
+  AVAILABLE: { label: 'Libre', variant: 'success' },
   RESERVED: { label: 'Réservé', variant: 'warning' },
   CONFIRMED: { label: 'Oui', variant: 'success' },
   UNAVAILABLE: { label: 'Non', variant: 'destructive' },
   BLACKLISTED: { label: 'BlackList', variant: 'neutral' },
+  // Issues « Double » / « Info » : prospect toujours tenu par l'employé
+  // (régime `Réservé`) — réservation active, visible que par son titulaire.
+  // « Double » porte la **couleur primaire** de l'app (à la demande), comme
+  // le badge homologue de la barre de filtres.
+  DOUBLE: { label: 'Double', variant: 'primary' },
+  INFO: { label: 'Info', variant: 'info' },
   // Statut affiché dérivé de la réservation en cours (jamais stocké) :
   IN_PROGRESS: { label: 'En traitement', variant: 'warning' },
   // Anciennes valeurs conservées pour données historiques non migrées :
@@ -50,7 +58,7 @@ const STYLES = {
   UNAVAILABLE_TEMP: { label: 'Non disponible', variant: 'destructive' },
   IN_PROGRESS_RECALL: { label: 'En cours de traitement', variant: 'info' },
   VOICEMAIL: { label: 'BV', variant: 'info' },
-  INJOINABLE: { label: 'À rappeler', variant: 'info' },
+  INJOINABLE: { label: 'À rapp..', variant: 'info' },
   BLOCKED: { label: 'Bloqué', variant: 'destructive' },
   ARCHIVED: { label: 'Archivé', variant: 'outline' },
 }

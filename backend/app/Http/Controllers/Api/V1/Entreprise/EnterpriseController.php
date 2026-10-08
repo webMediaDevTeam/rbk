@@ -17,6 +17,33 @@ use Illuminate\Support\Str;
 
 class EnterpriseController extends Controller
 {
+    /**
+     * Identifiants RingCentral **optionnels** de l'entreprise (compte propre,
+     * repli `.env` quand ils sont vides).
+     */
+    private const RINGCENTRAL_RULES = [
+        'ringcentral_client_id' => 'nullable|string|max:255',
+        'ringcentral_client_secret' => 'nullable|string|max:500',
+        'ringcentral_token' => 'nullable|string|max:4000',
+    ];
+
+    /**
+     * « Source » de l'entreprise — **choix pris dans la table `sources`**
+     * (`GET /api/v1/sources`, répertoire fermé sans CRUD). Le libellé est
+     * stocké en clair dans `enterprises.source` : ni clé étrangère ni
+     * contrainte `exists`, pour ne jamais bloquer l'enregistrement si le
+     * répertoire évolue.
+     */
+    private const SOURCE_RULES = ['source' => 'nullable|string|max:255'];
+
+    /** Champs normalisés (trim, `''` → `null`) à la création comme à l'édition. */
+    private const TRIMMABLE_FIELDS = [
+        'ringcentral_client_id',
+        'ringcentral_client_secret',
+        'ringcentral_token',
+        'source',
+    ];
+
     public function __construct(private ClientSearchService $search) {}
 
     protected function formatEnterprise(Enterprise $enterprise): array
@@ -36,9 +63,43 @@ class EnterpriseController extends Controller
                 : null,
             'status' => $enterprise->status ?? 'ACTIVE',
             'employees_count' => $enterprise->employees_count ?? 0,
+            // Compte RingCentral : `client_id` et `source` en clair, le
+            // secret et le jeton uniquement par « enregistré oui/non » —
+            // ils ne quittent jamais l'API.
+            'ringcentral_client_id' => $enterprise->ringcentral_client_id,
+            'ringcentral_client_secret_set' => filled($enterprise->ringcentral_client_secret),
+            'ringcentral_token_set' => filled($enterprise->ringcentral_token),
+            'ringcentral_configured' => $enterprise->hasOwnRingCentralAccount(),
+            'source' => $enterprise->source,
             'created_at' => $enterprise->created_at,
             'updated_at' => $enterprise->updated_at,
         ];
+    }
+
+    /**
+     * Normalise les champs optionnels reçus (RingCentral **et** source) :
+     *
+     *   - **absents** du payload → non retenus (la valeur enregistrée est
+     *     conservée, ce qui rend les champs « optionnels » à la mise à jour) ;
+     *   - `null` ou `''`         → `null` (valeur retirée) ;
+     *   - valeur non vide        → enregistrée (espaces retirés).
+     *
+     * @return array<string, string|null>
+     */
+    private function normalizedAttributes(array $validated): array
+    {
+        $attributes = [];
+
+        foreach (self::TRIMMABLE_FIELDS as $key) {
+            if (! array_key_exists($key, $validated)) {
+                continue;
+            }
+
+            $value = trim((string) ($validated[$key] ?? ''));
+            $attributes[$key] = $value === '' ? null : $value;
+        }
+
+        return $attributes;
     }
 
     public function index(Request $request): JsonResponse
@@ -105,6 +166,8 @@ class EnterpriseController extends Controller
             'tax_number' => 'nullable|string|max:255',
             'address' => 'nullable|string',
             'status' => 'nullable|in:ACTIVE,INACTIVE',
+            ...self::RINGCENTRAL_RULES,
+            ...self::SOURCE_RULES,
         ]);
 
         $enterprise = Enterprise::create([
@@ -114,6 +177,7 @@ class EnterpriseController extends Controller
             'tax_number' => $validated['tax_number'] ?? null,
             'address' => $validated['address'] ?? null,
             'status' => $validated['status'] ?? 'ACTIVE',
+            ...$this->normalizedAttributes($validated),
         ]);
 
         return response()->json([
@@ -162,9 +226,16 @@ class EnterpriseController extends Controller
             'tax_number' => 'sometimes|nullable|string|max:255',
             'address' => 'sometimes|nullable|string',
             'status' => 'sometimes|in:ACTIVE,INACTIVE,ARCHIVED',
+            ...self::RINGCENTRAL_RULES,
+            ...self::SOURCE_RULES,
         ]);
 
-        $enterprise->update($validated);
+        // Champs présents = remplacés ; champs absents (cas du formulaire qui
+        // n'envoie pas un secret laissé vide) = valeur enregistrée conservée.
+        $enterprise->update([
+            ...$validated,
+            ...$this->normalizedAttributes($validated),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -270,7 +341,7 @@ class EnterpriseController extends Controller
      *  - `analytics` : agrégats de l'entreprise (cartes KPI en haut) ;
      *  - `employees` : une ligne par employé avec **ses** chiffres ;
      *  - `historique` : clients appelés par un employé de l'entreprise,
-     *    paginés, avec les **8 badges** de statut (`badges.by_display_status`)
+     *    paginés, avec les **10 badges** de statut (`badges.by_display_status`)
      *    qui servent de filtre — exactement la forme de `historique` du
      *    détail employé, réutilisée par `<ProspectKpis>` / `<HistoryList>`.
      *

@@ -29,5 +29,9 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->call(QuebecConstructionSeeder::class);
+
+        // Répertoire des « sources » (sélecteur des modales entreprise) —
+        // idempotent, rejouable sans doublon.
+        $this->call(SourceSeeder::class);
     }
 }

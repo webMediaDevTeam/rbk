@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Carbon\CarbonInterface;
 use Exception;
 use Illuminate\Support\Facades\Cache;
 use RingCentral\SDK\SDK;
@@ -19,16 +20,89 @@ class RingCentralService
 
     protected $platform = null;
 
+    /**
+     * Identifiants courants : `.env` par défaut, remplacés pour la requête
+     * en cours par `configure()` (compte RingCentral d'une entreprise).
+     *
+     * @var array{client_id: ?string, client_secret: ?string, token: ?string, server_url: string}
+     */
+    protected array $credentials = [];
+
+    /**
+     * Suffixe des clés de cache, dérivé des identifiants courants : deux
+     * comptes ne doivent **jamais** partager le jeton d'accès mis en cache
+     * (`ringcentral:auth`) ni les listes figées. `''` = compte `.env`.
+     */
+    protected string $cacheScope = '';
+
     public function __construct()
     {
-        $clientId = config('services.ringcentral.client_id');
-        $clientSecret = config('services.ringcentral.client_secret');
-        $serverUrl = config('services.ringcentral.server_url', 'https://platform.ringcentral.com');
+        $this->credentials = [
+            'client_id' => config('services.ringcentral.client_id'),
+            'client_secret' => config('services.ringcentral.client_secret'),
+            'token' => config('services.ringcentral.jwt'),
+            'server_url' => config('services.ringcentral.server_url', 'https://platform.ringcentral.com'),
+        ];
+
+        $this->bootPlatform();
+    }
+
+    /**
+     * Reconfigure le service **pour la requête en cours** avec les
+     * identifiants d'une entreprise (`Enterprise::getRingCentralCredentials()`,
+     * déjà repliés sur `.env` champ par champ).
+     *
+     * `void` (jamais de valeur de retour) : l'instance est propre à la
+     * requête — elle n'est ni partagée ni stockée dans le conteneur.
+     *
+     * @param  array{client_id?: ?string, client_secret?: ?string, token?: ?string, server_url?: string}  $credentials
+     */
+    public function configure(array $credentials = []): void
+    {
+        $this->credentials = [
+            'client_id' => $credentials['client_id'] ?? config('services.ringcentral.client_id'),
+            'client_secret' => $credentials['client_secret'] ?? config('services.ringcentral.client_secret'),
+            'token' => $credentials['token'] ?? config('services.ringcentral.jwt'),
+            'server_url' => $credentials['server_url']
+                ?? config('services.ringcentral.server_url', 'https://platform.ringcentral.com'),
+        ];
+
+        $this->cacheScope = ':'.substr(
+            hash('sha256', implode('|', [
+                $this->credentials['client_id'],
+                $this->credentials['client_secret'],
+                $this->credentials['token'],
+            ])),
+            0,
+            16,
+        );
+
+        $this->bootPlatform();
+    }
+
+    /** (Re)construit le SDK / la plateforme à partir des identifiants courants. */
+    protected function bootPlatform(): void
+    {
+        $this->sdk = null;
+        $this->platform = null;
+
+        $clientId = $this->credentials['client_id'] ?? null;
+        $clientSecret = $this->credentials['client_secret'] ?? null;
 
         if (! empty($clientId) && ! empty($clientSecret)) {
-            $this->sdk = new SDK($clientId, $clientSecret, $serverUrl);
+            $this->sdk = new SDK(
+                (string) $clientId,
+                (string) $clientSecret,
+                (string) ($this->credentials['server_url'] ?? 'https://platform.ringcentral.com'),
+            );
             $this->platform = $this->sdk->platform();
         }
+    }
+
+    /** Clé de cache isolée par compte (voir `$cacheScope`). */
+    protected function scoped(string $key): string
+    {
+        return $this->cacheScope === '' ? $key : $key.$this->cacheScope;
     }
 
     /**
@@ -44,13 +118,14 @@ class RingCentralService
     protected function authenticate(): void
     {
         if (! $this->platform) {
-            throw new Exception('RingCentral non configuré (RINGCENTRAL_CLIENT_ID ou CLIENT_SECRET manquant).');
+            throw new Exception('RingCentral non configuré (identifiants manquants : `ringcentral_client_id` / `ringcentral_client_secret` de l\'entreprise, sinon RINGCENTRAL_CLIENT_ID / RINGCENTRAL_CLIENT_SECRET).');
         }
 
         // 1. Jeton obtenu par une requête précédente — `expire_time` /
         //    `refresh_token_expire_time` sont absolus, il est donc valable
-        //    tel quel.
-        $cached = Cache::get(self::AUTH_CACHE);
+        //    tel quel. La clé porte l'empreinte des identifiants : un jeton
+        //    n'est jamais réutilisé pour un autre compte d'entreprise.
+        $cached = Cache::get($this->scoped(self::AUTH_CACHE));
         if (is_array($cached) && $cached !== []) {
             $this->platform->auth()->setData($cached);
         }
@@ -63,9 +138,9 @@ class RingCentralService
             return;
         }
 
-        $jwt = config('services.ringcentral.jwt');
+        $jwt = $this->credentials['token'] ?? null;
         if (empty($jwt)) {
-            throw new Exception('RingCentral non authentifié (RINGCENTRAL_JWT manquant).');
+            throw new Exception('RingCentral non authentifié (jeton manquant : `ringcentral_token` de l\'entreprise ou RINGCENTRAL_JWT).');
         }
 
         $this->platform->login(['jwt' => $jwt]);
@@ -89,10 +164,10 @@ class RingCentralService
         $ttl = $expireAt > time() ? $expireAt - time() - 60 : 0;
 
         if ($ttl >= 30) {
-            Cache::put(self::AUTH_CACHE, $data, $ttl);
+            Cache::put($this->scoped(self::AUTH_CACHE), $data, $ttl);
         } else {
             // Déjà expiré : la prochaine requête refera l'échange JWT.
-            Cache::forget(self::AUTH_CACHE);
+            Cache::forget($this->scoped(self::AUTH_CACHE));
         }
     }
 
@@ -106,7 +181,7 @@ class RingCentralService
         // Listes figées 60 s : ouvertures répétées de l'onglet « Appels » /
         // des modales employé sans rejouer les mêmes requêtes (CMN-301).
         return Cache::remember(
-            "ringcentral:users:{$perPage}",
+            $this->scoped("ringcentral:users:{$perPage}"),
             now()->addSeconds(self::LIST_CACHE_TTL),
             function () use ($perPage) {
                 $this->authenticate();
@@ -197,7 +272,7 @@ class RingCentralService
     {
         // Listes figées 60 s (voir `getAllUsers`) — même garde-fou CMN-301.
         return Cache::remember(
-            "ringcentral:devices:{$perPage}",
+            $this->scoped("ringcentral:devices:{$perPage}"),
             now()->addSeconds(self::LIST_CACHE_TTL),
             function () use ($perPage) {
                 $this->authenticate();
@@ -227,7 +302,7 @@ class RingCentralService
     {
         // Listes figées 60 s (voir `getAllUsers`) — même garde-fou CMN-301.
         return Cache::remember(
-            "ringcentral:phone-numbers:{$perPage}",
+            $this->scoped("ringcentral:phone-numbers:{$perPage}"),
             now()->addSeconds(self::LIST_CACHE_TTL),
             function () use ($perPage) {
                 $this->authenticate();
@@ -338,6 +413,103 @@ class RingCentralService
         $this->authenticate();
 
         return $this->decode($this->platform->get('/account/~/telephony/sessions/'.$sessionId));
+    }
+
+    /**
+     * Call log RingCentral d'un appel sortant **récent**, avec ses
+     * enregistrements — c'est par ce chemin que l'on retrouve
+     * l'enregistrement **automatique** (console admin → Phone System →
+     * Call Recording) d'un appel ouvert « à chaud » depuis l'application.
+     *
+     * ⚠️ On ne peut pas filtrer par session : le `sessionId` du call log est
+     * **numérique** (`675097585025`), alors que l'application ne connaît que
+     * la session téléphonie (`s-a785e453…`) — deux espaces d'identifiants
+     * distincts (et `sessionId` + `withRecording` sont refusés ensemble).
+     * On rapproche donc par le **numéro appelé** et l'heure d'appel.
+     *
+     * GET /restapi/v1.0/account/~/call-log
+     *     ?phoneNumber=…&direction=Outbound&dateFrom=…
+     *     &view=Detailed&withRecording=true
+     *
+     * @return array|null `null` si aucun appel ne correspond (ligne non
+     *                    encore publiée dans le call log…).
+     *
+     * @throws Exception autre erreur API (authentification, quota429…)
+     */
+    public function findCallLogByTarget(string $phoneNumber, CarbonInterface $startedAt): ?array
+    {
+        $target = preg_replace('/\D+/', '', $phoneNumber);
+
+        if (! is_string($target) || $target === '') {
+            return null;
+        }
+
+        // Le filtre attend un E.164 sans « + » (11 chiffres ici).
+        $filter = strlen($target) < 11 ? '1'.$target : $target;
+        $needle = substr($target, -10);
+        $startedTs = $startedAt->getTimestamp();
+
+        $this->authenticate();
+
+        try {
+            $response = $this->platform->get('/account/~/call-log', [
+                'phoneNumber' => $filter,
+                'direction' => 'Outbound',
+                'dateFrom' => gmdate('Y-m-d\TH:i:s.000\Z', $startedTs - 600),
+                'view' => 'Detailed',
+                'withRecording' => 'true',
+                'perPage' => 10,
+            ]);
+        } catch (Throwable $e) {
+            // Aucun appel pour ces critères : rien à rapatrier.
+            if ($this->httpStatus($e) === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        $records = $this->decode($response)['records'] ?? [];
+
+        if (! is_array($records)) {
+            return null;
+        }
+
+        // Parmi les lignes au même numéro, on retient l'heure la plus
+        // proche de l'appel (fenêtre de ±5 min).
+        $best = null;
+        $bestDelta = null;
+
+        foreach ($records as $record) {
+            if (! is_array($record)) {
+                continue;
+            }
+
+            $called = preg_replace('/\D+/', '', (string) data_get($record, 'to.phoneNumber'));
+            $caller = preg_replace('/\D+/', '', (string) data_get($record, 'from.phoneNumber'));
+
+            if ((! is_string($called) || ! str_ends_with($called, $needle))
+                && (! is_string($caller) || ! str_ends_with($caller, $needle))) {
+                continue;
+            }
+
+            $started = strtotime((string) data_get($record, 'startTime'));
+
+            if ($started === false) {
+                continue;
+            }
+
+            $delta = abs($started - $startedTs);
+
+            if ($delta > 300 || ($bestDelta !== null && $delta >= $bestDelta)) {
+                continue;
+            }
+
+            $best = $record;
+            $bestDelta = $delta;
+        }
+
+        return $best;
     }
 
     /**

@@ -25,7 +25,13 @@ class ClientController extends Controller
         // lot (`ClientSearchService::applyFilters`) : la page et le lot
         // réservé
         // décrivent exactement les mêmes clients, dans le même ordre.
-        $query = $this->search->applyFilters(Client::query(), $request->all());
+        // `$heldByUserId` = connecté : les prospects « Double » / « Info »
+        // ne sont rendus qu'à leur titulaire (le lot, lui, ne les voit pas).
+        $query = $this->search->applyFilters(
+            Client::query(),
+            $request->all(),
+            $request->user()?->id
+        );
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
@@ -152,12 +158,13 @@ class ClientController extends Controller
 
     /**
      * Numéro de téléphone : réservé à l'admin / super admin, et au commercial
-     * qui détient **la réservation en cours** du client (client `RESERVED` /
-     * `CONFIRMED` ET dernière réservation à son nom).
+     * qui détient **la réservation en cours** du client (client « tenu » —
+     * `Client::HELD_STATUSES`, soit RESERVED / CONFIRMED / DOUBLE / INFO —
+     * ET dernière réservation à son nom).
      *
      * Un client `AVAILABLE`, revenu `AVAILABLE` après un blocage temporaire,
-     * ou `RESERVED` par un autre commercial : le numéro n'est tout simplement
-     * pas envoyé (la clé est absente de la réponse, pas `null`).
+     * ou tenu par un autre commercial : le numéro n'est tout simplement pas
+     * envoyé (la clé est absente de la réponse, pas `null`).
      */
     private function canSeePhone(Client $client, ?Reservation $activeReservation): bool
     {
@@ -167,7 +174,7 @@ class ClientController extends Controller
             return true;
         }
 
-        if (! in_array($client->status, [Client::STATUS_RESERVED, Client::STATUS_CONFIRMED], true)) {
+        if (! in_array($client->status, Client::HELD_STATUSES, true)) {
             return false;
         }
 
@@ -205,6 +212,9 @@ class ClientController extends Controller
             'licence_status' => $client->licence_status,
             'licence_end_date' => $client->licence_end_date,
             'enterprise_name' => $enterpriseName,
+            // Origine du prospect (répertoire `sources`, défaut « Affaire ») :
+            // renseignée par le payload n8n, jamais éditable en UI.
+            'source' => $client->source,
             'created_at' => $client->created_at,
             'updated_at' => $client->updated_at,
         ];
@@ -225,11 +235,14 @@ class ClientController extends Controller
             }
 
             if ($myReservation
-                && ! in_array($client->status, [Client::STATUS_RESERVED, Client::STATUS_CONFIRMED], true)) {
+                && ! in_array($client->status, Client::HELD_STATUSES, true)) {
                 $myReservation = null;
             }
 
             $assignedCommercial = $activeReservation?->comercial;
+            $hasOwnedReservation = $client->reservations->contains(
+                fn (Reservation $reservation) => (string) $reservation->comercial_id === (string) auth()->id()
+            );
 
             // Délai d'affichage du rappel de la réservation de l'employé
             // (table `rappels`) : [montant, unité] ou [null, null].
@@ -261,7 +274,7 @@ class ClientController extends Controller
                 'returned_at' => $client->returned_at,
                 // Journal unique du client : issues d'appel, réservation,
                 // listes noires et commentaires (plus de double source).
-                'notes' => $client->notes->map(fn ($n) => [
+                'notes' => $hasOwnedReservation ? $client->notes->map(fn ($n) => [
                     'id' => $n->id,
                     'type' => $n->type,
                     'description' => $n->description,
@@ -271,7 +284,7 @@ class ClientController extends Controller
                         'first_name' => $n->sender->first_name,
                         'last_name' => $n->sender->last_name,
                     ] : null,
-                ]),
+                ]) : [],
                 'my_reservation' => $myReservation ? [
                     'id' => $myReservation->id,
                     'status' => $myReservation->status,

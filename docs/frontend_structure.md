@@ -10,22 +10,16 @@ src/
 ├── context/                          # Global React Contexts
 │   └── AuthContext.js                # Auth session state provider
 │
-├── stores/                           # State management (Zustand / Redux / Jotai)
-│   ├── useAuthStore.js               # User auth & role state
-│   └── useClientStore.js             # Shared client selection state
-│
 ├── routes/                           # Routing and Route Guards
 │   ├── AppRoutes.jsx                 # Main React Router setup
-│   ├── ProtectedRoute.jsx            # Authentication guard
-│   └── RoleBasedRoute.jsx           # Role access guard (SUPER_ADMIN, ADMIN, etc.)
+│   └── ProtectedRoute.jsx            # Authentication + role guard
 │
 ├── services/                         # API services & Axios instances
 │   ├── api.js                        # Axios instance with JWT interceptors
 │   └── endpoints/                    # Endpoint modules (auth, clients, enterprises)
 │
-├── utils/                            # Helper functions & constants
-│   ├── constants.js                  # App-wide constants (Roles, ClientStatuses)
-│   └── helpers.js                    # Date formatters, string parsers
+├── utils/                            # Helpers partagés
+│   └── ringcentral.js                # Libellés / formats d'appareils RingCentral
 │
 └── pages/                            # Role-based modular page architecture
     ├── shared/                       # Public or multi-role accessible pages

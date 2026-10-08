@@ -188,6 +188,49 @@ Content-Type: application/json
 
 ```
 
+#### Status in RBK — Solution A is active, and how the recording is fetched
+
+**Recording.** *Automatic Call Recording* (outbound) is enabled in the admin
+console, so RingCentral itself records every call. The manual start sent by
+`POST /api/v1/call-logs/my-call` (and retried ~90 s by
+`frontend/src/hooks/use-direct-call.js`) is only a fallback: while the party is
+still `Setup` (ringing) RingCentral answers
+`409 TAS-102 Incorrect State [WrongState]`, mapped by
+`RingCentralController::recordingFailure()` to a **retryable HTTP 409**.
+
+**Retrieval — the call log cannot be reached by telephony session id.**
+
+| Attempt | Result |
+|---|---|
+| `GET /account/~/call-log?sessionId=s-a785e453…&withRecording=true` | `400 Parameter [sessionId] is not allowed for usage along with parameter [withRecording]` |
+| `GET /account/~/call-log?sessionId=s-a785e453…` | `400 Parameter [s-a785e453…] value is invalid.` — the call log `sessionId` is **numeric** (`675097585025`), never the telephony session id (`s-…`) stored in `call_logs.ringcentral_session_id` |
+
+What works is **number + time window, at account scope** (app-made calls are
+placed on the authenticated extension, not on the employee's own extension):
+
+```http
+GET /restapi/v1.0/account/~/call-log?phoneNumber=15148494526&direction=Outbound
+    &dateFrom=2026-10-08T08:26:58.000Z&view=Detailed&withRecording=true&perPage=10
+```
+
+* `RingCentralService::findCallLogByTarget()` — E.164 normalisation of any
+  input format (`514-849-4526`, `+1 (514) 849-4526`…), then the record whose
+  `startTime` is the closest to the journal row (±5 min).
+* `RingCentralController::pullRemoteCall()` — runs whenever the call-details
+  modal opens on a row without recordings: the row is given its
+  `ringcentral_call_id`, enriched (duration, result, raw) through
+  `RingCentralSyncService::upsertCall()` — the telephony session id `s-…` is
+  written back afterwards, it is the only one usable by
+  `/telephony/sessions/{id}` — and the audio lands in `call_recordings`, served
+  by `GET /api/v1/call-logs/client-calls/{callLog}/recordings/{recording}/content`.
+* `RingCentralSyncService::matchHotCall()` — the same number + time matching
+  during `POST /call-logs/employees/{id}/logs/sync`, so a synchronisation
+  completes a row opened hot by the application instead of duplicating it
+  (client and system note stay on the same line).
+
+Verified live on 2026-10-08: recording `3237454278025` (`audio/mpeg`, 43 KB)
+pulled for call log `N9e_V3Rr_TRSDUA`.
+
 ---
 
 ### Task 3: Backend Implementation (Node.js Call-Out, Webhook Listener & Recording Retrieval)

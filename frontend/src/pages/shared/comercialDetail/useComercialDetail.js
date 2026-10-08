@@ -68,7 +68,7 @@ export function useComercialDetailPage() {
   const analytics = data?.analytics
   const historique = data?.historique
   const clients = historique?.clients ?? []
-  // Compteurs des 7 badges, sur le périmètre de cet employé.
+  // Compteurs des 10 badges, sur le périmètre de cet employé.
   const badges = historique?.badges ?? null
   const statusFilters = statusFilter ? [statusFilter] : []
 

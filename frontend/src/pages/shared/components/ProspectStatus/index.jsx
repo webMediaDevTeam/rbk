@@ -19,8 +19,8 @@ function PendingDash({ className }) {
  *
  * Règle demandée par le client :
  *
- *  1. client **blacklisté** ou **(re)disponible** (relisté après un blocage)
- *     → son **statut client** : « BlackList » / « Disponible » (+ compte à
+ *  1. client **blacklisté** ou **(re)libéré** (relisté après un blocage)
+ *     → son **statut client** : « BlackList » / « Libre » (+ compte à
  *     rebours « Retour dans … » quand `returned_at` est renseigné) ;
  *  2. sinon → le **statut de sa réservation courante** (`reservation_status`,
  *     colonne `clients.current_reservation_id`) : « Oui » / « Non » /

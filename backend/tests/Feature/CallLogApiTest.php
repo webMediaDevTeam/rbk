@@ -100,4 +100,12 @@ class CallLogApiTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.0.id', 'call_2');
     }
+
+    public function test_commercial_cannot_read_arbitrary_ringcentral_call_history(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']));
+
+        $this->getJson('/api/v1/call-logs/users/101')->assertForbidden();
+        $this->getJson('/api/v1/call-logs/by-phone/14155552671')->assertForbidden();
+    }
 }

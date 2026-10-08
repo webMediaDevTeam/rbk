@@ -1,4 +1,4 @@
-import { Ban, CircleCheck, PhoneCall, PhoneOff, ThumbsDown, ThumbsUp, Users, Voicemail } from 'lucide-react'
+import { Ban, CircleCheck, Copy, Info, PhoneCall, PhoneOff, ThumbsDown, ThumbsUp, Users, Voicemail } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useProspectKpis } from './useProspectKpis.js'
 
@@ -10,8 +10,8 @@ const fmt = formatCount
  *
  * **Ordre imposé, identique sur les listes** (Grande liste — panel
  * admin, À rappeler, BV, détail d'un employé) :
- * `Tous` → `Disponible` → `Oui` → `Non` → `BV` → `À rappeler` → `Blacklist`
- * → `Sans téléphone`.
+ * `Tous` → `Libre` → `Oui` → `Non` → `BV` → `À rapp..` → `Double`
+ * → `Info` → `Blacklist` → `Sans tel..` (libellés courts, cf. §9).
  *
  * Chaque badge compte une **valeur affichée** (`by_display_status` de
  * `GET clients/overview`), produite par le scope qui pilote le filtre :
@@ -19,8 +19,9 @@ const fmt = formatCount
  *
  *  - **panel admin** (Grande liste) : sélection **unique** (un clic rend le
  *    badge seul actif, un second clic dessus repasse à *Tous*,
- *    `aria-pressed`) ; *Tous* retire l'unique filtre actif. Disponible /
- *    Blacklist filtrent le **statut client**, les autres le **statut de la
+ *    `aria-pressed`) ; *Tous* retire l'unique filtre actif. Libre /
+ *    Blacklist filtrent le **statut client**, les autres (dont `Double` /
+ *    `Info`) le **statut de la
  *    réservation courante** — deux paramètres serveur distincts, union `OR`
  *    côté requête ;
  *  - **détail d'un employé** (onglet Historique) : mêmes badges en sélection
@@ -31,13 +32,15 @@ const fmt = formatCount
  *
  * Couleur pleine à la sélection, sans bordure : chaque badge garde **sa**
  * couleur de fond, texte et icône passés en contraste (`activeFg`) — une
- * teinte distincte par badge pour rester lisible à 8 pastilles.
- * Tous les compteurs sont affichés, même à 0.
+ * teinte distincte par badge pour rester lisible à 10 pastilles (*Double*
+ * est en **couleur primaire** de l'app). Pastilles rendues en `compact`
+ * (`KpiPill`) pour tenir sur **une seule ligne**. Tous les compteurs sont
+ * affichés, même à 0.
  */
 const STATUS_PILLS = [
   {
     key: 'AVAILABLE',
-    label: 'Disponible',
+    label: 'Libre',
     icon: CircleCheck,
     iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     activeClass: 'border border-transparent bg-emerald-700',
@@ -73,12 +76,34 @@ const STATUS_PILLS = [
   },
   {
     key: 'CALL_BACK',
-    label: 'À rappeler',
+    label: 'À rapp..',
     icon: PhoneCall,
     iconClass: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
     activeClass: 'border border-transparent bg-indigo-600',
     activeFg: 'text-white',
     title: 'Réservation courante « À rappeler » — clique pour filtrer',
+  },
+  {
+    // Issues « Double » / « Info » : prospect toujours **tenu** par
+    // l'employé (régime « Réservé ») — filtre sur la réservation courante,
+    // comme les autres issues. « Double » affiche la **couleur primaire**
+    // de l'app (`#a21caf`), à la demande.
+    key: 'DOUBLE',
+    label: 'Double',
+    icon: Copy,
+    iconClass: 'bg-primary/10 text-primary',
+    activeClass: 'border border-transparent bg-primary',
+    activeFg: 'text-white',
+    title: 'Réservation courante « Double » — clique pour filtrer',
+  },
+  {
+    key: 'INFO',
+    label: 'Info',
+    icon: Info,
+    iconClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+    activeClass: 'border border-transparent bg-sky-600',
+    activeFg: 'text-white',
+    title: 'Réservation courante « Info » — clique pour filtrer',
   },
   {
     key: 'BLACKLISTED',
@@ -94,7 +119,7 @@ const STATUS_PILLS = [
     // numéro est aussi `AVAILABLE` ou blacklisté) — sélection unique dans
     // l'UI, donc le compteur = lignes rendues après clic reste exact.
     key: 'SANS_TELEPHONE',
-    label: 'Sans téléphone',
+    label: 'Sans tel..',
     icon: PhoneOff,
     iconClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
     activeClass: 'border border-transparent bg-rose-600',
@@ -107,7 +132,7 @@ const STATUS_PILLS = [
 export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED', 'SANS_TELEPHONE']
 
 /**
- * Barre « Tous + 7 statuts affichés » (8 badges au total, §9).
+ * Barre « Tous + 9 statuts affichés » (10 badges au total, §9).
  *
  * @param {string[]} statusFilters        valeurs affichées sélectionnées —
  *                                        **une seule** en sélection unique
@@ -135,9 +160,9 @@ export default function ProspectKpis({ statusFilters = [], onStatusFilterChange,
 
   if (isLoading || !kpis) {
     return (
-      <div className="flex flex-wrap gap-2" aria-hidden="true">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-8 w-40 animate-pulse rounded-full border border-border/60 bg-card" />
+      <div className="flex flex-wrap gap-1.5" aria-hidden="true">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} className="h-7 w-32 animate-pulse rounded-full border border-border/60 bg-card" />
         ))}
       </div>
     )
@@ -162,6 +187,7 @@ export default function ProspectKpis({ statusFilters = [], onStatusFilterChange,
     iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     activeClass: 'border border-transparent bg-blue-600',
     activeFg: 'text-white',
+    compact: true,
     active: statusFilters.length === 0,
     onClick: filterable ? () => onStatusFilterChange(null) : undefined,
     locked: !filterable,
@@ -185,6 +211,7 @@ export default function ProspectKpis({ statusFilters = [], onStatusFilterChange,
       ...pill,
       primary: count,
       value: fmt(count),
+      compact: true,
       active,
       onClick: filterable ? () => onStatusFilterChange(pill.key) : undefined,
       locked: !filterable,
@@ -193,7 +220,7 @@ export default function ProspectKpis({ statusFilters = [], onStatusFilterChange,
   })
 
   return (
-    <KpiBar>
+    <KpiBar dense>
       <KpiPill {...tousPill} />
       {statusPills.map(({ key: badgeKey, ...pillProps }) => (
         <KpiPill key={badgeKey} {...pillProps} />

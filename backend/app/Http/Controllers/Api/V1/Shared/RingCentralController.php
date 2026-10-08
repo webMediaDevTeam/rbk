@@ -4,13 +4,18 @@ namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
 use App\Models\CallLog;
+use App\Models\Client;
 use App\Models\Employee;
+use App\Models\Enterprise;
+use App\Models\Note;
+use App\Models\Reservation;
 use App\Models\User;
 use App\Services\RingCentralService;
 use App\Services\RingCentralSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -69,12 +74,34 @@ class RingCentralController extends Controller
      * renvoient `phoneLines: []`, c'est donc `/account/~/phone-number` qui
      * fournit le libellé affiché dans la sélection (numéro, pas nom).
      *
+     * `enterprise_id` (optionnel, ADMIN / SUPER_ADMIN) : la liste vient alors
+     * **du compte RingCentral de cette entreprise** (`enterprises.ringcentral_*`,
+     * repli `.env` champ par champ) — la modale employé l'envoie dès que
+     * l'entreprise est choisie. Sans `enterprise_id`, comportement inchangé
+     * (compte `.env`).
+     *
      * Best-effort : si l'API des numéros est injoignable, les appareils
      * sont renvoyés tels quels (la sélection retombe sur le nom).
      */
     public function devices(Request $request): JsonResponse
     {
         $perPage = max(1, min(250, (int) $request->query('per_page', 100)));
+
+        $validated = $request->validate([
+            'enterprise_id' => ['nullable', 'string', 'max:36', 'exists:enterprises,id'],
+        ]);
+
+        $enterpriseId = $validated['enterprise_id'] ?? null;
+
+        if (! empty($enterpriseId)) {
+            $enterprise = Enterprise::query()->find($enterpriseId);
+
+            if ($enterprise) {
+                // Instance propre à la requête (jamais un singleton) : le
+                // reconfigurement ne touche aucun autre appel.
+                $this->ringCentral->configure($enterprise->getRingCentralCredentials());
+            }
+        }
 
         return $this->pass(fn () => $this->withPhoneNumbers($this->ringCentral->getDevices($perPage)));
     }
@@ -205,20 +232,77 @@ class RingCentralController extends Controller
         $this->assertIdentifier($sessionId, 'sessionId');
         $this->assertIdentifier($partyId, 'partyId');
 
-        return $this->pass(function () use ($sessionId, $partyId) {
+        if ($request->user()->role === 'COMERCIAL') {
+            $ownsCall = CallLog::query()
+                ->where('ringcentral_session_id', $sessionId)
+                ->whereHas('employee', fn ($query) => $query->where('user_id', $request->user()->id))
+                ->exists();
+
+            if (! $ownsCall) {
+                return response()->json(['success' => false, 'message' => 'Appel introuvable.'], 404);
+            }
+        }
+
+        try {
             $response = $this->ringCentral->startRecording($sessionId, $partyId);
+        } catch (Throwable $e) {
+            return $this->recordingFailure($e, $sessionId, $partyId);
+        }
 
-            // Même traitement que lors de l'appel : si RingCentral renvoie
-            // un id d'enregistrement exploitable, il est rangé tout de
-            // suite (la carte peut alors lire l'audio sans synchro).
-            $this->attachRecordingToSession($sessionId, $response);
+        // Même traitement que lors de l'appel : si RingCentral renvoie
+        // un id d'enregistrement exploitable, il est rangé tout de
+        // suite (la carte peut alors lire l'audio sans synchro).
+        $this->attachRecordingToSession($sessionId, $response);
 
-            return [
+        return response()->json([
+            'success' => true,
+            'data' => [
                 'session_id' => $sessionId,
                 'party_id' => $partyId,
                 'raw' => $response,
-            ];
-        });
+            ],
+        ]);
+    }
+
+    /**
+     * Échec du démarrage d'un enregistrement, traduit pour le navigateur :
+     *
+     *   - `409 TAS-102 « Incorrect State »` → la ligne **sonne encore** (la
+     *     partie est en `Setup`) : ce n'est pas une erreur, RingCentral
+     *     accepte l'enregistrement seulement une fois la ligne connectée.
+     *     On renvoie donc un `409` explicite (`retryable: true`) que
+     *     `useDirectCall.retryRecording` retente jusqu'à la connexion ;
+     *   - `404` → la session n'existe plus (appel terminé) : retenter est
+     *     inutile, on le dit clairement ;
+     *   - sinon → `502` générique (`failed()`).
+     */
+    private function recordingFailure(Throwable $e, string $sessionId, string $partyId): JsonResponse
+    {
+        $upstream = $this->upstream($e);
+
+        if ($upstream !== null && $upstream['status'] === 409) {
+            Log::info('Enregistrement en attente de connexion de la ligne : '.$upstream['detail'], [
+                'session_id' => $sessionId,
+                'party_id' => $partyId,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'retryable' => true,
+                'message' => 'La ligne n’est pas encore connectée : nouvelle tentative en cours…',
+                'state' => $upstream['detail'],
+            ], 409);
+        }
+
+        if ($upstream !== null && $upstream['status'] === 404) {
+            return response()->json([
+                'success' => false,
+                'retryable' => false,
+                'message' => 'Appel terminé : l’enregistrement n’a pas pu démarrer.',
+            ], 404);
+        }
+
+        return $this->failed($e);
     }
 
     /**
@@ -279,6 +363,7 @@ class RingCentralController extends Controller
     {
         $validated = $request->validate([
             'to' => ['required', 'string', 'min:3', 'max:40'],
+            'client_id' => ['required', 'uuid', 'exists:clients,id'],
             'record' => ['sometimes', 'boolean'],
         ]);
 
@@ -287,6 +372,17 @@ class RingCentralController extends Controller
             : (bool) $validated['record'];
 
         $employee = Employee::query()->where('user_id', $request->user()->id)->first();
+
+        $ownsActiveReservation = Reservation::query()
+            ->active()
+            ->where('client_id', $validated['client_id'])
+            ->where('comercial_id', $request->user()->id)
+            ->exists();
+
+        if (! $ownsActiveReservation) {
+            return response()->json(['success' => false, 'message' => 'Client introuvable.'], 404);
+        }
+
         $from = (string) ($employee?->ringcentral_from_number ?? '');
 
         if ($from === '') {
@@ -295,9 +391,21 @@ class RingCentralController extends Controller
             ]);
         }
 
-        return $this->pass(function () use ($validated, $employee, $from, $record) {
+        $client = Client::query()->findOrFail($validated['client_id']);
+        $destination = trim($validated['to']);
+
+        $destinationNormalized = Client::normalizePhone($destination);
+        $clientPhoneNormalized = Client::normalizePhone($client->phone);
+
+        if ($destinationNormalized === null || $destinationNormalized !== $clientPhoneNormalized) {
+            throw ValidationException::withMessages([
+                'to' => 'Le numéro confirmé ne correspond pas au téléphone du client sélectionné.',
+            ]);
+        }
+
+        return $this->pass(function () use ($employee, $from, $record, $client, $destination) {
             $session = RingCentralService::unwrapSession($this->ringCentral->makeCallOut(
-                $validated['to'],
+                $destination,
                 $from,
                 $employee->ringcentral_device_id,
                 null, // extension = celle de la session (la seule acceptée par RingCentral)
@@ -315,16 +423,34 @@ class RingCentralController extends Controller
                 (string) $sessionId,
                 $partyId,
                 $from,
-                $validated['to'],
-                $session
+                $destination,
+                $session,
+                $client->id,
             );
+
+            if ($call !== null) {
+                DB::transaction(function () use ($call, $client, $destination) {
+                    Note::create([
+                        'client_id' => $client->id,
+                        'call_log_id' => $call->id,
+                        'sender_id' => Note::SENDER_SYSTEM,
+                        'type' => Note::TYPE_NOTE,
+                        'description' => sprintf(
+                            'Appel vers %s | %s | ID %s',
+                            $destination,
+                            now()->format('Y-m-d H:i'),
+                            $call->ringcentral_call_id ?? $call->ringcentral_session_id,
+                        ),
+                    ]);
+                });
+            }
 
             return [
                 'session_id' => $sessionId,
                 'party_id' => $partyId,
                 'device_id' => $employee->ringcentral_device_id,
                 'from' => $from,
-                'to' => $validated['to'],
+                'to' => $destination,
                 'record' => $record,
                 // Démarrage immédiat **best-effort** : `false` dès que la
                 // partie n'est pas encore connectée (cas le plus fréquent),
@@ -334,6 +460,179 @@ class RingCentralController extends Controller
                 'raw' => $session,
             ];
         });
+    }
+
+    /** Détails synchronisés d'un appel appartenant à l'employé connecté. */
+    public function clientCallDetails(Request $request, string $callLogId): JsonResponse
+    {
+        $call = CallLog::query()
+            ->with(['client:id,name,phone', 'employee', 'recordings'])
+            ->whereHas('employee', fn ($query) => $query->where('user_id', $request->user()->id))
+            ->findOrFail($callLogId);
+
+        $remoteRecord = null;
+        $session = null;
+
+        // Appel ouvert « à chaud » : le journal local n'a (pas encore)
+        // d'enregistrement — on va chercher la ligne RingCentral de cette
+        // **session**, qui porte l'enregistrement automatique (console
+        // admin → Call Recording), la durée et le résultat.
+        if ($call->recordings->isEmpty()) {
+            $remoteRecord = $this->pullRemoteCall($call);
+        }
+
+        try {
+            if ($remoteRecord === null && $call->ringcentral_extension_id) {
+                $records = $this->ringCentral->getCallHistoryByUser($call->ringcentral_extension_id, [
+                    'view' => 'Detailed',
+                    'perPage' => 100,
+                ]);
+                $remoteRecord = collect($records)->first(fn ($record) => (
+                    (string) data_get($record, 'id') === (string) $call->ringcentral_call_id
+                    || (string) data_get($record, 'sessionId') === (string) $call->ringcentral_session_id
+                ));
+            }
+        } catch (Throwable) {
+            Log::warning('Détails RingCentral indisponibles pour un appel.', ['call_log_id' => $call->id]);
+        }
+
+        try {
+            if ($call->ringcentral_session_id) {
+                $session = RingCentralService::unwrapSession(
+                    $this->ringCentral->getCallSession($call->ringcentral_session_id)
+                );
+            }
+        } catch (Throwable) {
+            // Les sessions terminées peuvent ne plus être disponibles ; le call log local reste la source de repli.
+        }
+
+        $events = data_get($remoteRecord, 'events', data_get($call->raw, 'events', []));
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $call->id,
+                'ringcentral_call_id' => $call->ringcentral_call_id,
+                'session_id' => $call->ringcentral_session_id,
+                'client' => $call->client,
+                'phone_number' => $call->to_number,
+                'started_at' => data_get($remoteRecord, 'startTime', $call->started_at?->toIso8601String()),
+                'ended_at' => data_get($remoteRecord, 'endTime', $call->ended_at?->toIso8601String()),
+                'status' => data_get($remoteRecord, 'result', data_get($session, 'status.code', $call->result)),
+                'duration' => data_get($remoteRecord, 'duration', $call->duration),
+                'events' => is_array($events) ? array_values($events) : [],
+                'recordings' => $call->recordings->map(fn ($recording) => [
+                    'id' => $recording->ringcentral_recording_id,
+                    'type' => $recording->type,
+                    'duration' => $recording->duration,
+                ])->values(),
+            ],
+        ]);
+    }
+
+    /**
+     * Rapatrie la ligne RingCentral d'un appel sortant « à chaud » (durée,
+     * résultat et surtout l'**enregistrement automatique**) dans le journal
+     * local.
+     *
+     * Cette ligne n'a ni id de call log ni enregistrement : on la retrouve
+     * chez RingCentral par le **numéro appelé + l'heure** (le `sessionId`
+     * téléphonie `s-…` n'existe pas dans le call log), on lui attribue son
+     * id — pour que l'upsert de la synchro complète *cette* ligne au lieu
+     * d'en créer une seconde sans client ni note — puis on range l'audio
+     * dans `call_recordings`.
+     *
+     * Jamais bloquant : l'ouverture de la modale survit à une panne
+     * RingCentral (le call log local reste le repli).
+     */
+    private function pullRemoteCall(CallLog $call): ?array
+    {
+        if ($call->started_at === null || ($call->to_number ?? '') === '') {
+            return null;
+        }
+
+        try {
+            $remote = $this->ringCentral->findCallLogByTarget($call->to_number, $call->started_at);
+        } catch (Throwable $e) {
+            Log::warning('Call log RingCentral introuvable pour cet appel : '.$e->getMessage(), [
+                'call_log_id' => $call->id,
+            ]);
+
+            return null;
+        }
+
+        if ($remote === null || $call->employee === null) {
+            return is_array($remote) ? $remote : null;
+        }
+
+        $callId = (string) ($remote['id'] ?? '');
+
+        // L'upsert rapproche par `ringcentral_call_id` : on l'attribue à
+        // **cette** ligne. Si une synchro a déjà créé le doublon, on se
+        // contente de ranger l'audio sur celle-ci.
+        $claimed = false;
+
+        if ($callId !== '') {
+            $taken = CallLog::query()
+                ->where('ringcentral_call_id', $callId)
+                ->where('id', '!=', $call->id)
+                ->exists();
+
+            if (! $taken) {
+                $call->ringcentral_call_id = $callId;
+                $call->save();
+                $claimed = true;
+            }
+        }
+
+        $extensionId = (string) ($call->ringcentral_extension_id ?: $call->employee->ringcentral_extension_id ?: '');
+        $telephonySession = (string) ($call->ringcentral_session_id ?? '');
+
+        if ($claimed && $extensionId !== '') {
+            // Complète la ligne (durée, résultat, brut) **et** range les
+            // enregistrements en une passe.
+            $this->ringCentralSync->upsertCall($remote, $call->employee, $extensionId);
+            $call->refresh();
+
+            // L'upsert a remplacé le `sessionId` (numérique dans le call
+            // log) : on rétablit la session téléphonie (`s-…`), seule
+            // exploitable par `/telephony/sessions/{id}` (détails) et par
+            // le démarrage d'enregistrement.
+            if (str_starts_with($telephonySession, 's-') && $call->ringcentral_session_id !== $telephonySession) {
+                $call->ringcentral_session_id = $telephonySession;
+                $call->save();
+            }
+        } else {
+            // Repli : on range au moins l'enregistrement automatique.
+            $this->ringCentralSync->attachRecording($call, $remote);
+            $call->load('recordings');
+        }
+
+        return $remote;
+    }
+
+    /** Audio proxy scoped to a call owned by the authenticated employee. */
+    public function clientCallRecordingContent(Request $request, string $callLogId, string $recordingId): Response|JsonResponse
+    {
+        $call = CallLog::query()
+            ->whereHas('employee', fn ($query) => $query->where('user_id', $request->user()->id))
+            ->whereKey($callLogId)
+            ->whereHas('recordings', fn ($query) => $query->where('ringcentral_recording_id', $recordingId))
+            ->firstOrFail();
+        $recording = $call->recordings()->where('ringcentral_recording_id', $recordingId)->firstOrFail();
+
+        try {
+            $content = $this->ringCentral->getRecordingContent($recording->ringcentral_recording_id);
+        } catch (Throwable) {
+            return response()->json(['success' => false, 'message' => 'Enregistrement indisponible.'], 502);
+        }
+
+        return response($content['body'], 200, [
+            'Content-Type' => $content['content_type'],
+            'Content-Length' => (string) strlen($content['body']),
+            'Cache-Control' => 'private, max-age=3600',
+            'Content-Disposition' => 'inline; filename="recording-'.$recordingId.'.mp3"',
+        ]);
     }
 
     /**

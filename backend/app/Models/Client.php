@@ -63,6 +63,19 @@ class Client extends Model
     public const STATUS_CONFIRMED = 'CONFIRMED';
 
     /**
+     * Issue « Double » : le prospect reste **tenu** par l'employé qui a
+     * enregistré l'issue — mêmes règles que `RESERVED` (réservation active,
+     * visible dans la Grande liste **que par son titulaire**).
+     */
+    public const STATUS_DOUBLE = 'DOUBLE';
+
+    /**
+     * Issue « Info » : même régime que `DOUBLE` / `RESERVED` — le prospect
+     * reste réservé par l'employé, hors du pool partagé.
+     */
+    public const STATUS_INFO = 'INFO';
+
+    /**
      * DÉRIVÉ — affichage et filtre uniquement, **jamais stocké** (même
      * régime que `IN_PROGRESS`) : le client n'a **aucun numéro** de
      * téléphone (`phone` NULL ou vide). Ce n'est pas un état du cycle de
@@ -78,7 +91,34 @@ class Client extends Model
         self::STATUS_UNAVAILABLE,
         self::STATUS_BLACKLISTED,
         self::STATUS_CONFIRMED,
+        self::STATUS_DOUBLE,
+        self::STATUS_INFO,
     ];
+
+    /**
+     * Statuts pour lesquels le prospect est **tenu** par un employé : le
+     * régime « Réservé », auquel `DOUBLE` et `INFO` se conforment
+     * (réservation active, numéro visible pour le titulaire, bouton
+     * « Suite appel » actif).
+     */
+    public const HELD_STATUSES = [
+        self::STATUS_RESERVED,
+        self::STATUS_CONFIRMED,
+        self::STATUS_DOUBLE,
+        self::STATUS_INFO,
+    ];
+
+    // ------------------------------------------------------------------
+    // Source du prospect (origine — répertoire `sources`)
+    // ------------------------------------------------------------------
+
+    /**
+     * Source par défaut : tout prospect créé sans source explicite
+     * (colonnes `NOT NULL DEFAULT 'Affaire'`, import n8n sans clé
+     * « Source ») porte « Affaire ». Même répertoire `sources` que
+     * `enterprises.source` — sans rapport avec RingCentral.
+     */
+    public const DEFAULT_SOURCE = 'Affaire';
 
     protected $fillable = [
         'name',
@@ -116,6 +156,9 @@ class Client extends Model
         'licence_start_date',
         'licence_end_date',
         'representative_name',
+        // Origine du prospect (répertoire `sources`) — valeur texte, pas de
+        // clé étrangère : `Client::DEFAULT_SOURCE` s'applique à la création.
+        'source',
     ];
 
     protected function casts(): array

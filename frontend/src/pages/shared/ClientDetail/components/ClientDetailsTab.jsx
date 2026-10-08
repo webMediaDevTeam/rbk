@@ -109,12 +109,17 @@ export default function ClientDetailsTab({ client }) {
       </div>
 
       <DetailSection title="Identification">
-        {/* E-mail et téléphone remontés en badges « Contact » ci-dessus. */}
-       
+        {/* E-mail et téléphone remontés aussi en badges « Contact » en tête
+            de fiche : la ligne « Courriel » les rappelle dans le panneau
+            d'informations principal. */}
+        <DetailRow label="Courriel" value={client.email} />
         <DetailRow label="Municipalité" value={client.municipality} />
          <DetailRow label="Région administrative" value={client.administrative_region} />
           <DetailRow label="NEQ" value={client.neq} />
         <DetailRow label="Statut" value={client.licence_status} />
+        {/* Origine du prospect — renseignée par le payload n8n (défaut
+            « Affaire ») : affichage seul, pas de saisie en UI. */}
+        <DetailRow label="Source" value={client.source} />
       </DetailSection>
 
       <DetailSection title="Licence">

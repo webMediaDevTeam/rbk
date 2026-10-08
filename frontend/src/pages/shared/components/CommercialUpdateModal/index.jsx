@@ -3,13 +3,15 @@ import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
 import Select from '@/components/ui/select.jsx'
 import Switch from '@/components/ui/switch.jsx'
+import UsernameField from '@/pages/shared/components/UsernameField.jsx'
 import { deviceLabel } from '@/utils/ringcentral.js'
 import { useCommercialUpdateModal } from './useCommercialUpdateModal.js'
 
 export default function CommercialUpdateModal({ open, onClose, user, queryKey }) {
   const {
     form, error, isPending, enterprises, set, handleSubmit,
-    devices, devicesLoading, devicesUnavailable, onDeviceChange,
+    usernameCheck, onEmailChange, onUsernameChange,
+    devices, devicesLoading, devicesUnavailable, onDeviceChange, onEnterpriseChange,
   } = useCommercialUpdateModal({ open, onClose, user, queryKey })
 
   if (!open || !user) return null
@@ -27,19 +29,13 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-bold mb-1">Adresse e-mail *</label>
-            <Input type="email" required value={form.email} onChange={(e) => set('email', e.target.value)} />
+            <Input type="email" required value={form.email} onChange={(e) => onEmailChange(e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-1">Nouveau mot de passe (optionnel)</label>
-              <Input type="password" minLength={8} autoComplete="new-password" value={form.mot_de_passe} onChange={(e) => set('mot_de_passe', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-1">Confirmer le mot de passe</label>
-              <Input type="password" minLength={8} autoComplete="new-password" value={form.mot_de_passe_confirmation} onChange={(e) => set('mot_de_passe_confirmation', e.target.value)} />
-            </div>
-          </div>
+          {/* Login (nom d'utilisateur) : déduit de l'e-mail, éditable,
+              unicité vérifiée en direct pendant la saisie
+              (« déjà pris » = envoi bloqué). */}
+          <UsernameField value={form.username} onChange={onUsernameChange} check={usernameCheck} />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -52,20 +48,14 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-1">Téléphone personnel (optionnel)</label>
-              <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-1">Entreprise *</label>
-              <Select required value={form.enterprise_id} onChange={(e) => set('enterprise_id', e.target.value)}>
-                <option value="">Sélectionner une entreprise</option>
-                {enterprises.map((ent) => (
-                  <option key={ent.id} value={ent.id}>{ent.name ?? ent.profil?.nom ?? ent.email}</option>
-                ))}
-              </Select>
-            </div>
+          <div>
+            <label className="block text-sm font-bold mb-1">Entreprise *</label>
+            <Select required value={form.enterprise_id} onChange={(e) => onEnterpriseChange(e.target.value)}>
+              <option value="">Sélectionner une entreprise</option>
+              {enterprises.map((ent) => (
+                <option key={ent.id} value={ent.id}>{ent.name ?? ent.profil?.nom ?? ent.email}</option>
+              ))}
+            </Select>
           </div>
 
           <div>
@@ -78,9 +68,11 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
               <option value="">
                 {devicesLoading
                   ? 'Chargement des appareils…'
-                  : devices.length
-                    ? '— Aucun appareil / numéro —'
-                    : '— aucun appareil disponible —'}
+                  : !form.enterprise_id
+                    ? '— Choisir une entreprise d\'abord —'
+                    : devices.length
+                      ? '— Aucun appareil / numéro —'
+                      : '— aucun appareil disponible —'}
               </option>
               {devices.map((d) => (
                 <option key={d.id} value={String(d.id)}>{deviceLabel(d)}</option>
@@ -88,22 +80,20 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
             </Select>
             <p className="mt-1 text-xs text-muted-foreground">
               Numéro affiché dans la liste (pas le nom de l'appareil) — enregistré avec l'identifiant de l'appareil.
+              Le poste RingCentral est déduit de l'appareil choisi.
+              Les appareils viennent du compte RingCentral de l'entreprise sélectionnée.
               {devicesUnavailable && ' Appareils indisponibles pour le moment.'}
             </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-bold mb-1">Informations supplémentaires</label>
-            <Input type="text" value={form.additional_info} onChange={(e) => set('additional_info', e.target.value)} />
-          </div>
-
-          {/* Privilège de libération — `users.has_permission` : ouvre la
-              liste noire et la libération de liste au COMERCIAL (403 sans,
-              middleware CheckPermission, docs/RULES.md §7.1). Édition :
-              état initial = `user.has_permission`. */}
+          {/* Privilège commercial (ex-« Privilège de libération ») —
+              `users.has_permission` : ouvre la liste noire et la libération
+              de liste au COMERCIAL (403 sans, middleware CheckPermission,
+              docs/RULES.md §7.1). Édition : état initial =
+              `user.has_permission`. */}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-3">
             <div>
-              <p className="text-sm font-bold">Privilège de libération</p>
+              <p className="text-sm font-bold">Privilège commercial</p>
               <p className="text-xs text-muted-foreground">
                 Autorise ce commercial à mettre en liste noire un client et à libérer ses réservations.
               </p>
@@ -111,8 +101,22 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
             <Switch
               checked={form.has_permission}
               onCheckedChange={(checked) => set('has_permission', checked)}
-              aria-label="Privilège de libération"
+              aria-label="Privilège commercial"
             />
+          </div>
+
+          {/* Mot de passe + confirmation : les deux derniers champs du
+              formulaire, affichés en clair. Laisser le mot de passe vide →
+              inchangé. Le « login » lui-même est le champ Login ci-dessus. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-1">Nouveau mot de passe (optionnel)</label>
+              <Input type="text" minLength={8} autoComplete="new-password" value={form.mot_de_passe} onChange={(e) => set('mot_de_passe', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-1">Confirmer le mot de passe</label>
+              <Input type="text" minLength={8} autoComplete="new-password" value={form.mot_de_passe_confirmation} onChange={(e) => set('mot_de_passe_confirmation', e.target.value)} />
+            </div>
           </div>
 
           {error && (
@@ -124,7 +128,7 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Annuler</Button>
-            <Button type="submit" disabled={isPending}>
+            <Button type="submit" disabled={isPending || usernameCheck.taken || !usernameCheck.valid || usernameCheck.checking}>
               {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Enregistrer
             </Button>

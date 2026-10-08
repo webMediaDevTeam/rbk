@@ -7,7 +7,7 @@
 ## 1. Rôles & permissions
 
 * **COMERCIAL** — réserve des lots de prospects, enregistre les issues d'appel
-  (YES / NO / BV / CALL_BACK), consulte ses listes et ses rappels.
+  (YES / NO / BV / CALL_BACK / DOUBLE / INFO), consulte ses listes et ses rappels.
 * **ENTREPRISE** — CRUD complet sur les employés, consultation des historiques
   de clients, statistiques de performance des employés.
 * **ADMIN** — toutes les permissions d'ENTREPRISE, plus : créer des entreprises,
@@ -66,8 +66,17 @@ que si le connecté a le droit de le voir.
 | `AVAILABLE` | Disponible à la réservation (règle `scopeAvailable`) |
 | `RESERVED` | Réservé par un employé (appel en cours : BV / À rappeler / en attente) |
 | `CONFIRMED` | Confirmé (issue `YES`) — définitif jusqu'à clôture admin |
+| `DOUBLE` | Issue **Double** : le prospect reste **tenu** par l'employé (régime `RESERVED`) |
+| `INFO` | Issue **Info** : même régime que `DOUBLE` |
 | `UNAVAILABLE` | Indisponible temporairement pour **tous** les employés ; `returned_at` porte la date de retour |
 | `BLACKLISTED` | Liste noire (`is_blacklisted = true`) |
+
+`Client::HELD_STATUSES` = `RESERVED / CONFIRMED / DOUBLE / INFO` : les
+statuts pour lesquels un employé **tient** encore le prospect (numéro visible
+pour le titulaire, réservation « active », bouton « Suite appel » actif).
+`DOUBLE` / `INFO` n'apparaissent dans la Grande liste commerciale
+(`GET clients`) **que pour leur titulaire** et n'entrent **jamais** dans un
+nouveau lot (`POST clients/reserver`).
 
 **Statut dérivé « Sans téléphone »** (`SANS_TELEPHONE`, **jamais stocké**,
 comme `IN_PROGRESS`) : le client n'a **aucun numéro** (`phone` NULL ou vide).
@@ -81,7 +90,7 @@ exige `scopeWithPhone()`), et l'admin peut lui ajouter un numéro
 `scopeAvailable()` : `status = AVAILABLE` **et** (`returned_at` null ou passé).
 
 **Invariant badge ⇄ lignes** : un client **ne peut pas** être `AVAILABLE` avec
-un `returned_at` **futur**. Le badge « Disponible » (`by_status`, statut brut,
+un `returned_at` **futur**. Le badge « Libre » (`by_status`, statut brut,
 `ProspectOverviewController`) compterait alors un prospect que la page n'affiche
 **pas** (ex. badge 4 / liste 1). L'état incohérent (reliquat de test) se
 normalise en **`UNAVAILABLE`**, compte à rebours conservé :
@@ -119,8 +128,8 @@ pas une requête par ligne) :
 | `PENDING` ou aucune | `RESERVED` | **Réservé** |
 
 Tous les autres statuts sont renvoyés tels quels (`AVAILABLE`, `CONFIRMED`,
-`UNAVAILABLE`, `BLACKLISTED`…). Le composant écrase toujours par
-« Liste noire » si `is_blacklisted`.
+`UNAVAILABLE`, `BLACKLISTED`, `DOUBLE`, `INFO`…). Le composant écrase toujours
+par « Liste noire » si `is_blacklisted`.
 
 `IN_PROGRESS` n'est **jamais stocké** : c'est la valeur d'affichage d'un
 client `RESERVED` dont la dernière réservation est en cours (BV / À rappeler).
@@ -158,8 +167,9 @@ du badge** et **filtre** proviennent donc d'une source unique.
 | Condition | Badge affiché |
 |---|---|
 | `is_blacklisted` (ou `status = BLACKLISTED`) | **BlackList** (`ClientStatus`) |
-| `status = AVAILABLE` (relisté) | **Disponible** (+ « Retour dans … ») |
-| sinon, réservation courante `YES` / `NO` / `BV_VOICEMAIL` / `CALL_BACK` | **Oui** / **Non** / **BV** / **À rappeler** (`ReservationStatusBadge`) — « Retour dans … » sous le badge si `returned_at` |
+| `status = AVAILABLE` (relisté) | **Libre** (+ « Retour dans … ») |
+| `status = DOUBLE` / `INFO` (sans réservation courante) | **Double** / **Info** (`ClientStatus`) |
+| sinon, réservation courante `YES` / `NO` / `BV_VOICEMAIL` / `CALL_BACK` / `DOUBLE` / `INFO` | **Oui** / **Non** / **BV** / **À rapp..** / **Double** / **Info** (`ReservationStatusBadge`) — « Retour dans … » sous le badge si `returned_at` |
 | sinon, réservation courante `PENDING` | **`-`** (aucune issue d'appel) |
 | sans réservation courante | repli sur `ClientStatus` (`display_status`) |
 
@@ -168,18 +178,21 @@ statut client n'apparaît que s'il est blacklisté ou (re)disponible.
 
 ### Réservations (`reservations.status`)
 
-`PENDING`, `YES`, `NO`, `BV_VOICEMAIL`, `CALL_BACK` (+ `REALIZED`, valeur
-réservée du modèle **jamais émise** par le workflow actuel).
+`PENDING`, `YES`, `NO`, `BV_VOICEMAIL`, `CALL_BACK`, `DOUBLE`, `INFO`
+(+ `REALIZED`, valeur réservée du modèle **jamais émise** par le workflow
+actuel).
 
-* **CALL_BACK s'affiche « À rappeler »** dans l'UI ; `BV_VOICEMAIL` s'affiche
-  « BV ».
+* **CALL_BACK s'affiche « À rapp.. »** dans l'UI ; `BV_VOICEMAIL` s'affiche
+  « BV » ; `DOUBLE` / `INFO` s'affichent « Double » / « Info ».
 * Aucune expiration : la colonne `expires_at` a été supprimée. Les réservations
-  **actives** sont `PENDING / YES / BV_VOICEMAIL / CALL_BACK` **et** le client
-  est `RESERVED` ou `CONFIRMED` (`Reservation::scopeActive()`).
+  **actives** sont `PENDING / YES / BV_VOICEMAIL / CALL_BACK / DOUBLE / INFO`
+  **et** le client est tenu (`Client::HELD_STATUSES`, `Reservation::scopeActive()`).
 * Il n'existe **aucune libération manuelle** : plus d'endpoint « release ».
   `CONFIRMED` est définitif ; seul le déblocage admin supprime les réservations.
+  La « libération de liste » ne touche que les réservations **`PENDING`** :
+  `DOUBLE` / `INFO` sont « déjà traitées » et sont **conservées**.
 * « Traités » = `Reservation::PROCESSED_STATUSES` = `YES / NO / BV_VOICEMAIL /
-  CALL_BACK` ; « restant » = `PENDING`.
+  CALL_BACK / DOUBLE / INFO` ; « restant » = `PENDING`.
 
 ### Événements du journal (`notes.type`)
 
@@ -190,7 +203,7 @@ workflow (`Note::CALL_TYPES` = événements d'appel, les autres sont des
 | `notes.type` | Sens | Émetteur |
 |---|---|---|
 | `RESERVED` | client réservé par un employé | l'employé |
-| `YES` / `NO` / `BV` / `CALL_BACK` | issue d'appel | l'employé |
+| `YES` / `NO` / `BV` / `CALL_BACK` / `DOUBLE` / `INFO` | issue d'appel | l'employé |
 | `BLACKLISTED` | passage en liste noire | l'employé |
 | `RETURNED_TO_AVAILABLE` | retour en `AVAILABLE` (réactivation cron ou déblocage admin) | `SYSTEM` ou l'admin |
 | `NOTE` | commentaire libre (créable/supprimable via l'API) | l'auteur |
@@ -225,6 +238,12 @@ Constantes : `RECALL_DAYS = 3`, `NON_BLOCK_MONTHS = 3`, `TEMP_BLOCK_DAYS = 21`,
   minute/mois). Le délai affiché (`recall_after` / `recall_unit`) est
   recalculé dans l'unité la plus lisible (`MINUTE` / `HEURE` / `JOUR`). Sans
   saisie (appel direct du service), repli sur le rappel automatique à 3 jours.
+* **DOUBLE** / **INFO** → client `DOUBLE` / `INFO`, réservation `DOUBLE` /
+  `INFO`, `returned_at` vidé et **rappel annulé** : le prospect reste **tenu**
+  par l'employé (régime `RESERVED`), sans compteur de tentative ni nouveau
+  rappel. La réservation est **obligatoire** (même garde que `YES`), le reste
+  suit le régime « tenu » : visible dans la Grande liste **que par le
+  titulaire**, jamais réservable une seconde fois.
 * **BLACKLISTED** → client `BLACKLISTED`, `is_blacklisted = true`,
   `returned_at = null`. La liste noire **ne supprime pas** les réservations
   (elles deviennent inactives via le statut client).
@@ -419,7 +438,7 @@ motif.
   sont pas comptées (`Note::noteWordsAreLimited()`).
 * `Note.reservation_id` (nullable, `2026_09_29_000004`) : rattache une note à
   la réservation qui l'a produite — l'événement `RESERVED` (cas 1) et les
-  issues d'appel (`YES` / `NO` / `BV` / `CALL_BACK`, cas 2 et suivants).
+  issues d'appel (`YES` / `NO` / `BV` / `CALL_BACK` / `DOUBLE` / `INFO`, cas 2 et suivants).
 * Notes optionnelles sur **toutes** les issues d'appel (`null` si laissé vide).
 * **Immuabilité** : seuls les commentaires (`type = NOTE`) sont modifiables /
   supprimables (`DELETE /notes/{id}` rejette les événements du workflow).
@@ -631,8 +650,8 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   rechargée (`admin-clients-history`). Composants : props `rowClickable` /
   `onToggleBlacklist` / `blacklistId` de `ProspectTable` / `ProspectCard`
   (la page commerciale `/prospects` garde ses lignes cliquables).
-* Badges statut client : Disponible / Réservé / Confirmé / Indisponible / Liste noire.
-* Badge réservation : En attente / Confirmé / Refusé / BV / **À rappeler**.
+* Badges statut client : Libre / Réservé / Confirmé / Double / Info / Indisponible / Liste noire.
+* Badge réservation : En attente / Confirmé / Refusé / BV / **À rapp..** / **Double** / **Info**.
 * **Listes (prospects, historique, listes, employés…)** : colonnes `N°`
   (numéro d'ordre sur la page), `Entreprise`, `Répondants`, `N° de licence`,
   `NEQ`, `Catégorie`, `Statut` dans le tableau **et** dans les cartes mobiles.
@@ -640,7 +659,8 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   `pages/shared/components/ProspectStatus` — **une seule valeur par ligne**,
   règle détaillée en §2 (« Réservation courante ») : statut **client** si le
   prospect est blacklisté ou (re)disponible, sinon statut de la
-  **réservation courante** (`Oui` / `Non` / `Boîte vocale` / `À rappeler`,
+  **réservation courante** (`Oui` / `Non` / `Boîte vocale` / `À rapp..` /
+  `Double` / `Info`,
   et **`-`** tant que la réservation est `PENDING`), repli sur `ClientStatus`
   sans réservation. Le compte à rebours « Retour dans … » suit le badge quand
   `returned_at` est renseigné (NO : 3 mois, 2 BV/CALL_BACK : 21 j), y compris
@@ -682,15 +702,18 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   employé, où les compteurs sont produits par `GET commercials/{id}`
   (`historique.badges`, même forme que `clients/overview`
   `{prospects, by_display_status}`), sur le périmètre de ses seuls appels. Elle contient
-  **exactement 8 badges**, dans **cet ordre, identique sur ces pages** :
+  **exactement 10 badges**, dans **cet ordre, identique sur ces pages** :
   1. *Tous* = `prospects.system` (total des clients) ;
-  2. *Disponible* (statut client), 3. *Oui*, 4. *Non*, 5. *BV*,
-     6. *À rappeler* (statut de la réservation courante),
-     7. *Blacklist* (drapeau `is_blacklisted`),
-     8. *Sans téléphone* (`phone` vide, seau **dérivé**
+  2. *Libre* (statut client), 3. *Oui*, 4. *Non*, 5. *BV*,
+     6. *À rapp..*, 7. *Double*, 8. *Info* (statut de la réservation
+     courante),
+     9. *Blacklist* (drapeau `is_blacklisted`),
+     10. *Sans tel..* (`phone` vide, seau **dérivé**
      `Client::STATUS_SANS_TELEPHONE`) = compteurs `by_display_status`,
      **toujours affichés, même avec un compte à 0**.
-  Le survol d'un badge rappelle sa définition (`title`).
+  Libellés **courts** (`Libre` / `À rapp..` / `Sans tel..`) : ils tiennent
+  dans les pastilles et dans la colonne « Statut ». Le survol d'un badge
+  rappelle sa définition (`title`).
 
   ⚠️ *Sans téléphone* **recoupe** les autres seaux client (un prospect sans
   numéro est aussi `AVAILABLE` ou blacklisté) : ses compteurs ne sont donc
@@ -705,8 +728,8 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   * **sélection unique** — un clic rend le badge cliqué **seul** actif ;
     un second clic sur le même badge repasse à *Tous*, et *Tous* retire
     l'unique filtre actif (`aria-pressed`) ;
-  * **deux paramètres serveur** : `status` (badges *Disponible* /
-    *Blacklist* / *Sans téléphone*) et `reservation_status` (les 4 autres),
+  * **deux paramètres serveur** : `status` (badges *Libre* /
+    *Blacklist* / *Sans tel..*) et `reservation_status` (les 6 autres),
     sur
     `GET commercials/clients` (grande liste admin) **et** sur
     `GET commercials/{id}` (détail d'un employé). Les
@@ -719,14 +742,14 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
     lié à une réservation : le badge *Tous* (`prospects.system`) et les
     lignes rendues couvrent donc le même ensemble ;
   * au **détail d'un employé** (onglet *Historique*), la base est l'historique
-    de **ses** appels et les 8 compteurs sont renvoyés par
+    de **ses** appels et les 10 compteurs sont renvoyés par
     `GET commercials/{id}` (`historique.badges`) — la requête
     `clients/overview` n'est **pas** appelée sur cette page ;
   * **couleur pleine à la sélection, sans bordure** : chaque badge
-    garde **sa** couleur de fond — *Tous* `blue-600`, *Disponible*
+    garde **sa** couleur de fond — *Tous* `blue-600`, *Libre*
     `emerald-700`, *Oui* `teal-600`, *Non* `destructive`, *BV* `amber-600`,
-    *À rappeler* `indigo-600`, *Blacklist* `--status-badge` (noir en clair /
-    gris en sombre), *Sans téléphone* `rose-600` — texte et
+    *À rapp..* `indigo-600`, *Blacklist* `--status-badge` (noir en clair /
+    gris en sombre), *Sans tel..* `rose-600` — texte et
     icône passés en contraste (`activeFg`) ; à l'inactif, pastille neutre
     `bg-card` avec pastille d'icône teintée ;
   * *Tous* repasse à **aucun** filtre de statut en un clic (état actif =
@@ -737,8 +760,11 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
     de lignes renvoyées après clic ;
   * sur **Grande liste (commercial)**, la barre est **supprimée** (à la
     demande) : cette liste ne contient que des prospects **disponibles et
-    munis d'un numéro** (les clients « Sans téléphone » en sont exclus par
-    `scopeProspectList`), elle n'accepte pas le paramètre `status`, l'écran
+    munis d'un numéro** (les clients « Sans tel.. » en sont exclus par
+    `scopeProspectList`) — **et**, depuis les issues « Double » / « Info »,
+    les prospects **tenus** par l'employé connecté (`DOUBLE` / `INFO`, rendus
+    qu'à leur titulaire par `ClientSearchService::applyFilters($query, $input,
+    $heldByUserId)`). Elle n'accepte pas le paramètre `status`, l'écran
     n'affiche donc plus aucun
     badge de statut — la colonne « Statut » du tableau reste en place.
   * sur **À rappeler** et **BV**, la barre est en **lecture seule**
@@ -752,9 +778,11 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   produits par `clients/overview`, inutilisés côté UI) : *Prospects*
   (dispo / total), *Réservés*, *Réservés traités*, *Réservés non traités*,
   *Succès / traités*, *En cours / traités*. Rappel des définitions : **traité**
-  = au moins une issue d'appel (note `YES` / `NO` / `BV` / `CALL_BACK`) ;
+  = au moins une issue d'appel (note `YES` / `NO` / `BV` / `CALL_BACK` /
+  `DOUBLE` / `INFO`) ;
   **succès** = traité et `CONFIRMED` (issue « YES ») ; **en cours** = traité
-  mais encore `RESERVED`.
+  mais encore **tenu** (`Client::HELD_STATUSES` : `RESERVED` / `DOUBLE` /
+  `INFO`) ; **réservés** = même ensemble tenu.
 * **Mes listes** — mêmes badges compacts (composant partagé
   `pages/shared/components/KpiPill`, celui de l'overview) :
   * en-tête de `/mes-listes` → badge *Listes* = `pagination.total` (total
@@ -806,7 +834,7 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
   réussite, échecs), onglets **Détails entreprise / Employés / Historique**.
   L'onglet *Employés* liste les `COMERCIAL` de l'entreprise (listes,
   réservations, en attente, appels, OUI, taux de réussite) et ouvre
-  `/comercialDetail/{id}` ; l'onglet *Historique* réutilise les 8 badges de
+  `/comercialDetail/{id}` ; l'onglet *Historique* réutilise les 10 badges de
   statut (sélection unique) + `HistoryList` sur le périmètre **commun** de
   l'entreprise (`GET entreprises/{id}/stats`, §10). Entrée depuis la liste
   des entreprises (nom cliquable + « Voir »).
@@ -860,6 +888,7 @@ Sur **Grande liste (commercial)** et **Grande liste (admin)** :
 | GET | `categories` | tous rôles — libellés distincts de `clients.categories` |
 | GET | `municipalities` | tous rôles — municipalités distinctes |
 | GET | `administrative-regions` | tous rôles — régions administratives distinctes |
+| GET | `sources` — table `sources` **lecture seule, aucun CRUD** (`POST`/`PUT`/`DELETE` absents), sélecteur « Source » des modales entreprise (`SourceSeeder`) | tous rôles |
 
 Les quatre filtres ci-dessus répondent `{success, data: [...]}` : valeurs
 **sans doublons** (même à la casse près), triées, valeurs vides exclues — lues
@@ -876,14 +905,15 @@ issue d'appel.
   `status`) : c'est **exactement la définition du filtre `status`** de
   `GET commercials/clients` (qui accepte `status=A,B` ou `status[]`, valeurs
   validées contre `Client::STATUSES`). Conservé pour l'API, **les badges UI
-  n'en dépendent plus**. Les statuts historiques hors `Client::STATUSES`
-  sortent des badges : leur somme peut rester inférieure à
-  `prospects.system` (total affiché par le badge *Tous*).
-* `by_display_status` — les **8 badges de la colonne « Statut »** (§9) :
+  n'en dépendent plus**. `DOUBLE` / `INFO` n'ont pas d'entrée **ici** (ils
+  sont bien dénombrés dans `by_display_status`) ; les valeurs historiques
+  hors `Client::STATUSES` sortent des badges : la somme peut rester
+  inférieure à `prospects.system` (total affiché par le badge *Tous*).
+* `by_display_status` — les **10 badges de la colonne « Statut »** (§9) :
   `AVAILABLE` / `BLACKLISTED` / `SANS_TELEPHONE` (statut client, ce dernier
   étant **dérivé** d'un `phone` vide et en recoupant les autres) + `YES` /
-  `NO` / `BV_VOICEMAIL` / `CALL_BACK` / `PENDING` (réservation courante ;
-  `PENDING` = badge « - »).
+  `NO` / `BV_VOICEMAIL` / `CALL_BACK` / `DOUBLE` / `INFO` / `PENDING`
+  (réservation courante ; `PENDING` = badge « - »).
   Chaque compteur est produit **par le scope qui pilote le filtre**
   (`Client::scopeFilterByStatuses()` /
   `scopeFilterByReservationStatuses()`) → le chiffre affiché vaut le nombre
@@ -977,6 +1007,22 @@ inconnues :
 | `Montant de la caution ($)` | `surety_amount` |
 | `Date de début / délivrance` | `licence_start_date` |
 | `Date de fin / paiement annuel` | `licence_end_date` |
+| `Source` | `source` |
+
+**Source du prospect** (`clients.source`) : origine du prospect, **même
+répertoire `sources` que `enterprises.source`** (§13 — table sans CRUD,
+lecture seule via `GET /api/v1/sources`, **sans rapport avec RingCentral**).
+Colonne `NOT NULL DEFAULT 'Affaire'` (migration `2026_10_08_140000` : les
+lignes existantes sont remplies en « Affaire », `Client::DEFAULT_SOURCE` fait
+foi côté code) :
+
+* le payload peut forcer la valeur avec la clé `Source` (comparée sans casse) ;
+* une valeur **vide ou absente n'efface jamais** celle déjà en place — la
+  création retombe sur « Affaire », la mise à jour conserve la valeur courante
+  (jamais de `NULL`) ;
+* **aucune saisie en UI** : la valeur vient de l'import n8n et s'affiche en
+  lecture seule dans la fiche client (« Source ») ; elle est exposée par les
+  réponses clients (listes commerciale / admin + détail).
 
 **Jamais repris du payload** : `status`, `is_blacklisted`, `returned_at` ni la
 réservation du commercial — état applicatif qu'une resynchronisation ne doit
@@ -1218,7 +1264,22 @@ Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/externa
   - `RINGCENTRAL_CLIENT_SECRET`
   - `RINGCENTRAL_SERVER_URL` (défaut : `https://platform.ringcentral.com`)
   - `RINGCENTRAL_JWT`
+* **Compte par entreprise (optionnel)** : `enterprises.ringcentral_client_id`,
+  `enterprises.ringcentral_client_secret`, `enterprises.ringcentral_token`,
+  saisis dans les modales « Créer / Modifier une entreprise » (ADMIN +
+  SUPER_ADMIN). Remplis → ce compte est utilisé ; vide **champ par champ** →
+  repli sur `.env` (`Enterprise::getRingCentralCredentials()`). Le secret et
+  le jeton ne sont jamais renvoyés par l'API : seulement
+  `ringcentral_client_secret_set` / `ringcentral_token_set` /
+  `ringcentral_configured`.
+* **Source de l'entreprise** : **sans rapport avec RingCentral** — colonne
+  `enterprises.source` remplie par le sélecteur « Source » du formulaire,
+  dont les options viennent de la table `sources` (`GET /api/v1/sources`,
+  répertoire fermé sans CRUD, lignes `SourceSeeder`).
 * **Service** : `App\Services\RingCentralService` (authentification JWT, lecture des extensions et de l'historique d'appels).
+  `configure($credentials)` reconfigure le service pour la requête en cours ;
+  le jeton d'accès et les listes sont mis en cache sous une clé dérivée des
+  identifiants (aucun mélange entre comptes).
 * **Endpoints** (`auth:sanctum`) :
   - `GET /api/v1/call-logs/users` : liste des utilisateurs / extensions
   - `GET /api/v1/call-logs/users/{extensionId}` : historique d'appels d'une extension
@@ -1226,7 +1287,11 @@ Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/externa
 * **Contrôle d'appel** (`RingCentralController`, **SUPER_ADMIN** — phase de
   test, **aucune écriture en base**) :
   - `GET /api/v1/call-logs/account` : compte / entreprise (`id` = `account_id`)
-  - `GET /api/v1/call-logs/devices` : appareils (source d'un appel sortant)
+  - `GET /api/v1/call-logs/devices` : appareils (source d'un appel
+    sortant) ; paramètre optionnel `enterprise_id` → appareils **du compte
+    RingCentral de cette entreprise** (les modales employé l'envoient dès
+    que l'entreprise est choisie ; entreprise inconnue → 422), sans
+    paramètre → compte `.env`
   - `POST /api/v1/call-logs/call` : `to` + une source (`device_id`, `from`
     ou `user_id`) → `{session_id, party_id, …}` ;
     `user_id` **résout** l'extension RingCentral (correspondance d'e-mail
@@ -1245,7 +1310,10 @@ Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/externa
   dé-doublonnés (pagination + filtres de date), sessions / événements /
   enregistrements.
 * **Gestion des erreurs** : exception SDK / API injoignable → réponse HTTP `502` avec `{success: false, error: "..."}` ; validation → `422`.
-* **Test Interface (Super Admin)** : `/call-logs-test` (visualisation brute des données, appareils, appel sortant, statut / enregistrement / raccroché).
+* **Interface de test (Super Admin)** : **supprimée** — la page
+  `/call-logs-test` (« Test Appels (RingCentral) ») n'existe plus ; les
+  endpoints restent testés par `RingCentralApiTest` / `EmployeeCallLogsTest`
+  et utilisés par les modales employé (appareils) et le workflow d'appel.
 
 
 **Conservés inchangés** (existaient avant l'alignement) :

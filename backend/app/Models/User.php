@@ -18,6 +18,9 @@ class User extends Authenticatable
 
     protected $fillable = [
         'email',
+        // Nom d'utilisateur (identifiant court, unique) : saisi ou déduit
+        // de l'e-mail dans les modales employé, stocké en minuscules.
+        'username',
         'password_hash',
         'first_name',
         'last_name',

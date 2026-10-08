@@ -60,6 +60,10 @@ class ClientImportService
         'Montant de la caution ($)' => 'surety_amount',
         'Date de début / délivrance' => 'licence_start_date',
         'Date de fin / paiement annuel' => 'licence_end_date',
+        // Origine du prospect (répertoire `sources`) — défaut `Affaire`
+        // (`Client::DEFAULT_SOURCE`) quand le payload n'envoie rien ; une
+        // valeur vide n'efface jamais celle déjà en place.
+        'Source' => 'source',
     ];
 
     /**
@@ -159,7 +163,9 @@ class ClientImportService
 
         if ($client === null) {
             Client::create(array_merge(
-                ['categories' => []],
+                // Défauts de création : la source « Affaire » n'est qu'un
+                // repli — le payload peut la remplacer avec « Source ».
+                ['categories' => [], 'source' => Client::DEFAULT_SOURCE],
                 $attributes,
                 // État applicatif : toujours neuf à la création, quel que
                 // soit ce que le payload aurait pu tenter d'envoyer.
@@ -1648,6 +1654,20 @@ class ClientImportService
 
         if (array_key_exists('email', $attributes)) {
             $attributes['email'] = self::cleanEmail($attributes['email']);
+        }
+
+        // Source : libellé du répertoire `sources`, colonne NOT NULL — une
+        // valeur vide / absente **retire la clé** : la création garde alors
+        // `Client::DEFAULT_SOURCE` (« Affaire ») et la mise à jour laisse la
+        // valeur déjà en place (jamais de NULL dans la colonne).
+        if (array_key_exists('source', $attributes)) {
+            $source = self::cleanLabel($attributes['source']);
+
+            if ($source === null || $source === '') {
+                unset($attributes['source']);
+            } else {
+                $attributes['source'] = $source;
+            }
         }
 
         foreach (['respondents', 'authorized_categories'] as $column) {

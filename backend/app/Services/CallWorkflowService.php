@@ -24,6 +24,10 @@ use Illuminate\Support\Facades\DB;
  *  - CALL_BACK   -> injoinable_count++ et rappel planifié par l'employé, mais
  *                   **sans limite** : il peut enchaîner autant de rappels
  *                   qu'il veut (CALL_BACK_ATTEMPTS_LIMIT = null).
+ *  - DOUBLE      -> client DOUBLE, réservation DOUBLE, rappel annulé : le
+ *                   prospect reste **tenu** par l'employé (régime RESERVED).
+ *  - INFO        -> client INFO, réservation INFO, rappel annulé — même
+ *                   régime que DOUBLE.
  *  - BLACKLISTED -> client BLACKLISTED.
  *
  * Chaque issue est journalisée dans `notes` (type = événement, description =
@@ -70,7 +74,7 @@ class CallWorkflowService
      *
      * @param  array{note?: ?string, recall_at?: ?string}  $validated  `recall_at` :
      *                                                                 date/heure du rappel pour CALL_BACK (ignoré pour les autres).
-     * @param  string  $event  un des `Note::TYPE_*` d'appel (YES/NO/BV/CALL_BACK/BLACKLISTED)
+     * @param  string  $event  un des `Note::TYPE_*` d'appel (YES/NO/BV/CALL_BACK/DOUBLE/INFO/BLACKLISTED)
      * @return array{message: string, client_status: string, blacklisted: bool}
      */
     public function apply(Client $client, ?Reservation $reservation, string $event, array $validated, User $actor): array
@@ -80,6 +84,8 @@ class CallWorkflowService
             Note::TYPE_NO,
             Note::TYPE_BV,
             Note::TYPE_CALL_BACK,
+            Note::TYPE_DOUBLE,
+            Note::TYPE_INFO,
             Note::TYPE_BLACKLISTED,
         ];
 
@@ -120,6 +126,22 @@ class CallWorkflowService
                     Reservation::STATUS_CALL_BACK,
                     'injoinable_count',
                     $validated['recall_at'] ?? null
+                ),
+                // Double / Info : le prospect reste tenu par l'employé
+                // (régime RESERVED) — pas de compteur, pas de nouveau rappel.
+                Note::TYPE_DOUBLE => $this->handleHeldOutcome(
+                    $client,
+                    $reservation,
+                    Client::STATUS_DOUBLE,
+                    Reservation::STATUS_DOUBLE,
+                    'Client marqué « Double ». Réservation maintenue.'
+                ),
+                Note::TYPE_INFO => $this->handleHeldOutcome(
+                    $client,
+                    $reservation,
+                    Client::STATUS_INFO,
+                    Reservation::STATUS_INFO,
+                    'Client marqué « Info ». Réservation maintenue.'
                 ),
                 Note::TYPE_BLACKLISTED => $this->handleBlacklist($client),
                 default => throw new \InvalidArgumentException("Evénement non géré : {$event}"),
@@ -266,6 +288,37 @@ class CallWorkflowService
             $client,
             false
         );
+    }
+
+    /**
+     * Issues « Double » / « Info » : le prospect reste **tenu** par l'employé,
+     * exactement comme un `RESERVED` — réservation active conservée (elle
+     * passe au statut DOUBLE / INFO), aucun compteur de tentatives, et le
+     * rappel en cours (BV / à rappeler) est annulé : l'issue enregistrée le
+     * remplace.
+     *
+     * @param  string  $clientStatus  Client::STATUS_DOUBLE|STATUS_INFO
+     * @param  string  $reservationStatus  Reservation::STATUS_DOUBLE|STATUS_INFO
+     * @return array{message: string, client_status: string, blacklisted: bool}
+     */
+    private function handleHeldOutcome(
+        Client $client,
+        ?Reservation $reservation,
+        string $clientStatus,
+        string $reservationStatus,
+        string $message
+    ): array {
+        $client->update([
+            'status' => $clientStatus,
+            'returned_at' => null,
+        ]);
+
+        if ($reservation) {
+            $reservation->update(['status' => $reservationStatus]);
+            $this->cancelRappel($reservation);
+        }
+
+        return $this->result($message, $client, false);
     }
 
     public function handleBlacklist(Client $client): array

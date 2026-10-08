@@ -1,4 +1,4 @@
-import { Copy, ArrowLeft, Phone, Ban, Loader2, AlertCircle, SquarePen, X, Unlock } from 'lucide-react'
+import { Copy, ArrowLeft, Phone, Ban, Loader2, AlertCircle, SquarePen, X, Unlock, Mail } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
@@ -72,6 +72,22 @@ export default function ClientDetailPage() {
             <Copy className="h-4 w-4" aria-hidden="true" />
           </button>
         </p>
+
+        {/* Courriel — panneau d'informations principal (en-tête de la fiche). */}
+        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+          <Mail className="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
+          {client.email ? (
+            <a
+              href={`mailto:${client.email}`}
+              className="truncate hover:text-foreground transition-colors"
+              title={client.email}
+            >
+              {client.email}
+            </a>
+          ) : (
+            <span>—</span>
+          )}
+        </p>
       </div>
 
       {!isAdmin
@@ -131,13 +147,14 @@ export default function ClientDetailPage() {
           <CallButton
             phone={client.phone}
             name={client.name}
+            clientId={id}
             label="Appeler"
             className="bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
           />
           <Button
             onClick={openAction}
-            variant="outline"
-            className="flex items-center justify-center gap-2 border-gray-300 font-medium text-sm px-4 py-2 transition-colors"
+            variant="default"
+            className="flex items-center justify-center gap-2 px-4 py-2 text-sm transition-colors"
           >
             <Phone className="h-4 w-4" />
             Suite appel

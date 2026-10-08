@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Client;
 use App\Models\Note;
+use App\Models\Reservation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -52,6 +53,15 @@ class NoteControllerTest extends TestCase
         ], $attrs));
     }
 
+    private function reserve(Client $client, User $commercial): void
+    {
+        Reservation::create([
+            'client_id' => $client->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+    }
+
     // ------------------------------------------------------------------ Index
 
     public function test_index_returns_client_notes_newest_first_with_sender_and_skips_other_clients(): void
@@ -62,6 +72,8 @@ class NoteControllerTest extends TestCase
         ]);
         $client = $this->makeClient();
         $otherClient = $this->makeClient(['name' => 'Autre Construction']);
+        $this->reserve($client, $commercial);
+        $this->reserve($otherClient, $commercial);
 
         // Trois notes créées à des instants distincts (précision à la seconde).
         $base = now();
@@ -107,6 +119,7 @@ class NoteControllerTest extends TestCase
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
+        $this->reserve($client, $commercial);
 
         Sanctum::actingAs($commercial);
 
@@ -132,6 +145,7 @@ class NoteControllerTest extends TestCase
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
+        $this->reserve($client, $commercial);
 
         Sanctum::actingAs($commercial);
 
@@ -150,6 +164,7 @@ class NoteControllerTest extends TestCase
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
+        $this->reserve($client, $commercial);
 
         Sanctum::actingAs($commercial);
 
@@ -182,6 +197,7 @@ class NoteControllerTest extends TestCase
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
+        $this->reserve($client, $commercial);
 
         Sanctum::actingAs($commercial);
 
@@ -199,6 +215,7 @@ class NoteControllerTest extends TestCase
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
+        $this->reserve($client, $commercial);
 
         Sanctum::actingAs($commercial);
 
@@ -217,6 +234,7 @@ class NoteControllerTest extends TestCase
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
+        $this->reserve($client, $commercial);
         $note = $this->makeNote($client, $commercial);
 
         Sanctum::actingAs($commercial);
@@ -233,6 +251,7 @@ class NoteControllerTest extends TestCase
         $owner = $this->makeCommercial();
         $intruder = $this->makeCommercial();
         $client = $this->makeClient();
+        $this->reserve($client, $owner);
         $note = $this->makeNote($client, $owner);
 
         Sanctum::actingAs($intruder);

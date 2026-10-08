@@ -86,7 +86,7 @@ class CommercialAdminController extends Controller
 
         $clientsPage = $historyQuery->paginate($perPage, ['*'], 'page', $page);
 
-        // Compteurs des 8 badges : périmètre employé, calculés par les scopes
+        // Compteurs des 10 badges : périmètre employé, calculés par les scopes
         // qui pilotent les filtres (compteur du badge = lignes après clic).
         // **Même forme que `data` de `GET clients/overview`**
         // (`{prospects, by_display_status}`) : la page les passe tels quels à
@@ -162,7 +162,7 @@ class CommercialAdminController extends Controller
             ] : null,
             'historique' => [
                 'clients' => $historique,
-                // Compteurs des 8 badges de statut, sur le périmètre de cet
+                // Compteurs des 10 badges de statut, sur le périmètre de cet
                 // employé (alimente `<ProspectKpis>` de l'onglet Historique).
                 'badges' => $badges,
                 'pagination' => [
@@ -269,6 +269,7 @@ class CommercialAdminController extends Controller
                 'respondent_count' => $c->respondent_count,
                 'authorized_categories' => $c->authorized_categories,
                 'enterprise_name' => $c->enterprise_name ?? '—',
+                'source' => $c->source,
                 'licence_end_date' => $c->licence_end_date,
                 'created_at' => $c->created_at,
                 'updated_at' => $c->updated_at,
@@ -317,7 +318,7 @@ class CommercialAdminController extends Controller
     }
 
     /**
-     * Compteurs des **8 badges** pour un périmètre donné — délégation à
+     * Compteurs des **10 badges** pour un périmètre donné — délégation à
      * `ClientSearchService::displayStatusCounts()` (partagé avec le détail d'une
      * entreprise).
      *
@@ -365,6 +366,8 @@ class CommercialAdminController extends Controller
                     'intervenant_name' => $client->intervenant_name,
                     'licence_propre' => $client->licence_propre,
                     'enterprise_name' => $client->enterprise_name ?? '—',
+                    // Origine du prospect (répertoire `sources`).
+                    'source' => $client->source,
                     'created_at' => $client->created_at,
                     'updated_at' => $client->updated_at,
                     'neq' => $client->neq,

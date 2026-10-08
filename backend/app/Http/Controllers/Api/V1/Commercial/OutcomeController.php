@@ -16,7 +16,7 @@ class OutcomeController extends Controller
     public function store(Request $request, string $clientId): JsonResponse
     {
         $validated = $request->validate([
-            // Issues d'appel du modèle : YES / NO / BV / CALL_BACK.
+            // Issues d'appel du modèle : YES / NO / BV / CALL_BACK / DOUBLE / INFO.
             'outcome' => 'required|in:'.implode(',', self::outcomes()),
             'note' => 'nullable|string|max:5000',
             // CALL_BACK : rappel à la date/heure choisie par l'employé.
@@ -41,7 +41,16 @@ class OutcomeController extends Controller
             ->where('sender_id', $user->id)
             ->exists();
 
-        if (in_array($outcome, [Note::TYPE_YES, Note::TYPE_BV, Note::TYPE_CALL_BACK], true) && ! $reservation) {
+        // Double / Info rejoignent Oui / BV / À rappeler : le prospect reste
+        // tenu par l'employé (régime RESERVED), la réservation est donc
+        // **obligatoire**.
+        if (in_array($outcome, [
+            Note::TYPE_YES,
+            Note::TYPE_BV,
+            Note::TYPE_CALL_BACK,
+            Note::TYPE_DOUBLE,
+            Note::TYPE_INFO,
+        ], true) && ! $reservation) {
             return response()->json([
                 'success' => false,
                 'message' => 'Vous devez réserver ce client avant de changer son statut.',
@@ -80,6 +89,8 @@ class OutcomeController extends Controller
             Note::TYPE_NO,
             Note::TYPE_BV,
             Note::TYPE_CALL_BACK,
+            Note::TYPE_DOUBLE,
+            Note::TYPE_INFO,
         ];
     }
 }

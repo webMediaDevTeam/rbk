@@ -238,16 +238,19 @@ class CurrentReservationStatusBadgesTest extends TestCase
                 Reservation::STATUS_NO,
                 Reservation::STATUS_BV_VOICEMAIL,
                 Reservation::STATUS_CALL_BACK,
+                Reservation::STATUS_DOUBLE,
+                Reservation::STATUS_INFO,
                 Reservation::STATUS_PENDING,
             ],
             array_keys($badges ?? []),
-            'Les 8 badges de la colonne « Statut » sont renvoyés.'
+            'Les 10 badges de la colonne « Statut » sont renvoyés.'
         );
 
         // Chaque compteur est produit **par le scope qui pilote le filtre** :
         // il doit valoir exactement le nombre de lignes rendues après clic.
         // (`SANS_TELEPHONE` est testé à part : aucun client du jeu n'est
-        // sans numéro, son compteur vaut donc 0.)
+        // sans numéro, son compteur vaut donc 0. — `DOUBLE` / `INFO` sont
+        // couverts par `DoubleInfoStatusTest` sur un jeu qui en contient.)
         $filters = [
             Client::STATUS_AVAILABLE => 'status',
             Client::STATUS_BLACKLISTED => 'status',

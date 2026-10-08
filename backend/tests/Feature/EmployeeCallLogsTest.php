@@ -220,6 +220,61 @@ class EmployeeCallLogsTest extends TestCase
         $this->assertNotNull($second->json('data.records.0.recording.id'));
     }
 
+    /**
+     * Un appel passé depuis l'application ouvre sa ligne « à chaud » (session
+     * téléphonie `s-…`) avant que le call log n'existe : la synchro doit
+     * compléter **cette** ligne — client et note système déjà attachés —
+     * au lieu d'en créer un second journal.
+     */
+    public function test_sync_merges_the_hot_call_row_of_an_app_call(): void
+    {
+        Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
+        $employe = $this->employe('dev-hot');
+
+        $hot = CallLog::create([
+            'employee_id' => $employe->employee->id,
+            'ringcentral_session_id' => 's-a785e453638b3z1a11a9354aaz131b0490000',
+            'direction' => 'Outbound',
+            'type' => 'Voice',
+            'from_number' => '+15146120498',
+            'to_number' => '514-393-1193',
+            'started_at' => '2026-10-08T08:13:45Z',
+            'result' => 'Setup',
+        ]);
+
+        $mock = $this->mockService();
+        $mock->shouldReceive('getDevices')->once()->with(250)->andReturn([
+            ['id' => 'dev-hot', 'extensionNumber' => '104', 'extension' => ['id' => 'ext-104']],
+        ]);
+        $mock->shouldReceive('getCallHistoryByUser')
+            ->once()
+            ->with('ext-104', Mockery::type('array'))
+            ->andReturn([
+                ['id' => 'c-hot', 'sessionId' => '675097585025', 'direction' => 'Outbound', 'duration' => 75,
+                    'startTime' => '2026-10-08T08:13:45Z', 'result' => 'Call connected',
+                    'from' => ['phoneNumber' => '+15146120498'],
+                    'to' => ['phoneNumber' => '+15143931193'],
+                    'recording' => ['id' => 'REC-HOT', 'type' => 'Automatic',
+                        'contentUri' => 'https://media.ringcentral.com/REC-HOT/content']],
+            ]);
+
+        $this->postJson("/api/v1/call-logs/employees/{$employe->id}/logs/sync")
+            ->assertOk()
+            ->assertJsonPath('data.sync.created', 0)
+            ->assertJsonPath('data.sync.updated', 1);
+
+        $this->assertSame(1, CallLog::query()->count(), 'La ligne ouverte à chaud est complétée, pas dupliquée.');
+
+        $merged = $hot->refresh();
+        $this->assertSame('c-hot', $merged->ringcentral_call_id);
+        $this->assertSame(75, $merged->duration);
+        $this->assertSame('Call connected', $merged->result);
+
+        $recording = CallRecording::query()->where('ringcentral_recording_id', 'REC-HOT')->first();
+        $this->assertNotNull($recording, "L'enregistrement automatique est rattaché à la même ligne.");
+        $this->assertSame($hot->id, $recording->call_log_id);
+    }
+
     public function test_sync_falls_back_to_the_email_when_the_device_is_unknown(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']));

@@ -3,8 +3,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * Interrupteur (shadcn/Radix) — utilisé notamment pour le switch
- * « Privilège de libération » des modales Commercial créer / éditer
- * (valeur envoyée : `has_permission`, colonne `users.has_permission`).
+ * « Privilège commercial » (ex-« Privilège de libération ») des modales
+ * Commercial créer / éditer (valeur envoyée : `has_permission`, colonne
+ * `users.has_permission`).
  */
 export default function Switch({ className, ...props }) {
   return (

@@ -141,6 +141,14 @@ les **colonnes `snake_case`** sont acceptées en parallèle des clés française
 | `Montant de la caution ($)` | `surety_amount` | décimal |
 | `Date de début / délivrance` | `licence_start_date` | `YYYY-MM-DD` |
 | `Date de fin / paiement annuel` | `licence_end_date` | `YYYY-MM-DD` |
+| `Source` | `source` | texte |
+
+**`source` — origine du prospect** (répertoire `sources`, même valeur que
+`enterprises.source`, sans rapport avec RingCentral) : colonne `NOT NULL
+DEFAULT 'Affaire'`. Une clé `Source` **vide ou absente n'efface jamais** la
+valeur en place — création sans clé → `Affaire`, mise à jour sans clé → valeur
+courante conservée. Aucune saisie UI : la valeur est lue dans les réponses
+clients (listes + détail) et affichée en lecture seule dans la fiche.
 
 Normalisations (`castPayloadValue()` + `scrubAttributes()`), le webhook
 **normalise sans valider** :

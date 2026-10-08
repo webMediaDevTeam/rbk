@@ -11,7 +11,8 @@ import {
 } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCallLogs } from './useCallLogs.js'
-import RecordingPlayer from './RecordingPlayer.jsx'
+import RecordingPlayer from '@/components/RecordingPlayer.jsx'
+import { getCallRecordingContentApi } from '@/api/shared.api.js'
 
 /** `2026-10-06T10:08:10Z` → `06/10 10:08`. */
 function formatDate(value) {
@@ -173,7 +174,12 @@ export default function CallLogsCard({ id }) {
                     <TableCell className="text-muted-foreground">{row.result}</TableCell>
                     <TableCell>
                       {row.recordingId ? (
-                        <RecordingPlayer recordingId={row.recordingId} />
+                        <RecordingPlayer
+                          load={() => getCallRecordingContentApi(row.recordingId)}
+                          recordingId={row.recordingId}
+                          lazy
+                          compact
+                        />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}

@@ -10,6 +10,7 @@ export default function AuthInput({
   error,
   inputClassName = "auth-input",
   required = false,
+  autoComplete,
 }) {
   const input = (
     <input
@@ -20,6 +21,7 @@ export default function AuthInput({
       value={value}
       onChange={onChange}
       required={required}
+      autoComplete={autoComplete}
     />
   );
 

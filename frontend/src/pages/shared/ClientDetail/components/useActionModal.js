@@ -7,6 +7,10 @@ const OUTCOMES = [
   { value: 'NO', label: 'Non', recall: 'none' },
   { value: 'BV', label: 'BV', recall: 'auto' },
   { value: 'CALL_BACK', label: 'à rappeler', recall: 'custom' },
+  // Issues qui conservent la réservation (régime « Réservé ») : le prospect
+  // reste tenu par l'employé et n'apparaît que dans SA Grande liste.
+  { value: 'DOUBLE', label: 'Double', recall: 'none' },
+  { value: 'INFO', label: 'Info', recall: 'none' },
 ]
 
 /** Valeur locale au format `datetime-local` (sans fuseau). */

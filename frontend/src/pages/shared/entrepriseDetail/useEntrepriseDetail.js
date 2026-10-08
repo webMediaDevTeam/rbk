@@ -16,7 +16,7 @@ const TABS = [
 /**
  * `GET entreprises/{id}/stats` — analytics agrégés de l'entreprise, tableau
  * des employés et historique **commun** (tous les employés) paginé avec les
- * 8 badges de la colonne « Statut ».
+ * 10 badges de la colonne « Statut ».
  */
 export function useEntrepriseStats(id, { page = 1, search, status, reservationStatus, rowsPerPage } = {}) {
   return useQuery({
@@ -75,7 +75,7 @@ export function useEntrepriseDetailPage() {
   const employees = data?.employees ?? []
   const historique = data?.historique
   const clients = historique?.clients ?? []
-  // Compteurs des 8 badges, sur le périmètre des appels de l'entreprise.
+  // Compteurs des 10 badges, sur le périmètre des appels de l'entreprise.
   const badges = historique?.badges ?? null
   const statusFilters = statusFilter ? [statusFilter] : []
 

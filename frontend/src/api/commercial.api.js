@@ -76,6 +76,17 @@ export function callMyNumberApi(payload = {}) {
   return api.post('/call-logs/my-call', payload)
 }
 
+export function getClientCallDetailsApi(callLogId) {
+  return api.get(`/call-logs/client-calls/${encodeURIComponent(callLogId)}`)
+}
+
+export function getClientCallRecordingApi(callLogId, recordingId) {
+  return api.get(
+    `/call-logs/client-calls/${encodeURIComponent(callLogId)}/recordings/${encodeURIComponent(recordingId)}/content`,
+    { responseType: 'blob' },
+  )
+}
+
 // (Re)démarre l'enregistrement d'une partie de session — retenté par le
 // hook `useDirectCall` tant que la partie n'est pas encore connectée.
 export function startCallRecordingApi(sessionId, partyId) {

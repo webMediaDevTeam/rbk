@@ -10,9 +10,10 @@ export default function ForgotEmailStep({ email, onEmailChange, error, pending, 
 
       <AuthInput
         id="auth-reset-email"
-        label="Courriel Professionnel"
-        type="email"
-        placeholder="agent@ZdigIA.ca"
+        label="Courriel ou Login"
+        type="text"
+        autoComplete="username"
+        placeholder="agent@ZdigIA.ca ou login"
         value={email}
         onChange={onEmailChange}
         icon={Mail}

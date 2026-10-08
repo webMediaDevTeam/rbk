@@ -47,6 +47,8 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
     // `from` est résolu côté API dans `employees.ringcentral_from_number`,
     // le navigateur n'envoie que la destination `to`.
     Route::post('call-logs/my-call', [RingCentralController::class, 'callAsEmployee']);
+    Route::get('call-logs/client-calls/{callLog}', [RingCentralController::class, 'clientCallDetails']);
+    Route::get('call-logs/client-calls/{callLog}/recordings/{recordingId}/content', [RingCentralController::class, 'clientCallRecordingContent']);
 });
 
 // Renommage de liste : propriétaire (COMERCIAL) ou ADMIN / SUPER_ADMIN.

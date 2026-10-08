@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Shared\ProspectFilterController;
 use App\Http\Controllers\Api\V1\Shared\ProspectOverviewController;
 use App\Http\Controllers\Api\V1\Shared\PublicClientController;
 use App\Http\Controllers\Api\V1\Shared\RingCentralController;
+use App\Http\Controllers\Api\V1\Shared\SourceController;
 use App\Http\Controllers\Api\V1\Shared\UserController;
 use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\VerifyExternalSystemKey;
@@ -78,15 +79,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('municipalities', [ProspectFilterController::class, 'municipalities']);
     Route::get('administrative-regions', [ProspectFilterController::class, 'administrativeRegions']);
 
+    // Sources — répertoire **fermé en lecture seule** (aucun CRUD : pas de
+    // POST / PUT / DELETE) : le sélecteur « Source » des modales entreprise
+    // lit cette liste ; lignes initialisées par `SourceSeeder`.
+    Route::get('sources', [SourceController::class, 'index']);
+
     // Cartes KPI « Overview » des deux listes de prospects (chiffres
     // globaux). Déclarée avant `clients/{id}` (routes/api/commercial.php) :
     // les routes se lisent dans l'ordre de chargement des fichiers.
     Route::get('clients/overview', [ProspectOverviewController::class, 'overview']);
 
     // ── RingCentral / Call Logs ──────────────────────────────────
-    Route::get('call-logs/users', [CallLogController::class, 'users']);
-    Route::get('call-logs/users/{extensionId}', [CallLogController::class, 'userCalls']);
-    Route::get('call-logs/by-phone/{phone}', [CallLogController::class, 'callsToNumber']);
 });
 
 // ── Appareils RingCentral (libellé = numéro) — ADMIN + SUPER_ADMIN ──────
@@ -95,6 +98,12 @@ Route::middleware('auth:sanctum')->group(function () {
 // SUPER_ADMIN. Le reste du contrôle d'appel reste réservé SUPER_ADMIN.
 Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])
     ->get('call-logs/devices', [RingCentralController::class, 'devices']);
+Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])
+    ->get('call-logs/users', [CallLogController::class, 'users']);
+Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->group(function () {
+    Route::get('call-logs/users/{extensionId}', [CallLogController::class, 'userCalls']);
+    Route::get('call-logs/by-phone/{phone}', [CallLogController::class, 'callsToNumber']);
+});
 
 // ── Journal d'appels d'un employé + lecture d'enregistrement ────────────
 // Onglet « Appels » de la fiche `/comercialDetail/:id` (ADMIN + SUPER_ADMIN,
@@ -134,6 +143,13 @@ if (app()->environment('local', 'testing')) {
 // connectée, le navigateur retente donc `…/record` jusqu'au succès.
 Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL,ADMIN,SUPER_ADMIN'])
     ->post('call-logs/calls/{sessionId}/parties/{partyId}/record', [RingCentralController::class, 'record']);
+
+// ── Nom d'utilisateur (modales employé) ─────────────────────────────────
+// Contrôle en temps réel (debounce) avant envoi : `users.username` est
+// unique. **Déclarée avant `GET users/{id}`** — sinon « username-available »
+// serait avalée par le paramètre `{id}` et renverrait un 404.
+Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])
+    ->get('users/username-available', [UserController::class, 'usernameAvailable']);
 
 // ── User Management ─────────────────────────────────────────
 // ADMIN       → manages COMERCIAL

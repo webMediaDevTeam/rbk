@@ -23,8 +23,8 @@ class ProspectOverviewController extends Controller
      *  - « traité » (`processed`) : le client porte au moins une issue
      *    d'appel (note `YES` / `NO` / `BV` / `CALL_BACK`) — le commercial qui
      *    l'a réservé a appelé et/ou fait évoluer son statut ;
-     *  - « en cours » : traité mais encore `RESERVED` (BV / À rappeler /
-     *    suite à donner) ;
+     *  - « en cours » : traité mais encore **tenu** (`Client::HELD_STATUSES`
+     *    : RESERVED / DOUBLE / INFO — BV / À rappeler / suite à donner) ;
      *  - « succès » : traité et `CONFIRMED` (issue « YES ») ;
      *  - « par statut » (`by_status`) : une entrée par statut **courant**
      *    (`AVAILABLE` / `RESERVED` / `CONFIRMED` / `UNAVAILABLE` /
@@ -33,15 +33,17 @@ class ProspectOverviewController extends Controller
      *    définition** que le filtre `status` de `GET commercials/clients`
      *    (une ligne blacklistée va dans `BLACKLISTED`, quel que soit son
      *    `status`) : le chiffre affiché coïncide avec le nombre de lignes
-     *    renvoyées après clic. Les éventuels statuts historiques hors
-     *    `Client::STATUSES` sortent des badges, mais restent dans
-     *    `prospects.system` (le total du badge « Tous »).
+     *    renvoyées après clic. Les statuts sans badge (`DOUBLE` / `INFO`,
+     *    régime « tenu », et les valeurs historiques hors
+     *    `Client::STATUSES`) restent dans `prospects.system` (le total du
+     *    badge « Tous »).
      *  - « par statut affiché » (`by_display_status`) : une entrée par valeur
      *    que la **colonne « Statut »** montre réellement — `AVAILABLE`
-     *    (Disponible), `BLACKLISTED` (Blacklist), `SANS_TELEPHONE` (Sans
+     *    (Libre), `BLACKLISTED` (Blacklist), `SANS_TELEPHONE` (Sans
      *    téléphone, seau dérivé d'un `phone` vide), puis le statut de la
      *    réservation **courante** `YES` / `NO` / `BV_VOICEMAIL` / `CALL_BACK`
-     *    / `PENDING` (« - »). Ce sont les 8 badges de filtre demandés ;
+     *    / `DOUBLE` / `INFO` / `PENDING` (« - »). Ce sont les 10 badges de
+     *    filtre demandés ;
      *    chaque compteur est calculé **par le scope qui pilote le filtre**
      *    (`filterByStatuses()` / `filterByReservationStatuses()`), donc le
      *    chiffre affiché coïncide avec le nombre de lignes renvoyées après
@@ -66,9 +68,12 @@ class ProspectOverviewController extends Controller
             ->count();
 
         // ── 2/3. Réservés : traités / non traités ───────────────────────
-        $reservedTotal = Client::query()->where('status', Client::STATUS_RESERVED)->count();
+        // « Réservé » au sens large = prospect **tenu** par un employé :
+        // RESERVED, mais aussi DOUBLE / INFO (issues qui conservent la
+        // réservation, régime `Client::HELD_STATUSES`).
+        $reservedTotal = Client::query()->whereIn('status', Client::HELD_STATUSES)->count();
         $reservedProcessed = Client::query()
-            ->where('status', Client::STATUS_RESERVED)
+            ->whereIn('status', Client::HELD_STATUSES)
             ->whereHas('notes', fn ($q) => $q->calls())
             ->count();
 
@@ -80,7 +85,7 @@ class ProspectOverviewController extends Controller
             ->count();
         $processedInProgress = Client::query()
             ->whereHas('notes', fn ($q) => $q->calls())
-            ->where('status', Client::STATUS_RESERVED)
+            ->whereIn('status', Client::HELD_STATUSES)
             ->count();
 
         // ── 5. Statuts (badges de filtre du panel admin) ─────────────
@@ -96,9 +101,10 @@ class ProspectOverviewController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        // ── 6. Statut affiché (les 8 badges de la colonne « Statut ») ────
-        // Disponible / Blacklist = dimension **client** ; Oui / Non / BV /
-        // À rappeler / - = dimension **réservation courante** ; Sans
+        // ── 6. Statut affiché (les 10 badges de la colonne « Statut ») ───
+        // Libre / Blacklist = dimension **client** ; Oui / Non / BV /
+        // À rapp.. / Double / Info / - = dimension **réservation courante** ;
+        // Sans
         // téléphone = seau **dérivé** (`phone` vide) qui recoupe les deux.
         // Les compteurs sont produits par les scopes mêmes qui filtrent la
         // liste, avec les mêmes paramètres que `GET commercials/clients`.
@@ -113,6 +119,8 @@ class ProspectOverviewController extends Controller
             Reservation::STATUS_NO,
             Reservation::STATUS_BV_VOICEMAIL,
             Reservation::STATUS_CALL_BACK,
+            Reservation::STATUS_DOUBLE,
+            Reservation::STATUS_INFO,
             Reservation::STATUS_PENDING,
         ];
 
@@ -150,8 +158,8 @@ class ProspectOverviewController extends Controller
                     Client::STATUS_UNAVAILABLE => (int) ($statusCounts[Client::STATUS_UNAVAILABLE] ?? 0),
                     Client::STATUS_BLACKLISTED => $blacklisted,
                 ],
-                // Badges « Tous / Disponible / Oui / Non / BV / À rappeler /
-                // Blacklist / Sans téléphone » : une entrée par valeur
+                // Badges « Tous / Libre / Oui / Non / BV / À rapp.. /
+                // Blacklist / Sans tel.. » : une entrée par valeur
                 // affichée, comptée par le filtre qu'elle pilote (invariant
                 // badge ⇄ lignes).
                 'by_display_status' => $displayCounts,

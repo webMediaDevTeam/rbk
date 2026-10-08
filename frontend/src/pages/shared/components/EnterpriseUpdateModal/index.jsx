@@ -1,10 +1,14 @@
 import { AlertCircle, Loader2, X } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
+import Select from '@/components/ui/select.jsx'
 import { useEnterpriseUpdateModal } from './useEnterpriseUpdateModal.js'
 
 export default function EnterpriseUpdateModal({ open, onClose, user: entreprise, queryKey }) {
-  const { form, error, isPending, set, handleSubmit } = useEnterpriseUpdateModal({ open, onClose, user: entreprise, queryKey })
+  const {
+    form, error, isPending, set, handleSubmit,
+    sourceOptions, sourcesLoading, sourcesUnavailable,
+  } = useEnterpriseUpdateModal({ open, onClose, user: entreprise, queryKey })
 
   if (!open || !entreprise) return null
 
@@ -65,6 +69,79 @@ export default function EnterpriseUpdateModal({ open, onClose, user: entreprise,
               value={form.address}
               onChange={(e) => set('address', e.target.value)}
             />
+          </div>
+
+          {/* Source : **choix dans la table `sources`** (`GET /sources`,
+              répertoire fermé sans CRUD) — pas lié à RingCentral. */}
+          <div>
+            <label className="block text-sm font-bold mb-1">Source</label>
+            <Select value={form.source} onChange={(e) => set('source', e.target.value)}>
+              <option value="">— Aucune source —</option>
+              {sourceOptions.map((s) => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </Select>
+            {sourcesLoading && (
+              <p className="mt-1 text-xs text-muted-foreground">Chargement des sources…</p>
+            )}
+            {sourcesUnavailable && (
+              <p className="mt-1 text-xs text-destructive">Sources indisponibles pour le moment.</p>
+            )}
+          </div>
+
+          {/* ── RingCentral (optionnel) ──────────────────────────────────
+              Compte propre de l'entreprise : la sélection « Appareil /
+              numéro source » des modales employé liste alors SES
+              appareils. `Client ID` est prérempli ; le secret et le jeton
+              ne reviennent jamais de l'API (on ne renvoie que
+              « enregistré »), donc laisser vide = conserver. */}
+          <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+            <div>
+              <p className="text-sm font-bold">RingCentral — compte de l'entreprise (optionnel)</p>
+              <p className="text-xs text-muted-foreground">
+                Champs vidés = compte RingCentral par défaut (.env). Le secret et le jeton
+                ne sont jamais affichés après enregistrement : laisser vide pour les conserver.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold mb-1">Client ID</label>
+                <Input
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={form.ringcentral_client_id}
+                  onChange={(e) => set('ringcentral_client_id', e.target.value)}
+                  placeholder="RINGCENTRAL_CLIENT_ID"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Client Secret</label>
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.ringcentral_client_secret}
+                  onChange={(e) => set('ringcentral_client_secret', e.target.value)}
+                  placeholder={entreprise.ringcentral_client_secret_set ? '•••••••• (enregistré)' : '••••••••••••'}
+                />
+                {entreprise.ringcentral_client_secret_set && (
+                  <p className="mt-1 text-xs text-muted-foreground">Secret déjà enregistré ✓</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-1">Token</label>
+                <Input
+                  type="password"
+                  autoComplete="new-password"
+                  value={form.ringcentral_token}
+                  onChange={(e) => set('ringcentral_token', e.target.value)}
+                  placeholder={entreprise.ringcentral_token_set ? '•••••••• (enregistré)' : 'JWT RingCentral'}
+                />
+                {entreprise.ringcentral_token_set && (
+                  <p className="mt-1 text-xs text-muted-foreground">Jeton déjà enregistré ✓</p>
+                )}
+              </div>
+            </div>
           </div>
 
           {error && (

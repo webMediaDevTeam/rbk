@@ -58,8 +58,29 @@ class RingCentralApiTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']));
 
         $this->getJson('/api/v1/call-logs/account')->assertStatus(403);
+        $this->getJson('/api/v1/call-logs/users')->assertStatus(403);
         $this->postJson('/api/v1/call-logs/call', ['to' => '15145550123'])->assertStatus(403);
         $this->deleteJson('/api/v1/call-logs/calls/sess-1')->assertStatus(403);
+    }
+
+    public function test_ringcentral_user_list_returns_enabled_extension_records_to_admins(): void
+    {
+        Sanctum::actingAs($this->superAdmin);
+
+        $mock = $this->mockService();
+        $mock->shouldReceive('getAllUsers')->once()->with(50)->andReturn([
+            $this->obj([
+                'id' => 'extension-50',
+                'name' => 'Remote User',
+                'extensionNumber' => '50',
+                'contact' => ['email' => 'remote@example.test', 'phoneNumber' => '+15145550100'],
+            ]),
+        ]);
+
+        $this->getJson('/api/v1/call-logs/users?per_page=50')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', 'extension-50')
+            ->assertJsonPath('data.0.contact.email', 'remote@example.test');
     }
 
     public function test_account_returns_company_information(): void

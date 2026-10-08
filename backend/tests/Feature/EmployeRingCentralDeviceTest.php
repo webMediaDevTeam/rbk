@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Models\Enterprise;
+use App\Models\User;
 use App\Services\RingCentralService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -35,10 +35,8 @@ class EmployeRingCentralDeviceTest extends TestCase
 
     public function test_admin_stores_device_and_from_number_when_creating_an_employe(): void
     {
-        $admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
-        Sanctum::actingAs($admin);
+        Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
         $enterprise = Enterprise::forceCreate([
-            'user_id' => $admin->id,
             'name' => 'RingCentral Test Enterprise',
         ]);
 
@@ -50,10 +48,12 @@ class EmployeRingCentralDeviceTest extends TestCase
             'mot_de_passe' => 'secret-pass',
             'mot_de_passe_confirmation' => 'secret-pass',
             'enterprise_id' => $enterprise->id,
+            'ringcentral_extension_id' => '35664208024',
             'ringcentral_device_id' => '35664208024',
             'ringcentral_from_number' => '+15146120498',
         ])
             ->assertCreated()
+            ->assertJsonPath('data.utilisateur.profil.ringcentral_extension_id', '35664208024')
             ->assertJsonPath('data.utilisateur.profil.ringcentral_device_id', '35664208024')
             ->assertJsonPath('data.utilisateur.profil.ringcentral_from_number', '+15146120498');
 
@@ -71,10 +71,12 @@ class EmployeRingCentralDeviceTest extends TestCase
 
         // 1. Enregistrement d'un appareil + numéro.
         $this->putJson("/api/v1/users/{$employe->id}", [
+            'ringcentral_extension_id' => 'extension-22',
             'ringcentral_device_id' => '35682803024',
             'ringcentral_from_number' => '+16473603035',
         ])
             ->assertOk()
+            ->assertJsonPath('data.utilisateur.profil.ringcentral_extension_id', 'extension-22')
             ->assertJsonPath('data.utilisateur.profil.ringcentral_device_id', '35682803024')
             ->assertJsonPath('data.utilisateur.profil.ringcentral_from_number', '+16473603035');
 
@@ -86,6 +88,7 @@ class EmployeRingCentralDeviceTest extends TestCase
 
         // 2. Retrait de la source (`null` explicite = colonnes vidées).
         $this->putJson("/api/v1/users/{$employe->id}", [
+            'ringcentral_extension_id' => null,
             'ringcentral_device_id' => null,
             'ringcentral_from_number' => null,
         ])
@@ -102,12 +105,16 @@ class EmployeRingCentralDeviceTest extends TestCase
     public function test_device_fields_are_validated(): void
     {
         Sanctum::actingAs(User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']));
+        $enterprise = Enterprise::forceCreate(['name' => 'Device Validation Enterprise']);
 
         $this->postJson('/api/v1/users', [
             'email' => 'trop@long.local',
             'role' => 'COMERCIAL',
             'first_name' => 'Trop',
             'last_name' => 'Long',
+            'mot_de_passe' => 'secret-pass',
+            'mot_de_passe_confirmation' => 'secret-pass',
+            'enterprise_id' => $enterprise->id,
             'ringcentral_device_id' => str_repeat('a', 65),
             'ringcentral_from_number' => '+15145550123',
         ])
@@ -155,12 +162,8 @@ class EmployeRingCentralDeviceTest extends TestCase
     /** Panne RingCentral : la création d'un employé ne doit pas échouer. */
     public function test_missing_device_fields_do_not_break_creation(): void
     {
-        $admin = User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']);
-        Sanctum::actingAs($admin);
-        $enterprise = Enterprise::forceCreate([
-            'user_id' => $admin->id,
-            'name' => 'No Device Test Enterprise',
-        ]);
+        Sanctum::actingAs(User::factory()->create(['role' => 'SUPER_ADMIN', 'status' => 'ACTIVE']));
+        $enterprise = Enterprise::forceCreate(['name' => 'No Device Test Enterprise']);
 
         $this->postJson('/api/v1/users', [
             'email' => 'sans@source.local',

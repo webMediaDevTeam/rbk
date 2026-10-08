@@ -49,7 +49,9 @@ package "Prospects & réservation" {
   class Client {
     id UUID
     name
-    status AVAILABLE | RESERVED | CONFIRMED | UNAVAILABLE | BLACKLISTED
+    status AVAILABLE | RESERVED | CONFIRMED | DOUBLE | INFO
+         | UNAVAILABLE | BLACKLISTED
+    HELD_STATUSES = RESERVED | CONFIRMED | DOUBLE | INFO (client tenu)
     is_blacklisted BOOL
     returned_at DATETIME
     licence_* / neq / categories / respondents ...
@@ -71,13 +73,13 @@ package "Prospects & réservation" {
     client_id --> Client (cascade)
     comercial_id --> User
     reservation_group_id --> ReservationGroup
-    status PENDING | YES | NO | BV_VOICEMAIL | CALL_BACK
+    status PENDING | YES | NO | BV_VOICEMAIL | CALL_BACK | DOUBLE | INFO
          (+ REALIZED : réservé, non émis)
     bv_count INT
     injoinable_count INT
     --
-    scopeActive() : statut actif et client RESERVED/CONFIRMED
-    PROCESSED = YES | NO | BV_VOICEMAIL | CALL_BACK
+    scopeActive() : statut actif et client tenu (HELD_STATUSES)
+    PROCESSED = YES | NO | BV_VOICEMAIL | CALL_BACK | DOUBLE | INFO
     + aucune expiration (expires_at supprimé)
     + plus de colonnes de rappel
   }
@@ -100,7 +102,7 @@ package "Journal unique" {
     id UUID
     client_id --> Client (cascade)
     sender_id STRING nullable
-    type RESERVED | YES | NO | BV | CALL_BACK
+    type RESERVED | YES | NO | BV | CALL_BACK | DOUBLE | INFO
        | BLACKLISTED | RETURNED_TO_AVAILABLE | NOTE
     description TEXT nullable (8 mots max)
     created_at

@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\CallLog;
+use App\Models\Client;
+use App\Models\Reservation;
 use App\Models\User;
 use App\Services\RingCentralService;
 use Exception;
@@ -31,7 +34,7 @@ class CommercialEmployeeCallTest extends TestCase
     }
 
     /** Employé (COMERCIAL) + son `employees` 1:1 (source configurée ou non). */
-    private function employe(?string $fromNumber, ?string $deviceId = null): User
+    private function employe(?string $fromNumber, ?string $deviceId = 'device-1'): User
     {
         $user = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
 
@@ -40,14 +43,32 @@ class CommercialEmployeeCallTest extends TestCase
             'last_name' => 'Tremblay',
             'ringcentral_from_number' => $fromNumber,
             'ringcentral_device_id' => $deviceId,
+            'ringcentral_extension_id' => 'extension-1',
         ]);
 
         return $user;
     }
 
+    private function reserveClient(User $user): Client
+    {
+        $client = Client::create([
+            'name' => 'Call target',
+            'phone' => '514-555-0123',
+            'status' => Client::STATUS_RESERVED,
+        ]);
+        Reservation::create([
+            'client_id' => $client->id,
+            'comercial_id' => $user->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        return $client;
+    }
+
     public function test_commercial_calls_with_his_own_from_number(): void
     {
         $employe = $this->employe('+15146120498', '35664208024');
+        $client = $this->reserveClient($employe);
         Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
@@ -59,7 +80,7 @@ class CommercialEmployeeCallTest extends TestCase
         // `record: true` (défaut) → l'enregistrement est démarré aussitôt.
         $mock->shouldReceive('startRecording')->once()->with('sess-42', 'party-1')->andReturn(['id' => 'rec-1']);
 
-        $this->postJson('/api/v1/call-logs/my-call', ['to' => '15145550123'])
+        $this->postJson('/api/v1/call-logs/my-call', ['client_id' => $client->id, 'to' => '15145550123'])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.session_id', 'sess-42')
@@ -72,7 +93,9 @@ class CommercialEmployeeCallTest extends TestCase
 
     public function test_recording_can_be_disabled_with_record_false(): void
     {
-        Sanctum::actingAs($this->employe('+15146120498'));
+        $employe = $this->employe('+15146120498');
+        $client = $this->reserveClient($employe);
+        Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
         $mock->shouldReceive('makeCallOut')->once()->andReturn([
@@ -81,7 +104,7 @@ class CommercialEmployeeCallTest extends TestCase
         ]);
         $mock->shouldNotReceive('startRecording');
 
-        $this->postJson('/api/v1/call-logs/my-call', ['to' => '15145550123', 'record' => false])
+        $this->postJson('/api/v1/call-logs/my-call', ['client_id' => $client->id, 'to' => '15145550123', 'record' => false])
             ->assertOk()
             ->assertJsonPath('data.record', false)
             ->assertJsonPath('data.recorded', false);
@@ -89,7 +112,9 @@ class CommercialEmployeeCallTest extends TestCase
 
     public function test_recording_failure_does_not_fail_the_call(): void
     {
-        Sanctum::actingAs($this->employe('+15146120498'));
+        $employe = $this->employe('+15146120498');
+        $client = $this->reserveClient($employe);
+        Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
         $mock->shouldReceive('makeCallOut')->once()->andReturn([
@@ -100,7 +125,7 @@ class CommercialEmployeeCallTest extends TestCase
         // retentera `…/record`.
         $mock->shouldReceive('startRecording')->once()->andThrow(new Exception('Party is not connected'));
 
-        $this->postJson('/api/v1/call-logs/my-call', ['to' => '15145550123'])
+        $this->postJson('/api/v1/call-logs/my-call', ['client_id' => $client->id, 'to' => '15145550123'])
             ->assertOk()
             ->assertJsonPath('data.record', true)
             ->assertJsonPath('data.recorded', false);
@@ -108,7 +133,12 @@ class CommercialEmployeeCallTest extends TestCase
 
     public function test_commercial_can_start_a_recording_of_a_session(): void
     {
-        Sanctum::actingAs($this->employe('+15146120498'));
+        $employe = $this->employe('+15146120498');
+        CallLog::create([
+            'employee_id' => $employe->employee->id,
+            'ringcentral_session_id' => 'sess-42',
+        ]);
+        Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
         $mock->shouldReceive('startRecording')->once()->with('sess-42', 'party-1')->andReturn(['id' => 'rec-1']);
@@ -119,14 +149,27 @@ class CommercialEmployeeCallTest extends TestCase
             ->assertJsonPath('data.party_id', 'party-1');
     }
 
+    public function test_commercial_cannot_start_recording_for_another_employees_session(): void
+    {
+        Sanctum::actingAs($this->employe('+15146120498'));
+
+        $mock = $this->mockService();
+        $mock->shouldNotReceive('startRecording');
+
+        $this->postJson('/api/v1/call-logs/calls/foreign-session/parties/party-1/record')
+            ->assertNotFound();
+    }
+
     public function test_commercial_without_a_from_number_gets_a_clear_422(): void
     {
-        Sanctum::actingAs($this->employe(null));
+        $employe = $this->employe(null);
+        $client = $this->reserveClient($employe);
+        Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
         $mock->shouldNotReceive('makeCallOut');
 
-        $this->postJson('/api/v1/call-logs/my-call', ['to' => '15145550123'])
+        $this->postJson('/api/v1/call-logs/my-call', ['client_id' => $client->id, 'to' => '15145550123'])
             ->assertStatus(422)
             ->assertJsonPath('errors.to.0', "Aucun numéro source configuré : demandez à un administrateur de choisir votre appareil / numéro (fiche employé) avant d'appeler.");
     }
@@ -166,12 +209,14 @@ class CommercialEmployeeCallTest extends TestCase
 
     public function test_ringcentral_failure_returns_502(): void
     {
-        Sanctum::actingAs($this->employe('+15146120498'));
+        $employe = $this->employe('+15146120498');
+        $client = $this->reserveClient($employe);
+        Sanctum::actingAs($employe);
 
         $mock = $this->mockService();
         $mock->shouldReceive('makeCallOut')->once()->andThrow(new Exception('RingCentral non configuré'));
 
-        $this->postJson('/api/v1/call-logs/my-call', ['to' => '15145550123'])
+        $this->postJson('/api/v1/call-logs/my-call', ['client_id' => $client->id, 'to' => '15145550123'])
             ->assertStatus(502)
             ->assertJsonPath('success', false)
             ->assertJsonStructure(['success', 'error']);
