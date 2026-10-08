@@ -808,3 +808,36 @@ saisir, libération de liste, paliers, fiche client, stats d'entreprise).
       Phase 7 + Phase 8 (migrations, modèles, contrôleurs, tests, frontend,
       docs) : **commit à proposer** — dernier commit `dfcd019 docs: display
       status rules…`.
+
+## Nettoyage + rapports d'analyse (2026-10-08)
+
+- [x] **Badges « Double » en couleur primaire** : pastille `DOUBLE` de la barre
+      (`ProspectKpis`) passée `bg-primary` (`#a21caf`), plus badges de statut
+      `ClientStatus` / `ReservationStatusBadge` via le **nouveau variant
+      `primary`** de `Badge` (`components/ui/badge.jsx`).
+- [x] **Badges réduits pour tenir sur une ligne** : `KpiPill` gère `compact`
+      (padding/texte `xs`, pastille d'icône 20 px) et `KpiBar` gère `dense`
+      (`gap-1.5`) ; la barre des 10 badges les utilise (`squelette` 8 → 10).
+- [x] **Page « Test Appels (RingCentral) » supprimée** : route
+      `/call-logs-test` (`routes/AppRoutes.jsx`), entrée de navigation SUPER_ADMIN
+      (`App.jsx`) et dossier `pages/superAdmin/CallLogTest/` (717 lignes).
+      Les endpoints REST testés par `RingCentralApiTest` / `CallLogApiTest`
+      restent en place (toujours testés).
+- [x] **Fichiers inutiles supprimés** : racine `d` et `@php` (fichiers
+      parasites commités), `routes/RoleBasedRoute.jsx`, `stores/useClientStore.js`,
+      `hooks/use-dialog-state.js`, `utils/constants.js`, `utils/helpers.js`,
+      `assets/{clerk-logo,logo,rbq-mark,custom/icon-layout-default}.jsx`,
+      primitives shadcn non référencées `components/ui/{tabs,form,calendar,collapsible}.jsx`.
+      `docs/frontend_structure.md` aligné sur les suppressions.
+- [x] **3 rapports d'analyse** ajoutés dans `docs/` :
+      `status_change_report.md` (statuts oui/non/bv/à rappeler/info/double +
+      notes, avec 17 incohérences repérées), `public_api_report.md` (91 routes,
+      auth/RBAC, conventions, 10 écarts doc ↔ code, 10 risques) et
+      `project_analysis_report.md` (architecture via **graphify** : 2 319 nœuds /
+      175 communautés ; parcours « liste clients » ; causes de lenteur mesurées
+      au `EXPLAIN` : plein scan de `clients` (45 938 lignes) faute d'index sur
+      `status`/`is_blacklisted`/`municipality`, index morts `phone_normalized` et
+      `simple_name`, 10 `COUNT(*)` par appel d'overview ≈ 1 s, préchargée `notes`
+      non bornée côté admin).
+- [x] Vérifications : backend **393 tests / 2 540 assertions** ✔, Pint ✔,
+      ESLint 0 erreur ✔, `test:guard` ✔, `npm run build` ✔.
