@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Employee;
+use App\Models\Enterprise;
 use App\Models\Note;
 use App\Models\Reservation;
 use App\Models\User;
@@ -30,9 +32,36 @@ class ClientLicenceFieldsApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    private ?Enterprise $enterprise = null;
+
     private function makeUser(string $role): User
     {
-        return User::factory()->create(['role' => $role, 'status' => 'ACTIVE']);
+        $user = User::factory()->create(['role' => $role, 'status' => 'ACTIVE']);
+
+        // Périmètre « source » de la Grande liste commerciale : un employé
+        // est rattaché à une entreprise dont la source vaut celle des clients
+        // fixtures (`Client::DEFAULT_SOURCE`) — sans entreprise (ou sans
+        // source), `GET /clients` est **vide** (verrou serveur, voir
+        // GrandeListeSourceFilterTest).
+        if ($role === 'COMERCIAL') {
+            Employee::create([
+                'user_id' => $user->id,
+                'enterprise_id' => $this->sharedEnterprise()->id,
+                'first_name' => 'Jean',
+                'last_name' => 'Test',
+            ]);
+        }
+
+        return $user;
+    }
+
+    private function sharedEnterprise(): Enterprise
+    {
+        return $this->enterprise ??= Enterprise::create([
+            'name' => 'Entreprise test',
+            'status' => 'ACTIVE',
+            'source' => Client::DEFAULT_SOURCE,
+        ]);
     }
 
     /** Client tel que reçu de n8n (voir contrat ci-dessus). */

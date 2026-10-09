@@ -122,7 +122,13 @@ class ReservationController extends Controller
         // Pré-sélection = requête de la page Prospects (filtres + exclusions
         // + tri) complétée des règles métier de réservation : pas de
         // prospect déjà traité en NO / BV par cet employé.
-        $candidates = $this->search->applyFilters(Client::query(), $validated)
+        //
+        // **Même périmètre « source » que la page** : le lot ne peut être
+        // pris que dans la source de l'entreprise du commercial (sinon le
+        // bouton « Réserver » piocherait des prospects invisibles dans la
+        // liste). Entreprise absente ou sans source → 0 candidat.
+        $candidates = $this->search
+            ->applyCommercialSourceScope($this->search->applyFilters(Client::query(), $validated), $user)
             ->whereDoesntHave('notes', fn ($q) => $q
                 ->where('sender_id', $user->id)
                 ->whereIn('type', [Note::TYPE_NO, Note::TYPE_BV]))

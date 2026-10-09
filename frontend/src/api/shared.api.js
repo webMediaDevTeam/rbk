@@ -61,6 +61,14 @@ export function listSourcesApi() {
   return api.get('/sources')
 }
 
+// Origines **réellement présentes** dans `clients.source` (distinctes +
+// dédoublonnées, cache serveur une semaine) : onglets « Tous / Affaire / … »
+// de la Grande liste admin (`/clients-historique`).
+// Réponse : `{success, data: ['Affaire', 'Angalis', …]}`.
+export function listClientSourcesApi() {
+  return api.get('/clients/sources')
+}
+
 // RingCentral — appareils de l'account + numéros assignés (consultation
 // seule, ADMIN + SUPER_ADMIN) : sert au select « Appareil / numéro source »
 // des modales employé.

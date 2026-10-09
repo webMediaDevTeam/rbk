@@ -33,6 +33,12 @@ class ClientController extends Controller
             $request->user()?->id
         );
 
+        // Périmètre « source » : la Grande liste du commercial est
+        // **verrouillée** sur la source de son entreprise — sans entreprise
+        // ou sans source, liste vide (jamais de repli vers toute la base).
+        // Un paramètre `source` éventuel est ignoré, le serveur décide.
+        $query = $this->search->applyCommercialSourceScope($query, $request->user());
+
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
 
@@ -127,9 +133,6 @@ class ClientController extends Controller
         $client = Client::findOrFail($id);
 
         return DB::transaction(function () use ($client, $user, $validated) {
-            // `handleBlacklist()` fait tout : statut `BLACKLISTED`,
-            // `is_blacklisted = true`, `returned_at` vidé, rappels annulés,
-            // note `BLACKLISTED` (motif optionnel, émetteur = l'employé).
             $this->workflow->apply($client, null, Note::TYPE_BLACKLISTED, $validated, $user);
 
             return response()->json([
@@ -139,12 +142,7 @@ class ClientController extends Controller
         });
     }
 
-    /**
-     * Dernière réservation du client — celle qui fait foi pour « qui détient
-     * le client en ce moment ». Utilise la relation préchargée quand elle
-     * l'est (listes), sinon la collection `reservations` du détail. Même
-     * départage que `Client::latestReservation()` (`created_at`, puis `id`).
-     */
+   
     private function latestReservationOf(Client $client): ?Reservation
     {
         if ($client->relationLoaded('latestReservation')) {
@@ -156,16 +154,7 @@ class ClientController extends Controller
             ->first();
     }
 
-    /**
-     * Numéro de téléphone : réservé à l'admin / super admin, et au commercial
-     * qui détient **la réservation en cours** du client (client « tenu » —
-     * `Client::HELD_STATUSES`, soit RESERVED / CONFIRMED / DOUBLE / INFO —
-     * ET dernière réservation à son nom).
-     *
-     * Un client `AVAILABLE`, revenu `AVAILABLE` après un blocage temporaire,
-     * ou tenu par un autre commercial : le numéro n'est tout simplement pas
-     * envoyé (la clé est absente de la réponse, pas `null`).
-     */
+
     private function canSeePhone(Client $client, ?Reservation $activeReservation): bool
     {
         $user = auth()->user();
@@ -191,12 +180,8 @@ class ClientController extends Controller
             'id' => $client->id,
             'name' => $name,
             'email' => $client->email,
-            // Clé absente si le connecté n'a pas le droit de voir le numéro
-            // (cf. `canSeePhone()`) : le frontend n'affiche alors rien.
             ...($canSeePhone ? ['phone' => $client->phone] : []),
             'status' => $client->status,
-            // Statut affiché (règle §2 : RESERVED qualifié par sa dernière
-            // réservation) + retour éventuel du blocage temporaire.
             'display_status' => $client->displayStatus(),
             'is_blacklisted' => $client->is_blacklisted,
             'returned_at' => $client->returned_at,

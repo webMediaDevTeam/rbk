@@ -2,6 +2,7 @@ import { useClientsHistoryPage } from './useClientsHistory.js'
 import ProspectTable from '@/pages/comercial/ProspectList/components/ProspectTable.jsx'
 import ProspectCard from '@/pages/comercial/ProspectList/components/ProspectCard.jsx'
 import ClientsHistoryToolbar from './components/ClientsHistoryToolbar.jsx'
+import SourceTabs from './components/SourceTabs.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 import PhoneEditModal from '@/pages/shared/components/PhoneEditModal/index.jsx'
@@ -20,6 +21,8 @@ export default function ClientsHistoryPage() {
     handleCategoryChange,
     region,
     handleRegionChange,
+    source,
+    handleSourceChange,
     currentPage,
     setCurrentPage,
     rowsPerPage,
@@ -48,8 +51,16 @@ export default function ClientsHistoryPage() {
 
       {/* Badges de la colonne « Statut » = filtre (sélection **unique**,
           couleur pleine pour l'état sélectionné) : une seule valeur par
-          ligne, deux dimensions disjointes (statut client / réservation). */}
-      <ProspectKpis statusFilters={statusFilters} onStatusFilterChange={handleStatusToggle} />
+          ligne, deux dimensions disjointes (statut client / réservation).
+          `source` borne les compteurs à l'onglet actif : compteur de badge =
+          lignes rendues **dans cet onglet**. */}
+      <ProspectKpis statusFilters={statusFilters} onStatusFilterChange={handleStatusToggle} source={source} />
+
+      {/* Onglets « Tous / Affaire / … » = filtre `?source=` (origine du
+          prospect) — **réservés ADMIN / SUPER_ADMIN** : la barre n'est pas
+          rendue sans le privilège `clients:filter-source`, et le commercial
+          n'ouvre pas cette page. */}
+      <SourceTabs source={source} onChange={handleSourceChange} />
 
       <ClientsHistoryToolbar
         search={search} setSearch={handleSearchChange}

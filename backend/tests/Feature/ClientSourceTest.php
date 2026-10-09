@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Employee;
+use App\Models\Enterprise;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -146,7 +148,21 @@ class ClientSourceTest extends TestCase
 
     public function test_source_is_exposed_by_the_client_endpoints(): void
     {
+        // Entreprise du commercial : source « Angalis », celle du client de
+        // ce test — la Grande liste commerciale est **verrouillée** sur la
+        // source de l'entreprise (`clients.enterprise_id` n'existe plus).
+        $enterprise = Enterprise::create([
+            'name' => 'Entreprise test',
+            'status' => 'ACTIVE',
+            'source' => 'Angalis',
+        ]);
         $commercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
+        Employee::create([
+            'user_id' => $commercial->id,
+            'enterprise_id' => $enterprise->id,
+            'first_name' => 'Jean',
+            'last_name' => 'Test',
+        ]);
         $admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
 
         $this->postJson(self::URI, ['clients' => [

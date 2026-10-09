@@ -4,6 +4,7 @@ namespace App\Services\Client;
 
 use App\Models\Client;
 use App\Models\Reservation;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -88,6 +89,24 @@ class ClientSearchService
                     $nested->orWhereJsonContains('categories', $category);
                 }
             });
+    }
+
+    /**
+     * Filtre par **source** (origine du prospect, `clients.source` —
+     * répertoire `sources`, §13) :
+     *
+     *   $search->filterBySource(Client::query(), 'Angalis');  // libellé exact
+     *   $search->filterBySource(Client::query(), null);       // aucun filtre
+     *
+     * Comparaison **exacte** (répertoire fermé : la casse doit être celle
+     * stockée) ; valeur vide ou nulle = aucun filtre — c'est l'onglet
+     * « Tous » de la Grande liste admin (`GET commercials/clients?source=`).
+     */
+    public function filterBySource(Builder $query, ?string $source): Builder
+    {
+        $value = $source === null ? '' : trim($source);
+
+        return $value === '' ? $query : $query->where('source', $value);
     }
 
     /**
@@ -508,6 +527,41 @@ class ClientSearchService
         }
 
         return $query;
+    }
+
+    /**
+     * Périmètre **source** d'un utilisateur `COMERCIAL` — Grande liste
+     * commerciale (`GET /clients`) **et** réservation d'un lot
+     * (`POST clients/reserver`, qui partage `applyFilters()`).
+     *
+     * Un employé ne voit ni ne réserve que les prospects de la source
+     * assignée à **son entreprise** (`enterprises.source`, même répertoire
+     * `sources` que `clients.source`). La colonne `clients.enterprise_id`
+     * n'existe plus (migration `2026_09_17_181200`) : ce libellé est le
+     * seul lien client ↔ entreprise, il porte donc seul le filtrage.
+     *
+     * **Aucun repli** : sans entreprise (`employee.enterprise` absent) ou
+     * entreprise sans source renseignée → **liste vide**, jamais d'ouverture
+     * vers l'ensemble de la base. Un appelant non `COMERCIAL` (aucun : les
+     * deux routes sont sous `CheckRole:COMERCIAL`) reste inchangé, et un
+     * éventuel paramètre `source` venu du navigateur est **ignoré** : le
+     * périmètre est décidé par le serveur.
+     */
+    public function applyCommercialSourceScope(Builder $query, ?User $user): Builder
+    {
+        if ($user === null || $user->role !== 'COMERCIAL') {
+            return $query;
+        }
+
+        $user->loadMissing('employee.enterprise');
+        $source = $user->employee?->enterprise?->source;
+        $source = is_string($source) ? trim($source) : '';
+
+        // `whereIn` sur liste vide → `0 = 1` : aucune ligne, expression
+        // portable (MySQL comme SQLite, base des tests).
+        return $source === ''
+            ? $query->whereIn('source', [])
+            : $query->where('source', $source);
     }
 
     /** Liste de filtre nettoyée : chaînes non vides uniquement. */

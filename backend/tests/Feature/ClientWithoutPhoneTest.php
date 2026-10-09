@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Employee;
+use App\Models\Enterprise;
 use App\Models\User;
 use App\Services\Client\ClientImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,6 +38,22 @@ class ClientWithoutPhoneTest extends TestCase
 
         $this->admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
         $this->commercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
+
+        // Périmètre « source » de la Grande liste commerciale : l'employé est
+        // rattaché à une entreprise dont la source vaut celle des clients
+        // fixtures (`Client::DEFAULT_SOURCE`) — sans entreprise (ou sans
+        // source), `GET /clients` est **vide** (verrou serveur, voir
+        // GrandeListeSourceFilterTest).
+        Employee::create([
+            'user_id' => $this->commercial->id,
+            'enterprise_id' => Enterprise::create([
+                'name' => 'Entreprise test',
+                'status' => 'ACTIVE',
+                'source' => Client::DEFAULT_SOURCE,
+            ])->id,
+            'first_name' => 'Jean',
+            'last_name' => 'Test',
+        ]);
     }
 
     private function makeClient(array $attrs = []): Client

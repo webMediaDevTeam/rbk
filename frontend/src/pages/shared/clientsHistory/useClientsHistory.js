@@ -30,6 +30,10 @@ export function useClientsHistoryPage() {
   const [municipality, setMunicipality] = useState('')
   const [categories, setCategories] = useState('')
   const [region, setRegion] = useState('')
+  // Onglet « source » actif (origine du prospect, §13) : `''` = « Tous »
+  // (aucun `?source=` envoyé). Sert aussi aux compteurs des badges de statut
+  // (`<ProspectKpis source>` → `GET clients/overview?source=`).
+  const [source, setSource] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [sortBy, setSortBy] = useState('created_at')
@@ -53,6 +57,9 @@ export function useClientsHistoryPage() {
     municipality: municipality || undefined,
     category: categories || undefined,
     administrative_region: region || undefined,
+    // Onglet « source » : omis pour « Tous » (paramètre vide = périmètre
+    // entier côté serveur).
+    source: source || undefined,
     page: currentPage,
     per_page: rowsPerPage,
     sort_by: sortBy,
@@ -141,6 +148,14 @@ export function useClientsHistoryPage() {
     setCurrentPage(1)
   }
 
+  // Onglets « source » (origine) : sélection unique — le composant bascule
+  // déjà vers `''` (« Tous ») au second clic ; revient à la 1re page comme
+  // tous les filtres de la liste.
+  const handleSourceChange = (value) => {
+    setSource(value ?? '')
+    setCurrentPage(1)
+  }
+
   const handleRowsPerPageChange = (n) => {
     setRowsPerPage(n)
     setCurrentPage(1)
@@ -159,6 +174,8 @@ export function useClientsHistoryPage() {
     handleCategoryChange,
     region,
     handleRegionChange,
+    source,
+    handleSourceChange,
     currentPage,
     setCurrentPage,
     rowsPerPage,

@@ -152,9 +152,14 @@ export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED', 'SANS_TELEPHONE']
  *                                        `undefined` (défaut) = compteurs
  *                                        globaux ; `null` = chargement en
  *                                        cours → squelette.
+ * @param {string}   [source]             origine active (onglet de la Grande
+ *                                        liste admin) : bornée côté serveur
+ *                                        (`GET clients/overview?source=`),
+ *                                        aucun effet ailleurs (paramètre omis
+ *                                        = périmètre entier).
  */
-export default function ProspectKpis({ statusFilters = [], onStatusFilterChange, counts }) {
-  const { kpis, isLoading, isError } = useProspectKpis(counts)
+export default function ProspectKpis({ statusFilters = [], onStatusFilterChange, counts, source }) {
+  const { kpis, isLoading, isError } = useProspectKpis(counts, { source })
 
   if (isError) return null
 

@@ -550,10 +550,10 @@ class Client extends Model
     /**
      * Colonnes dont les valeurs distinctes sont exposées aux listes
      * déroulantes (`GET /categories`, `/municipalities`,
-     * `/administrative-regions`). Liste blanche : le nom de colonne n'est
-     * jamais repris d'une requête HTTP.
+     * `/administrative-regions`, `/clients/sources`). Liste blanche : le
+     * nom de colonne n'est jamais repris d'une requête HTTP.
      */
-    public const DISTINCT_COLUMNS = ['categories', 'municipality', 'administrative_region'];
+    public const DISTINCT_COLUMNS = ['categories', 'municipality', 'administrative_region', 'source'];
 
     /** Cache des listes distinctes : 1 semaine (604 800 s). */
     public const DISTINCT_CACHE_TTL = 604800;

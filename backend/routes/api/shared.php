@@ -31,36 +31,36 @@ Route::post('auth/resend-verification', [AuthController::class, 'resendVerificat
 // borné par `public_api.max_items`. Déclarées avant toute route
 // `clients/{…}` pour ne jamais être capturées par un paramètre de route.
 
-    Route::post('clients/bulk-upsert', [PublicClientController::class, 'bulkUpsert']);
+Route::post('clients/bulk-upsert', [PublicClientController::class, 'bulkUpsert']);
 
-    // Suppression en masse, même règle de sécurité de bout en bout : un client
-    // qui porte des données liées (réservations / notes / rappels, toutes en
-    // `cascadeOnDelete`) est **ignoré**, la boucle passe au client suivant
-    // (RULES §12). `POST` et `DELETE` pointent sur la même action.
-    Route::match(['post', 'delete'], 'clients/bulk-delete', [PublicClientController::class, 'bulkDelete']);
+// Suppression en masse, même règle de sécurité de bout en bout : un client
+// qui porte des données liées (réservations / notes / rappels, toutes en
+// `cascadeOnDelete`) est **ignoré**, la boucle passe au client suivant
+// (RULES §12). `POST` et `DELETE` pointent sur la même action.
+Route::match(['post', 'delete'], 'clients/bulk-delete', [PublicClientController::class, 'bulkDelete']);
 
-    // Conversion en liste noire par nom — endpoint public **temporaire**
-    // (spec docs/convert_to_blacklist_api.md) : même surface que les deux
-    // routes ci-dessus, clé `X-Api-Key` exigée, lot borné par
-    // `PUBLIC_API_MAX_ITEMS`. Recherche par `enterprise_name` / `name`
-    // insensible à la casse.
-    Route::post('clients/convert-to-blacklist', [PublicClientController::class, 'convertToBlacklist']);
+// Conversion en liste noire par nom — endpoint public **temporaire**
+// (spec docs/convert_to_blacklist_api.md) : même surface que les deux
+// routes ci-dessus, clé `X-Api-Key` exigée, lot borné par
+// `PUBLIC_API_MAX_ITEMS`. Recherche par `enterprise_name` / `name`
+// insensible à la casse.
+Route::post('clients/convert-to-blacklist', [PublicClientController::class, 'convertToBlacklist']);
 
-    // Indisponibilité en masse **par numéro de téléphone** — endpoint public
-    // **temporaire** (spec docs/convert_to_unavailable_api.md) : même surface
-    // que les routes ci-dessus, clé `X-Api-Key` exigée, lot borné par
-    // `PUBLIC_API_MAX_ITEMS`. Numéro détecté quel que soit son format
-    // (`819-418-6550` / `+1-819-418-6550` / `8194186550`…), chaque ligne
-    // visée → `UNAVAILABLE` + `returned_at = now + 3 mois` (geste NO).
-    Route::post('clients/convert-to-unavailable', [PublicClientController::class, 'convertToUnavailable']);
+// Indisponibilité en masse **par numéro de téléphone** — endpoint public
+// **temporaire** (spec docs/convert_to_unavailable_api.md) : même surface
+// que les routes ci-dessus, clé `X-Api-Key` exigée, lot borné par
+// `PUBLIC_API_MAX_ITEMS`. Numéro détecté quel que soit son format
+// (`819-418-6550` / `+1-819-418-6550` / `8194186550`…), chaque ligne
+// visée → `UNAVAILABLE` + `returned_at = now + 3 mois` (geste NO).
+Route::post('clients/convert-to-unavailable', [PublicClientController::class, 'convertToUnavailable']);
 
-    // Fausses réservations « NON » (endpoint public **temporaire**, spec
-    // docs/create_no_reservations_api.md) : même surface que les routes
-    // ci-dessus, clé `X-Api-Key` exigée, lot borné par
-    // `PUBLIC_API_MAX_ITEMS` (mode `{"status": …}` : borné par
-    // `NO_RESERVATIONS_STATUS_LIMIT`). Une ligne `reservations` `NO` par client
-    // visé, attribuée à **un seul employé**, sans effet de bord métier.
-    Route::post('clients/create-no-reservations', [PublicClientController::class, 'createNoReservations']);
+// Fausses réservations « NON » (endpoint public **temporaire**, spec
+// docs/create_no_reservations_api.md) : même surface que les routes
+// ci-dessus, clé `X-Api-Key` exigée, lot borné par
+// `PUBLIC_API_MAX_ITEMS` (mode `{"status": …}` : borné par
+// `NO_RESERVATIONS_STATUS_LIMIT`). Une ligne `reservations` `NO` par client
+// visé, attribuée à **un seul employé**, sans effet de bord métier.
+Route::post('clients/create-no-reservations', [PublicClientController::class, 'createNoReservations']);
 
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
@@ -82,6 +82,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // POST / PUT / DELETE) : le sélecteur « Source » des modales entreprise
     // lit cette liste ; lignes initialisées par `SourceSeeder`.
     Route::get('sources', [SourceController::class, 'index']);
+
+    // Origines **réellement présentes** dans `clients.source` (distinctes,
+    // mises en cache une semaine) : onglets « Tous / Affaire / … » de la
+    // Grande liste admin. Déclarée avant `clients/{id}`
+    // (routes/api/commercial.php) : les routes se lisent dans l'ordre de
+    // chargement des fichiers.
+    Route::get('clients/sources', [ProspectFilterController::class, 'sources']);
 
     // Cartes KPI « Overview » des deux listes de prospects (chiffres
     // globaux). Déclarée avant `clients/{id}` (routes/api/commercial.php) :

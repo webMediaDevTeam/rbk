@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Reservation;
 use App\Services\Client\ClientSearchService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ProspectOverviewController extends Controller
 {
@@ -17,7 +19,12 @@ class ProspectOverviewController extends Controller
      * prospects (panel commercial et panel admin).
      *
      * Chiffres **globaux** (système entier), indépendants des filtres de la
-     * liste : ce sont des totaux, pas un découpage de la page courante.
+     * liste : ce sont des totaux, pas un découpage de la page courante —
+     * sauf `?source=` (onglet actif de la Grande liste admin), qui borne
+     * **tous** les compteurs à la source demandée pour que l'invariant
+     * « compteur du badge = lignes rendues » tienne sous chaque onglet
+     * (`ClientSearchService::filterBySource()`, absent / vide = périmètre
+     * entier).
      *
      * Définitions métier :
      *  - « traité » (`processed`) : le client porte au moins une issue
@@ -57,12 +64,22 @@ class ProspectOverviewController extends Controller
      * appel réservé, inutile de les figer une semaine comme les listes
      * distinctes des filtres.
      */
-    public function overview(): JsonResponse
+    public function overview(Request $request): JsonResponse
     {
+        // ── 0. Périmètre « source » (onglets de la Grande liste admin) ──
+        // Paramètre **vide ou absent = périmètre entier**. Quand un onglet
+        // est actif, TOUS les compteurs suivent le filtre : l'invariant
+        // « compteur du badge = lignes rendues après clic » (§9) doit tenir
+        // sous chaque onglet, sinon les badges de statut mentiraient.
+        $clients = fn (): Builder => $this->search->filterBySource(
+            Client::query(),
+            $request->input('source'),
+        );
+
         // ── 1. Prospects ────────────────────────────────────────────────
-        $system = Client::query()->count();
-        $blacklisted = Client::query()->where('is_blacklisted', true)->count();
-        $available = Client::query()
+        $system = $clients()->count();
+        $blacklisted = $clients()->where('is_blacklisted', true)->count();
+        $available = $clients()
             ->where('is_blacklisted', false)
             ->available()
             ->count();
@@ -71,19 +88,19 @@ class ProspectOverviewController extends Controller
         // « Réservé » au sens large = prospect **tenu** par un employé :
         // RESERVED, mais aussi DOUBLE / INFO (issues qui conservent la
         // réservation, régime `Client::HELD_STATUSES`).
-        $reservedTotal = Client::query()->whereIn('status', Client::HELD_STATUSES)->count();
-        $reservedProcessed = Client::query()
+        $reservedTotal = $clients()->whereIn('status', Client::HELD_STATUSES)->count();
+        $reservedProcessed = $clients()
             ->whereIn('status', Client::HELD_STATUSES)
             ->whereHas('notes', fn ($q) => $q->calls())
             ->count();
 
         // ── 4. Traités : succès / en cours ──────────────────────────────
-        $processedTotal = Client::query()->whereHas('notes', fn ($q) => $q->calls())->count();
-        $processedSuccess = Client::query()
+        $processedTotal = $clients()->whereHas('notes', fn ($q) => $q->calls())->count();
+        $processedSuccess = $clients()
             ->whereHas('notes', fn ($q) => $q->calls())
             ->where('status', Client::STATUS_CONFIRMED)
             ->count();
-        $processedInProgress = Client::query()
+        $processedInProgress = $clients()
             ->whereHas('notes', fn ($q) => $q->calls())
             ->whereIn('status', Client::HELD_STATUSES)
             ->count();
@@ -95,7 +112,7 @@ class ProspectOverviewController extends Controller
         // `is_blacklisted`) — ainsi le chiffre du badge et le nombre de lignes
         // renvoyées après clic coïncident. Les lignes blacklistées, quel que
         // soit leur `status`, vont dans le seau `BLACKLISTED`.
-        $statusCounts = Client::query()
+        $statusCounts = $clients()
             ->where('is_blacklisted', false)
             ->selectRaw('status, COUNT(*) AS total')
             ->groupBy('status')
@@ -125,11 +142,11 @@ class ProspectOverviewController extends Controller
         ];
 
         foreach ($clientBuckets as $bucket) {
-            $displayCounts[$bucket] = $this->search->filterByStatuses(Client::query(), $bucket)->count();
+            $displayCounts[$bucket] = $this->search->filterByStatuses($clients(), $bucket)->count();
         }
 
         foreach ($reservationBuckets as $bucket) {
-            $displayCounts[$bucket] = $this->search->filterByReservationStatuses(Client::query(), $bucket)->count();
+            $displayCounts[$bucket] = $this->search->filterByReservationStatuses($clients(), $bucket)->count();
         }
 
         return response()->json([

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Employee;
+use App\Models\Enterprise;
 use App\Models\Rappel;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
@@ -22,12 +24,37 @@ class ReservationGroupControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    private ?Enterprise $enterprise = null;
+
     private function makeCommercial(array $attrs = []): User
     {
-        return User::factory()->create(array_merge([
+        $user = User::factory()->create(array_merge([
             'role' => 'COMERCIAL',
             'status' => 'ACTIVE',
         ], $attrs));
+
+        // Périmètre « source » de la Grande liste commerciale : l'employé est
+        // rattaché à une entreprise dont la source vaut celle des clients
+        // fixtures (`Client::DEFAULT_SOURCE`) — sans entreprise (ou sans
+        // source), `GET /clients` est **vide** (verrou serveur, voir
+        // GrandeListeSourceFilterTest).
+        Employee::create([
+            'user_id' => $user->id,
+            'enterprise_id' => $this->sharedEnterprise()->id,
+            'first_name' => 'Jean',
+            'last_name' => 'Test',
+        ]);
+
+        return $user;
+    }
+
+    private function sharedEnterprise(): Enterprise
+    {
+        return $this->enterprise ??= Enterprise::create([
+            'name' => 'Entreprise test',
+            'status' => 'ACTIVE',
+            'source' => Client::DEFAULT_SOURCE,
+        ]);
     }
 
     private function makeClient(array $attrs = []): Client

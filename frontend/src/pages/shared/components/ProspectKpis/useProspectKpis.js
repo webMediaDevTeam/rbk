@@ -16,13 +16,21 @@ import { api } from '@/api/client.js'
  *                             appels) — la requête globale est alors
  *                             désactivée. `undefined` = compteurs globaux,
  *                             `null` = chargement en cours.
+ * @param {object}  [params]    paramètres du périmètre serveur : **`source`**
+ *                             (onglet actif de la Grande liste admin) borne
+ *                             tous les compteurs à cette origine, pour que
+ *                             l'invariant « compteur du badge = lignes
+ *                             rendues » tienne sous chaque onglet
+ *                             (`GET clients/overview?source=`). Absente =
+ *                             périmètre entier.
  */
-export function useProspectKpis(counts = undefined) {
+export function useProspectKpis(counts = undefined, params = {}) {
   const localCounts = counts !== undefined
+  const source = params.source || undefined
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['prospect-kpis'],
-    queryFn: () => api.get('/clients/overview'),
+    queryKey: ['prospect-kpis', { source }],
+    queryFn: () => api.get('/clients/overview', source ? { params: { source } } : {}),
     staleTime: 1000 * 15,
     retry: false,
     enabled: !localCounts,

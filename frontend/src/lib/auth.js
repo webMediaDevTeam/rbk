@@ -52,6 +52,12 @@ export const PERMISSIONS = {
   'blacklist:list':    ['SUPER_ADMIN', 'ADMIN'],
   'blacklist:unblock': ['SUPER_ADMIN', 'ADMIN'],
 
+  // Grande liste admin (`/clients-historique`) : onglets « source » et le
+  // filtre `?source=` qu'ils envoient — un appelant sans ce privilège ne
+  // voit pas la barre d'onglets (l'API reste la source de vérité : la route
+  // `GET commercials/clients` est sous `CheckRole:ADMIN,SUPER_ADMIN`).
+  'clients:filter-source': ['SUPER_ADMIN', 'ADMIN'],
+
   // Dashboard
   'dashboard': ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
 

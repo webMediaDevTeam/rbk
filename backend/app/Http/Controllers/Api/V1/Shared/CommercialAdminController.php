@@ -219,6 +219,13 @@ class CommercialAdminController extends Controller
             $this->search->filterByAdministrativeRegions($query, $region);
         }
 
+        // Onglets « Tous / Affaire / … » de la Grande liste : filtre sur
+        // l'origine (`clients.source`), libellé exact — paramètre vide ou
+        // absent = « Tous ». Le contrôle d'accès (`CheckRole:ADMIN,
+        // SUPER_ADMIN`) est porté par la route : ce périmètre n'est jamais
+        // décidé par un appelant `COMERCIAL`.
+        $this->search->filterBySource($query, $request->input('source'));
+
         $sortable = [
             'name' => 'name',
             'email' => 'email',
