@@ -85,7 +85,7 @@ class RingCentralController extends Controller
      */
     public function devices(Request $request): JsonResponse
     {
-        $perPage = max(1, min(250, (int) $request->query('per_page', 100)));
+        $perPage = max(1, min(1000, (int) $request->query('per_page', 100)));
 
         $validated = $request->validate([
             'enterprise_id' => ['nullable', 'string', 'max:36', 'exists:enterprises,id'],
@@ -118,7 +118,7 @@ class RingCentralController extends Controller
         try {
             $byExtension = [];
 
-            foreach ($this->ringCentral->getPhoneNumbers(500) as $number) {
+            foreach ($this->ringCentral->getPhoneNumbers(1000) as $number) {
                 $extensionId = (string) (data_get($number, 'extension.id') ?? '');
                 $phoneNumber = (string) (data_get($number, 'phoneNumber') ?? '');
 

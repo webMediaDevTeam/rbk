@@ -124,7 +124,7 @@ class RingCentralApiTest extends TestCase
             $this->obj(['id' => 'dev-1', 'name' => 'Bureau', 'extension' => ['id' => 'ext-101']]),
             $this->obj(['id' => 'dev-2', 'name' => 'Softphone orphelin']),
         ]);
-        $mock->shouldReceive('getPhoneNumbers')->once()->with(500)->andReturn([
+        $mock->shouldReceive('getPhoneNumbers')->once()->with(1000)->andReturn([
             ['phoneNumber' => '+15145550100', 'extension' => ['id' => 'ext-101']],
         ]);
 

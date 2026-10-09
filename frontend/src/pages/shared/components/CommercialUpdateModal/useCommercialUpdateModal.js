@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { updateUserApi, listRingCentralDevicesApi } from '@/api/shared.api.js'
 import { listEntreprisesApi } from '@/api/admin.api.js'
 import { getApiErrorMessage } from '@/lib/api-errors.js'
-import { deviceNumber, selectableDevices } from '@/utils/ringcentral.js'
+import { ringcentralDeviceOptions, selectedRingcentralDeviceOption } from '@/utils/ringcentral.js'
 import { useUsernameAvailability, sanitizeUsername, usernameFromEmail } from '@/hooks/use-username-availability.js'
 
 export function useCommercialUpdateModal(props) {
@@ -46,9 +46,13 @@ export function useCommercialUpdateModal(props) {
     retry: false,
   })
 
-  // Un numéro n'apparaît qu'une fois et l'appareil déjà enregistré reste
-  // sélectionnable même s'il est un doublon (cf. `selectableDevices`).
-  const devices = selectableDevices(devicesData?.data, form.ringcentral_device_id)
+  // Tous les appareils et chacun de leurs numéros sont proposés séparément.
+  const devices = ringcentralDeviceOptions(devicesData?.data)
+  const selectedDeviceValue = selectedRingcentralDeviceOption(
+    devices,
+    form.ringcentral_device_id,
+    form.ringcentral_from_number,
+  )
 
   // Contrôle d'unicité en temps réel (`users.username`), l'employé édité
   // étant exclu de la comparaison.
@@ -141,14 +145,15 @@ export function useCommercialUpdateModal(props) {
    * l'appareil choisi (`devices[*].extension.id`).
    */
   const onDeviceChange = (deviceId) => {
-    const device = devices.find((d) => String(d.id) === String(deviceId))
+    const option = devices.find((device) => device.value === deviceId)
+    const device = option?.device
     setForm((p) => ({
       ...p,
-      ringcentral_device_id: deviceId,
-      ringcentral_from_number: device ? deviceNumber(device) : '',
+      ringcentral_device_id: option?.deviceId ?? '',
+      ringcentral_from_number: option?.phoneNumber ?? '',
       ringcentral_extension_id: device?.extension?.id
         ? String(device.extension.id)
-        : p.ringcentral_extension_id,
+        : '',
     }))
   }
 
@@ -186,9 +191,8 @@ export function useCommercialUpdateModal(props) {
     // Numéro « from » : celui de l'appareil choisi (valeur fraîche de
     // l'API), en secours celui déjà enregistré. `null` explicite pour
     // pouvoir **retirer** la source (`sometimes|nullable` côté API).
-    const selected = devices.find((d) => String(d.id) === String(form.ringcentral_device_id))
     const fromNumber = form.ringcentral_device_id
-      ? (deviceNumber(selected) || form.ringcentral_from_number || null)
+      ? (form.ringcentral_from_number || null)
       : null
 
     const payload = {
@@ -222,7 +226,7 @@ export function useCommercialUpdateModal(props) {
     // disponibilité vérifiée en temps réel (hors employé édité).
     usernameCheck, onEmailChange, onUsernameChange,
     // Tous les appareils sont listés : le poste est déduit du choix.
-    devices, devicesLoading, devicesUnavailable, onDeviceChange,
+    devices, selectedDeviceValue, devicesLoading, devicesUnavailable, onDeviceChange,
     onEnterpriseChange,
   }
 }

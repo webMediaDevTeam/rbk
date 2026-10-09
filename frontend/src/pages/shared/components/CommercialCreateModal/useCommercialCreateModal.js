@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { createUserApi, listRingCentralDevicesApi } from '@/api/shared.api.js'
 import { listEntreprisesApi } from '@/api/admin.api.js'
 import { getApiErrorMessage } from '@/lib/api-errors.js'
-import { deviceNumber, selectableDevices } from '@/utils/ringcentral.js'
+import { ringcentralDeviceOptions } from '@/utils/ringcentral.js'
 import { useUsernameAvailability, sanitizeUsername, usernameFromEmail } from '@/hooks/use-username-availability.js'
 
 export function useCommercialCreateModal(props) {
@@ -45,8 +45,8 @@ export function useCommercialCreateModal(props) {
     retry: false,
   })
 
-  // Numéros uniques, postes sans ligne écartés (cf. `selectableDevices`).
-  const devices = selectableDevices(devicesData?.data)
+  // Tous les appareils et chacun de leurs numéros sont proposés séparément.
+  const devices = ringcentralDeviceOptions(devicesData?.data)
 
   // Contrôle d'unicité en temps réel (`users.username`, debounce).
   const usernameCheck = useUsernameAvailability(form.username)
@@ -129,14 +129,15 @@ export function useCommercialCreateModal(props) {
    * l'appareil choisi (`devices[*].extension.id`).
    */
   const onDeviceChange = (deviceId) => {
-    const device = devices.find((d) => String(d.id) === String(deviceId))
+    const option = devices.find((device) => device.value === deviceId)
+    const device = option?.device
     setForm((p) => ({
       ...p,
-      ringcentral_device_id: deviceId,
-      ringcentral_from_number: device ? deviceNumber(device) : '',
+      ringcentral_device_id: option?.deviceId ?? '',
+      ringcentral_from_number: option?.phoneNumber ?? '',
       ringcentral_extension_id: device?.extension?.id
         ? String(device.extension.id)
-        : p.ringcentral_extension_id,
+        : '',
     }))
   }
 
@@ -171,10 +172,7 @@ export function useCommercialCreateModal(props) {
       setError('Les mots de passe ne correspondent pas.')
       return
     }
-    // Numéro « from » : celui de l'appareil choisi (valeur fraîche de
-    // l'API), en secours celui déjà sélectionné dans le formulaire.
-    const selected = devices.find((d) => String(d.id) === String(form.ringcentral_device_id))
-    const fromNumber = deviceNumber(selected) || form.ringcentral_from_number || undefined
+    const fromNumber = form.ringcentral_from_number || undefined
 
     const payload = {
       role: 'COMERCIAL',

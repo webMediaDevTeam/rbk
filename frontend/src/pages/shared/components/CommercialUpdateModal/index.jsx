@@ -4,14 +4,13 @@ import Input from '@/components/ui/input.jsx'
 import Select from '@/components/ui/select.jsx'
 import Switch from '@/components/ui/switch.jsx'
 import UsernameField from '@/pages/shared/components/UsernameField.jsx'
-import { deviceLabel } from '@/utils/ringcentral.js'
 import { useCommercialUpdateModal } from './useCommercialUpdateModal.js'
 
 export default function CommercialUpdateModal({ open, onClose, user, queryKey }) {
   const {
     form, error, isPending, enterprises, set, handleSubmit,
     usernameCheck, onEmailChange, onUsernameChange,
-    devices, devicesLoading, devicesUnavailable, onDeviceChange, onEnterpriseChange,
+    devices, selectedDeviceValue, devicesLoading, devicesUnavailable, onDeviceChange, onEnterpriseChange,
   } = useCommercialUpdateModal({ open, onClose, user, queryKey })
 
   if (!open || !user) return null
@@ -61,7 +60,7 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
           <div>
             <label className="block text-sm font-bold mb-1">Appareil / numéro source (RingCentral)</label>
             <Select
-              value={form.ringcentral_device_id}
+              value={selectedDeviceValue}
               onChange={(e) => onDeviceChange(e.target.value)}
               disabled={devicesLoading}
             >
@@ -71,15 +70,15 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
                   : !form.enterprise_id
                     ? '— Choisir une entreprise d\'abord —'
                     : devices.length
-                      ? '— Aucun appareil / numéro —'
+                      ? '— Sélectionner un appareil / numéro —'
                       : '— aucun appareil disponible —'}
               </option>
               {devices.map((d) => (
-                <option key={d.id} value={String(d.id)}>{deviceLabel(d)}</option>
+                <option key={d.value} value={d.value}>{d.label}</option>
               ))}
             </Select>
             <p className="mt-1 text-xs text-muted-foreground">
-              Numéro affiché dans la liste (pas le nom de l'appareil) — enregistré avec l'identifiant de l'appareil.
+              Chaque numéro et appareil est un choix distinct; le numéro choisi sera enregistré comme source.
               Le poste RingCentral est déduit de l'appareil choisi.
               Les appareils viennent du compte RingCentral de l'entreprise sélectionnée.
               {devicesUnavailable && ' Appareils indisponibles pour le moment.'}

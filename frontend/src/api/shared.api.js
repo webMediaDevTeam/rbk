@@ -79,7 +79,7 @@ export function listClientSourcesApi() {
 // renseigné). Omis = compte `.env`.
 export function listRingCentralDevicesApi(enterpriseId = null) {
   return api.get('/call-logs/devices', {
-    params: enterpriseId ? { per_page: 250, enterprise_id: enterpriseId } : { per_page: 250 },
+    params: enterpriseId ? { per_page: 1000, enterprise_id: enterpriseId } : { per_page: 1000 },
   })
 }
 
