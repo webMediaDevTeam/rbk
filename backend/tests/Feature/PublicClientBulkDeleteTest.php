@@ -56,6 +56,20 @@ class PublicClientBulkDeleteTest extends TestCase
 
     // -------------------------------------------------------------- Suppression
 
+    public function test_source_query_limits_deletion_to_that_source(): void
+    {
+        $affaire = $this->makeClient(['licence_number' => 'L-SOURCE-1', 'source' => 'Affaire']);
+        $anglais = $this->makeClient(['licence_number' => 'L-SOURCE-1', 'source' => 'Anglais']);
+
+        $this->postJson(self::URI.'?source=Anglais', ['licences' => ['L-SOURCE-1']])
+            ->assertOk()
+            ->assertJsonPath('data.deleted', 1)
+            ->assertJsonPath('data.missing', 0);
+
+        $this->assertDatabaseHas('clients', ['id' => $affaire->id]);
+        $this->assertDatabaseMissing('clients', ['id' => $anglais->id]);
+    }
+
     public function test_guest_can_bulk_delete_clients_without_authentication(): void
     {
         $client = $this->makeClient(['licence_number' => 'L-1001']);

@@ -131,6 +131,17 @@ class ClientSourceTest extends TestCase
         $this->assertSame('Affaire', $client->fresh()->source);
     }
 
+    public function test_query_source_is_used_when_payload_has_no_source(): void
+    {
+        $this->postJson(self::URI.'?source=Anglais', ['clients' => [
+            ['Licence' => 'L-5007', "Nom de l'intervenant / Entreprise" => 'Ontario Builder'],
+        ]])
+            ->assertOk()
+            ->assertJsonPath('data.created', 1);
+
+        $this->assertSame('Anglais', Client::where('licence_number', 'L-5007')->firstOrFail()->source);
+    }
+
     // ------------------------------------------------------------- Exposition
 
     public function test_source_is_exposed_by_the_client_endpoints(): void

@@ -217,7 +217,7 @@ class ClientImportService
      * @param  list<mixed>  $payloads
      * @return array{received:int, processed:int, created:int, updated:int, unchanged:int, skipped_manual:int, failed:int, errors:list<array{index:int, licence_number:?string, error:string}>}
      */
-    public static function bulkUpsertFromScraperPayload(array $payloads): array
+    public static function bulkUpsertFromScraperPayload(array $payloads, string $source = Client::DEFAULT_SOURCE): array
     {
         $result = [
             'received' => count($payloads),
@@ -234,6 +234,19 @@ class ClientImportService
             try {
                 if (! is_array($payload)) {
                     throw new InvalidArgumentException('Enregistrement attendu : un objet JSON par ligne.');
+                }
+
+                $hasSource = false;
+                foreach ($payload as $key => $value) {
+                    if (self::normalizePayloadKey((string) $key) === 'source'
+                        && Client::cleanText($value) !== null) {
+                        $hasSource = true;
+                        break;
+                    }
+                }
+
+                if (! $hasSource) {
+                    $payload['source'] = $source;
                 }
 
                 $outcome = DB::transaction(fn () => self::upsertFromScraperPayload($payload));
@@ -304,7 +317,7 @@ class ClientImportService
      * @param  list<mixed>  $items
      * @return array{received:int, processed:int, deleted:int, skipped:int, missing:int, failed:int, skipped_items:list<array{index:int, licence_number:?string, linked:array{reservations:int, notes:int, rappels:int}}>, missing_items:list<array{index:int, licence_number:?string}>, errors:list<array{index:int, licence_number:?string, error:string}>}
      */
-    public static function bulkDeleteFromScraper(array $items): array
+    public static function bulkDeleteFromScraper(array $items, string $source = Client::DEFAULT_SOURCE): array
     {
         $result = [
             'received' => count($items),
@@ -333,9 +346,10 @@ class ClientImportService
                 // Transaction par ligne : la vérification des liens et la
                 // suppression forment un seul geste (aucun client supprimé
                 // pendant qu'une réservation viendrait d'être créée).
-                $step = DB::transaction(function () use ($key, $licence): array {
+                $step = DB::transaction(function () use ($key, $licence, $source): array {
                     $client = Client::query()
                         ->where($key)
+                        ->where('source', $source)
                         ->lockForUpdate()
                         ->withCount(['reservations', 'notes', 'rappels'])
                         ->first();
@@ -459,9 +473,9 @@ class ClientImportService
      * @param  list<mixed>  $items
      * @return array<string, mixed>
      */
-    public static function convertToBlacklistFromName(array $items): array
+    public static function convertToBlacklistFromName(array $items, string $source = Client::DEFAULT_SOURCE): array
     {
-        return self::convertToBlacklistPayload($items, self::BLACKLIST_MODE_NAME);
+        return self::convertToBlacklistPayload($items, self::BLACKLIST_MODE_NAME, $source);
     }
 
     /**
@@ -477,9 +491,9 @@ class ClientImportService
      *                              (`{"licence": "…"}`, `{"Licence (propre)": …}`)
      * @return array<string, mixed>
      */
-    public static function convertToBlacklistFromLicence(array $items): array
+    public static function convertToBlacklistFromLicence(array $items, string $source = Client::DEFAULT_SOURCE): array
     {
-        return self::convertToBlacklistPayload($items, self::BLACKLIST_MODE_LICENCE);
+        return self::convertToBlacklistPayload($items, self::BLACKLIST_MODE_LICENCE, $source);
     }
 
     /**
@@ -489,9 +503,9 @@ class ClientImportService
      * @param  list<mixed>  $items
      * @return array<string, mixed>
      */
-    public static function convertToBlacklistFromPayload(array $items): array
+    public static function convertToBlacklistFromPayload(array $items, string $source = Client::DEFAULT_SOURCE): array
     {
-        return self::convertToBlacklistPayload($items, self::BLACKLIST_MODE_AUTO);
+        return self::convertToBlacklistPayload($items, self::BLACKLIST_MODE_AUTO, $source);
     }
 
     /**
@@ -526,7 +540,7 @@ class ClientImportService
      * @param  list<mixed>  $items
      * @return array{received:int, processed:int, matched:int, zapped:int, ignored:int, not_found:int, already_blacklisted:int, failed:int, zapped_items:list<array<string, mixed>>, ignored_items:list<array<string, mixed>>, errors:list<array<string, mixed>>}
      */
-    private static function convertToBlacklistPayload(array $items, string $mode): array
+    private static function convertToBlacklistPayload(array $items, string $mode, string $source): array
     {
         $result = [
             'received' => count($items),
@@ -557,8 +571,8 @@ class ClientImportService
                 }
 
                 $step = DB::transaction(fn () => $target['type'] === self::BLACKLIST_MODE_LICENCE
-                    ? self::blacklistByLicence($target['key'])
-                    : self::blacklistByName($target['key']));
+                    ? self::blacklistByLicence($target['key'], $source)
+                    : self::blacklistByName($target['key'], $source));
 
                 $result['processed'] += 1;
                 $result['matched'] += $step['matched'];
@@ -714,9 +728,9 @@ class ClientImportService
      *
      * @return array{matched: int, blacklisted: int, already: int}
      */
-    private static function blacklistByName(string $name): array
+    private static function blacklistByName(string $name, string $source): array
     {
-        return self::applyBlacklist(self::clientsMatchingName($name), $name);
+        return self::applyBlacklist(self::clientsMatchingName($name, $source), $name);
     }
 
     /**
@@ -725,9 +739,9 @@ class ClientImportService
      *
      * @return array{matched: int, blacklisted: int, already: int}
      */
-    private static function blacklistByLicence(string $licence): array
+    private static function blacklistByLicence(string $licence, string $source): array
     {
-        return self::applyBlacklist(self::clientsMatchingLicence($licence), 'licence '.$licence);
+        return self::applyBlacklist(self::clientsMatchingLicence($licence, $source), 'licence '.$licence);
     }
 
     /**
@@ -739,9 +753,10 @@ class ClientImportService
      *
      * @return Collection<int, Client>
      */
-    private static function clientsMatchingLicence(string $licence): Collection
+    private static function clientsMatchingLicence(string $licence, string $source = Client::DEFAULT_SOURCE): Collection
     {
         return Client::query()
+            ->where('source', $source)
             ->where(function (Builder $query) use ($licence) {
                 if (ctype_digit($licence)) {
                     $query->where('licence_propre_numero', (int) $licence)
@@ -762,9 +777,10 @@ class ClientImportService
      *
      * @return Collection<int, Client>
      */
-    private static function clientsMatchingName(string $name): Collection
+    private static function clientsMatchingName(string $name, string $source): Collection
     {
         return Client::query()
+            ->where('source', $source)
             ->where(function (Builder $query) use ($name) {
                 $searchTerm = '%'.strtolower($name).'%';
                 $query->whereRaw('LOWER(enterprise_name) LIKE ?', [$searchTerm])
@@ -922,7 +938,7 @@ class ClientImportService
      *                              (`{"phone": "…"}`, cf. `PHONE_ITEM_KEYS`)
      * @return array{received:int, processed:int, matched:int, blocked:int, ignored:int, not_found:int, already_unavailable:int, blacklisted:int, failed:int, blocked_items:list<array{index:int, phone:string, matched:int, blocked:int, returned_at:string}>, ignored_items:list<array{index:int, phone:string, reason:string}>, errors:list<array{index:int, phone:?string, error:string}>}
      */
-    public static function bulkUnavailableFromPhone(array $items): array
+        public static function bulkUnavailableFromPhone(array $items, string $source = Client::DEFAULT_SOURCE): array
     {
         $result = [
             'received' => count($items),
@@ -937,6 +953,7 @@ class ClientImportService
             'blocked_items' => [],
             'ignored_items' => [],
             'errors' => [],
+            'source' => $source,
         ];
 
         foreach (array_values($items) as $index => $item) {
@@ -957,7 +974,8 @@ class ClientImportService
                     );
                 }
 
-                $step = DB::transaction(fn () => self::unavailableByPhone($normalized, $phone));
+                // Pass $source into the transaction closure
+                $step = DB::transaction(fn () => self::unavailableByPhone($normalized, $phone, $source));
 
                 $result['processed'] += 1;
                 $result['matched'] += $step['matched'];
@@ -1032,9 +1050,13 @@ class ClientImportService
      *
      * @return array{matched: int, blocked: int, already: int, blacklisted: int, returned_at: ?string}
      */
-    private static function unavailableByPhone(string $normalized, string $phone): array
+    private static function unavailableByPhone(
+        string $normalized,
+        string $phone,
+        string $source = Client::DEFAULT_SOURCE
+    ): array
     {
-        $clients = self::clientsByPhone($normalized);
+        $clients = self::clientsByPhone($normalized, $source);
 
         $step = [
             'matched' => $clients->count(),
@@ -1105,9 +1127,9 @@ class ClientImportService
      *
      * @return Collection<int, Client>
      */
-    private static function clientsByPhone(string $normalized)
+    private static function clientsByPhone(string $normalized, string $source = Client::DEFAULT_SOURCE)
     {
-        $query = Client::query()->whereNotNull('phone');
+        $query = Client::query()->where('source', $source)->whereNotNull('phone');
         $phone = $query->getQuery()->getGrammar()->wrap('phone');
 
         return $query
@@ -1196,7 +1218,11 @@ class ClientImportService
      *                              (`{"client_id": "…"}`, `{"licence": "…"}`)
      * @return array<string, mixed> rapport consolidé (voir §5 de la spec)
      */
-    public static function noReservationsFromItems(array $items, string $comercialEmail): array
+    public static function noReservationsFromItems(
+        array $items,
+        string $comercialEmail,
+        string $source = Client::DEFAULT_SOURCE
+    ): array
     {
         $targets = [];
 
@@ -1210,7 +1236,7 @@ class ClientImportService
             }
         }
 
-        return self::noReservationsForTargets($targets, $comercialEmail);
+        return self::noReservationsForTargets($targets, $comercialEmail, $source);
     }
 
     /**
@@ -1232,7 +1258,8 @@ class ClientImportService
     public static function noReservationsFromStatus(
         string $status,
         string $comercialEmail,
-        ?string $after = null
+        ?string $after = null,
+        string $source = Client::DEFAULT_SOURCE
     ): array {
         $status = Client::cleanText($status) ?? '';
         $normalized = strtoupper($status);
@@ -1256,7 +1283,7 @@ class ClientImportService
         // On ne charge que les identifiants (une campagne « indisponibles »
         // peut viser plusieurs milliers de clients) et on plafonne :
         // `next_after` invite le script à reprendre au-delà.
-        $query = Client::query()->where('status', $normalized);
+        $query = Client::query()->where('status', $normalized)->where('source', $source);
 
         if ($after !== null) {
             $query->where('id', '>', $after);
@@ -1278,7 +1305,7 @@ class ClientImportService
             ])
             ->all();
 
-        $result = self::noReservationsForTargets($targets, $comercialEmail);
+        $result = self::noReservationsForTargets($targets, $comercialEmail, $source);
         $result['truncated'] = $truncated;
         $result['next_after'] = $truncated ? $page->last() : null;
 
@@ -1299,7 +1326,7 @@ class ClientImportService
      * @param  list<array{index: ?int, type: ?string, key: ?string}>  $targets
      * @return array<string, mixed>
      */
-    private static function noReservationsForTargets(array $targets, string $comercialEmail): array
+    private static function noReservationsForTargets(array $targets, string $comercialEmail, string $source): array
     {
         $result = [
             'received' => count($targets),
@@ -1349,7 +1376,7 @@ class ClientImportService
                 }
 
                 $step = DB::transaction(
-                    fn () => self::noReservationByTarget($comercial, $target['type'], $target['key'])
+                    fn () => self::noReservationByTarget($comercial, $target['type'], $target['key'], $source)
                 );
 
                 $result['processed'] += 1;
@@ -1400,11 +1427,16 @@ class ClientImportService
      *
      * @return array{matched: int, created: list<array<string, mixed>>, ignored: list<array<string, mixed>>, already: int, skipped: int}
      */
-    private static function noReservationByTarget(User $comercial, string $type, string $key): array
+    private static function noReservationByTarget(
+        User $comercial,
+        string $type,
+        string $key,
+        string $source
+    ): array
     {
         $clients = $type === self::NO_RESERVATION_TARGET_ID
-            ? Client::query()->whereKey($key)->get()
-            : self::clientsMatchingLicence($key);
+            ? Client::query()->whereKey($key)->where('source', $source)->get()
+            : self::clientsMatchingLicence($key, $source);
 
         $created = [];
         $ignored = [];

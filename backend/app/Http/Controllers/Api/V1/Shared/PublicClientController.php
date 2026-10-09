@@ -82,8 +82,8 @@ class PublicClientController extends Controller
         if ($items instanceof JsonResponse) {
             return $items;
         }
-
-        $result = ClientImportService::bulkUpsertFromScraperPayload($items);
+        $source = Client::cleanText($request->query('source')) ?? Client::DEFAULT_SOURCE;
+        $result = ClientImportService::bulkUpsertFromScraperPayload($items, $source);
 
         return response()->json([
             // `success = false` uniquement si **aucune** ligne n'a pu être
@@ -109,7 +109,8 @@ class PublicClientController extends Controller
             return $items;
         }
 
-        $result = ClientImportService::bulkDeleteFromScraper($items);
+        $source = Client::cleanText($request->query('source')) ?? Client::DEFAULT_SOURCE;
+        $result = ClientImportService::bulkDeleteFromScraper($items, $source);
 
         return response()->json([
             'success' => $result['processed'] > 0,
@@ -170,10 +171,11 @@ class PublicClientController extends Controller
             return $items;
         }
 
+        $source = Client::cleanText($request->query('source')) ?? Client::DEFAULT_SOURCE;
         $result = match ($mode) {
-            ClientImportService::BLACKLIST_MODE_LICENCE => ClientImportService::convertToBlacklistFromLicence($items),
-            ClientImportService::BLACKLIST_MODE_NAME => ClientImportService::convertToBlacklistFromName($items),
-            default => ClientImportService::convertToBlacklistFromPayload($items),
+            ClientImportService::BLACKLIST_MODE_LICENCE => ClientImportService::convertToBlacklistFromLicence($items, $source),
+            ClientImportService::BLACKLIST_MODE_NAME => ClientImportService::convertToBlacklistFromName($items, $source),
+            default => ClientImportService::convertToBlacklistFromPayload($items, $source),
         };
 
         return response()->json([
@@ -270,6 +272,7 @@ class PublicClientController extends Controller
     public function createNoReservations(Request $request): JsonResponse
     {
         $decoded = json_decode((string) $request->getContent(), true);
+        $source = Client::cleanText($request->query('source')) ?? Client::DEFAULT_SOURCE;
         $comercial = (string) config(
             'public_api.no_reservations_comercial_email',
             ClientImportService::NO_RESERVATIONS_COMERCIAL_EMAIL
@@ -297,7 +300,8 @@ class PublicClientController extends Controller
                 $result = ClientImportService::noReservationsFromStatus(
                     $decoded['status'],
                     $comercial,
-                    isset($decoded['after']) ? $decoded['after'] : null
+                    isset($decoded['after']) ? $decoded['after'] : null,
+                    $source
                 );
             } catch (InvalidArgumentException $e) {
                 return $this->invalid($e->getMessage());
@@ -316,7 +320,7 @@ class PublicClientController extends Controller
         }
 
         try {
-            $result = ClientImportService::noReservationsFromItems($items, $comercial);
+            $result = ClientImportService::noReservationsFromItems($items, $comercial, $source);
         } catch (InvalidArgumentException $e) {
             // Employé absent de la base : configuration, pas requête invalide.
             return $this->invalid($e->getMessage());
@@ -404,7 +408,8 @@ class PublicClientController extends Controller
             return $items;
         }
 
-        $result = ClientImportService::bulkUnavailableFromPhone($items);
+        $source = Client::cleanText($request->query('source')) ?? Client::DEFAULT_SOURCE;
+        $result = ClientImportService::bulkUnavailableFromPhone($items, $source);
 
         return response()->json([
             // `success = false` uniquement si **aucun** numéro n'a pu être

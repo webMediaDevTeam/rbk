@@ -91,6 +91,20 @@ class PublicClientNoReservationsTest extends TestCase
 
     // ------------------------------------------------- Création (par licence)
 
+    public function test_source_query_limits_status_campaign_to_that_source(): void
+    {
+        $affaire = $this->makeClient(['source' => 'Affaire']);
+        $anglais = $this->makeClient(['source' => 'Anglais']);
+
+        $this->postJson(self::URI.'?source=Anglais', ['status' => Client::STATUS_UNAVAILABLE])
+            ->assertOk()
+            ->assertJsonPath('data.matched', 1)
+            ->assertJsonPath('data.created', 1);
+
+        $this->assertDatabaseMissing('reservations', ['client_id' => $affaire->id]);
+        $this->assertDatabaseHas('reservations', ['client_id' => $anglais->id]);
+    }
+
     public function test_guest_can_create_a_no_reservation_by_licence_without_authentication(): void
     {
         $client = $this->makeClient([

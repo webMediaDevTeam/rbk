@@ -65,6 +65,28 @@ class PublicClientConvertToBlacklistTest extends TestCase
 
     // --------------------------------------------------------- Conversion
 
+    public function test_source_query_limits_blacklisting_to_that_source(): void
+    {
+        $affaire = $this->makeClient([
+            'name' => 'Ontario Builder',
+            'enterprise_name' => 'Ontario Builder Inc.',
+            'source' => 'Affaire',
+        ]);
+        $anglais = $this->makeClient([
+            'name' => 'Ontario Builder',
+            'enterprise_name' => 'Ontario Builder Inc.',
+            'source' => 'Anglais',
+        ]);
+
+        $this->postJson(self::URI.'?source=Anglais', ['name' => 'Ontario Builder'])
+            ->assertOk()
+            ->assertJsonPath('data.matched', 1)
+            ->assertJsonPath('data.zapped', 1);
+
+        $this->assertSame(Client::STATUS_AVAILABLE, $affaire->fresh()->status);
+        $this->assertSame(Client::STATUS_BLACKLISTED, $anglais->fresh()->status);
+    }
+
     public function test_guest_can_blacklist_by_enterprise_name_without_authentication(): void
     {
         $client = $this->makeClient([

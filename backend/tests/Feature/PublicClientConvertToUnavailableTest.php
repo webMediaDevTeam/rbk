@@ -68,6 +68,20 @@ class PublicClientConvertToUnavailableTest extends TestCase
 
     // ----------------------------------------------------------- Blocage
 
+    public function test_source_query_limits_phone_updates_to_that_source(): void
+    {
+        $affaire = $this->makeClient(['phone' => '819-418-6550', 'source' => 'Affaire']);
+        $anglais = $this->makeClient(['phone' => '819-418-6550', 'source' => 'Anglais']);
+
+        $this->postJson(self::URI.'?source=Anglais', ['phone' => '819-418-6550'])
+            ->assertOk()
+            ->assertJsonPath('data.matched', 1)
+            ->assertJsonPath('data.blocked', 1);
+
+        $this->assertSame(Client::STATUS_AVAILABLE, $affaire->fresh()->status);
+        $this->assertSame(Client::STATUS_UNAVAILABLE, $anglais->fresh()->status);
+    }
+
     public function test_guest_can_block_by_phone_without_authentication(): void
     {
         $client = $this->makeClient(['phone' => '819-418-6550']);
