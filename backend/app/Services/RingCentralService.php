@@ -49,8 +49,7 @@ class RingCentralService
 
     /**
      * Reconfigure le service **pour la requête en cours** avec les
-     * identifiants d'une entreprise (`Enterprise::getRingCentralCredentials()`,
-     * déjà repliés sur `.env` champ par champ).
+    * identifiants stockés sur une entreprise (`Enterprise::getRingCentralCredentials()`).
      *
      * `void` (jamais de valeur de retour) : l'instance est propre à la
      * requête — elle n'est ni partagée ni stockée dans le conteneur.
@@ -60,9 +59,15 @@ class RingCentralService
     public function configure(array $credentials = []): void
     {
         $this->credentials = [
-            'client_id' => $credentials['client_id'] ?? config('services.ringcentral.client_id'),
-            'client_secret' => $credentials['client_secret'] ?? config('services.ringcentral.client_secret'),
-            'token' => $credentials['token'] ?? config('services.ringcentral.jwt'),
+            'client_id' => array_key_exists('client_id', $credentials)
+                ? $credentials['client_id']
+                : config('services.ringcentral.client_id'),
+            'client_secret' => array_key_exists('client_secret', $credentials)
+                ? $credentials['client_secret']
+                : config('services.ringcentral.client_secret'),
+            'token' => array_key_exists('token', $credentials)
+                ? $credentials['token']
+                : config('services.ringcentral.jwt'),
             'server_url' => $credentials['server_url']
                 ?? config('services.ringcentral.server_url', 'https://platform.ringcentral.com'),
         ];

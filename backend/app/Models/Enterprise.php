@@ -19,35 +19,30 @@ class Enterprise extends Model
         'address',
         'logo',
         'status',
-        // Compte RingCentral propre à l'entreprise (optionnel, repli `.env`)
+        // Compte RingCentral propre à l'entreprise (optionnel)
         'ringcentral_client_id',
         'ringcentral_client_secret',
         'ringcentral_token',
         'source',
     ];
 
-    /**
-     * Identifiants RingCentral **de l'entreprise**, avec repli sur `.env`
-     * (`config('services.ringcentral.*')`) champ par champ : une entreprise
-     * sans identifiants propres → compte global inchangé ; une entreprise
-     * partiellement remplie → le champ manquant vient aussi de `.env`.
-     *
-     * @return array{client_id: ?string, client_secret: ?string, token: ?string, server_url: string}
-     */
+    /** Identifiants RingCentral stockés directement sur l'entreprise. */
     public function getRingCentralCredentials(): array
     {
         return [
-            'client_id' => $this->ringcentral_client_id ?: config('services.ringcentral.client_id'),
-            'client_secret' => $this->ringcentral_client_secret ?: config('services.ringcentral.client_secret'),
-            'token' => $this->ringcentral_token ?: config('services.ringcentral.jwt'),
+            'client_id' => $this->ringcentral_client_id,
+            'client_secret' => $this->ringcentral_client_secret,
+            'token' => $this->ringcentral_token,
             'server_url' => config('services.ringcentral.server_url', 'https://platform.ringcentral.com'),
         ];
     }
 
-    /** L'entreprise a-t-elle **son propre** compte (indépendant de `.env`) ? */
+    /** L'entreprise a-t-elle les trois identifiants RingCentral enregistrés ? */
     public function hasOwnRingCentralAccount(): bool
     {
-        return filled($this->ringcentral_client_id) && filled($this->ringcentral_client_secret);
+        return filled($this->ringcentral_client_id)
+            && filled($this->ringcentral_client_secret)
+            && filled($this->ringcentral_token);
     }
 
     public function employees(): HasMany

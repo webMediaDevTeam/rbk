@@ -29,13 +29,19 @@ export default function EnterpriseInfoCard({ entreprise }) {
         </div>
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground truncate">{entreprise.name}</h3>
-          <p className="text-xs text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {entreprise.status === 'INACTIVE' ? (
               <Badge variant="destructive">Inactive</Badge>
             ) : (
               <Badge variant="success">Active</Badge>
             )}
-          </p>
+            <span>RingCentral</span>
+            {entreprise.ringcentral_configured ? (
+              <Badge variant="success">Actif</Badge>
+            ) : (
+              <Badge variant="secondary">Inactif</Badge>
+            )}
+          </div>
         </div>
       </div>
 

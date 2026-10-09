@@ -142,24 +142,24 @@ class EnterpriseRingCentralCredentialsTest extends TestCase
             ->assertJsonValidationErrors(['source']);
     }
 
-    public function test_credentials_fall_back_to_the_env_configuration(): void
+    public function test_credentials_are_read_only_from_the_enterprise_record(): void
     {
         config()->set('services.ringcentral.client_id', 'env-client-id');
         config()->set('services.ringcentral.client_secret', 'env-client-secret');
         config()->set('services.ringcentral.jwt', 'env-jwt');
 
-        // Sans identifiants propres → tout vient de `.env`.
-        $fallback = (new Enterprise)->getRingCentralCredentials();
-        $this->assertSame('env-client-id', $fallback['client_id']);
-        $this->assertSame('env-client-secret', $fallback['client_secret']);
-        $this->assertSame('env-jwt', $fallback['token']);
+        // Les valeurs globales ne complètent pas une entreprise vide.
+        $empty = (new Enterprise)->getRingCentralCredentials();
+        $this->assertNull($empty['client_id']);
+        $this->assertNull($empty['client_secret']);
+        $this->assertNull($empty['token']);
 
-        // Entreprise partiellement remplie → ses champs à elle, le reste de `.env`.
+        // Une entreprise partielle reste incomplète.
         $partial = new Enterprise(['ringcentral_client_id' => 'entreprise-id']);
         $credentials = $partial->getRingCentralCredentials();
         $this->assertSame('entreprise-id', $credentials['client_id']);
-        $this->assertSame('env-client-secret', $credentials['client_secret']);
-        $this->assertSame('env-jwt', $credentials['token']);
+        $this->assertNull($credentials['client_secret']);
+        $this->assertNull($credentials['token']);
         $this->assertFalse($partial->hasOwnRingCentralAccount());
     }
 
@@ -197,21 +197,38 @@ class EnterpriseRingCentralCredentialsTest extends TestCase
             ->assertJsonPath('data.0.phoneNumber', '+15145550111');
     }
 
-    /** Sans `enterprise_id` : rien n'est reconfiguré, le compte `.env` reste. */
-    public function test_devices_endpoint_without_enterprise_keeps_the_env_credentials(): void
+    /** L'endpoint des choix exige une entreprise en base. */
+    public function test_devices_endpoint_requires_an_enterprise_id(): void
     {
         $this->admin('ADMIN');
 
         $mock = Mockery::mock(RingCentralService::class);
         $this->app->instance(RingCentralService::class, $mock);
         $mock->shouldReceive('configure')->never();
-        $mock->shouldReceive('getDevices')->once()->with(100)->andReturn([]);
-        $mock->shouldReceive('getPhoneNumbers')->once()->andReturn([]);
+        $mock->shouldReceive('getDevices')->never();
+        $mock->shouldReceive('getPhoneNumbers')->never();
 
         $this->getJson('/api/v1/call-logs/devices')
-            ->assertOk()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('data', []);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['enterprise_id']);
+    }
+
+    public function test_devices_endpoint_rejects_enterprise_without_complete_database_credentials(): void
+    {
+        $this->admin('ADMIN');
+        config()->set('services.ringcentral.client_id', 'env-client-id');
+        config()->set('services.ringcentral.client_secret', 'env-client-secret');
+        config()->set('services.ringcentral.jwt', 'env-jwt');
+        $enterprise = Enterprise::create(['name' => 'Sans compte RingCentral']);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        $mock->shouldReceive('configure')->never();
+        $mock->shouldReceive('getDevices')->never();
+
+        $this->getJson("/api/v1/call-logs/devices?enterprise_id={$enterprise->id}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cette entreprise doit avoir son client ID, son secret et son JWT RingCentral enregistrés.');
     }
 
     public function test_devices_endpoint_rejects_an_unknown_enterprise(): void

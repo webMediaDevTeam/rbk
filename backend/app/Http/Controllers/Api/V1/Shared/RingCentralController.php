@@ -74,11 +74,8 @@ class RingCentralController extends Controller
      * renvoient `phoneLines: []`, c'est donc `/account/~/phone-number` qui
      * fournit le libellé affiché dans la sélection (numéro, pas nom).
      *
-     * `enterprise_id` (optionnel, ADMIN / SUPER_ADMIN) : la liste vient alors
-     * **du compte RingCentral de cette entreprise** (`enterprises.ringcentral_*`,
-     * repli `.env` champ par champ) — la modale employé l'envoie dès que
-     * l'entreprise est choisie. Sans `enterprise_id`, comportement inchangé
-     * (compte `.env`).
+    * `enterprise_id` obligatoire : la liste vient exclusivement du compte
+    * RingCentral enregistré sur cette entreprise (`enterprises.ringcentral_*`).
      *
      * Best-effort : si l'API des numéros est injoignable, les appareils
      * sont renvoyés tels quels (la sélection retombe sur le nom).
@@ -88,20 +85,21 @@ class RingCentralController extends Controller
         $perPage = max(1, min(1000, (int) $request->query('per_page', 100)));
 
         $validated = $request->validate([
-            'enterprise_id' => ['nullable', 'string', 'max:36', 'exists:enterprises,id'],
+            'enterprise_id' => ['required', 'string', 'max:36', 'exists:enterprises,id'],
         ]);
 
-        $enterpriseId = $validated['enterprise_id'] ?? null;
+        $enterprise = Enterprise::query()->findOrFail($validated['enterprise_id']);
 
-        if (! empty($enterpriseId)) {
-            $enterprise = Enterprise::query()->find($enterpriseId);
-
-            if ($enterprise) {
-                // Instance propre à la requête (jamais un singleton) : le
-                // reconfigurement ne touche aucun autre appel.
-                $this->ringCentral->configure($enterprise->getRingCentralCredentials());
-            }
+        if (! $enterprise->hasOwnRingCentralAccount()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cette entreprise doit avoir son client ID, son secret et son JWT RingCentral enregistrés.',
+            ], 422);
         }
+
+        // Instance propre à la requête, configurée uniquement avec les
+        // identifiants stockés sur cette entreprise.
+        $this->ringCentral->configure($enterprise->getRingCentralCredentials());
 
         return $this->pass(fn () => $this->withPhoneNumbers($this->ringCentral->getDevices($perPage)));
     }

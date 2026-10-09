@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Enterprise;
 use App\Models\User;
 use App\Services\RingCentralService;
 use Exception;
@@ -116,6 +117,12 @@ class RingCentralApiTest extends TestCase
     public function test_devices_returns_records_with_their_phone_numbers(): void
     {
         Sanctum::actingAs($this->superAdmin);
+        $enterprise = Enterprise::create([
+            'name' => 'Compte RC test',
+            'ringcentral_client_id' => 'client-id',
+            'ringcentral_client_secret' => 'client-secret',
+            'ringcentral_token' => 'jwt-token',
+        ]);
 
         $mock = $this->mockService();
         // Les softphones ont `phoneLines: []` : le numéro vient de
@@ -128,7 +135,7 @@ class RingCentralApiTest extends TestCase
             ['phoneNumber' => '+15145550100', 'extension' => ['id' => 'ext-101']],
         ]);
 
-        $this->getJson('/api/v1/call-logs/devices?per_page=50')
+        $this->getJson("/api/v1/call-logs/devices?per_page=50&enterprise_id={$enterprise->id}")
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.0.id', 'dev-1')
@@ -142,6 +149,12 @@ class RingCentralApiTest extends TestCase
     public function test_devices_survive_an_unreachable_phone_number_api(): void
     {
         Sanctum::actingAs($this->superAdmin);
+        $enterprise = Enterprise::create([
+            'name' => 'Compte RC test',
+            'ringcentral_client_id' => 'client-id',
+            'ringcentral_client_secret' => 'client-secret',
+            'ringcentral_token' => 'jwt-token',
+        ]);
 
         $mock = $this->mockService();
         $mock->shouldReceive('getDevices')->once()->andReturn([
@@ -149,7 +162,7 @@ class RingCentralApiTest extends TestCase
         ]);
         $mock->shouldReceive('getPhoneNumbers')->once()->andThrow(new Exception('RingCentral non configuré'));
 
-        $this->getJson('/api/v1/call-logs/devices')
+        $this->getJson("/api/v1/call-logs/devices?enterprise_id={$enterprise->id}")
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.0.id', 'dev-1');
