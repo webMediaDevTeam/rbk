@@ -15,6 +15,7 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
     Route::get('clients', [ClientController::class, 'index']);
     Route::get('clients/mes', [ClientController::class, 'mine']);
     Route::get('clients/{id}', [ClientController::class, 'show']);
+    Route::patch('clients/{id}', [ClientController::class, 'update']);
     // Mise en liste noire = mise à jour d'une fiche client : réservée aux
     // commerciaux **autorisés** (`users.has_permission`, « Privilège de
     // libération ») — 403 sinon (middleware CheckPermission, §7.1).

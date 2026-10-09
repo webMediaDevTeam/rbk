@@ -9,6 +9,10 @@ export function getCommercialProspectApi(id) {
   return api.get(`/clients/${id}`)
 }
 
+export function updateCommercialClientApi(id, payload) {
+  return api.patch(`/clients/${id}`, payload)
+}
+
 export function blacklistClientApi(id, note) {
   return api.post(`/clients/${id}/blacklist`, { note })
 }

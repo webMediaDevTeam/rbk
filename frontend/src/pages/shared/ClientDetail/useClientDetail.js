@@ -48,6 +48,7 @@ export function useClientDetail() {
   const [blacklistOpen, setBlacklistOpen] = useState(false)
   const [blacklistNote, setBlacklistNote] = useState('')
   const [blacklistError, setBlacklistError] = useState(null)
+  const [clientEditOpen, setClientEditOpen] = useState(false)
 
   const client = data?.data?.client
   // Journal unique : tout vit dans `notes` (issues d'appel + commentaires).
@@ -95,6 +96,8 @@ export function useClientDetail() {
   const [phoneOpen, setPhoneOpen] = useState(false)
   const openPhoneEdit = () => setPhoneOpen(true)
   const closePhoneEdit = () => setPhoneOpen(false)
+  const openClientEdit = () => setClientEditOpen(true)
+  const closeClientEdit = () => setClientEditOpen(false)
 
   // Retour en arrière (seul navigation restante : les breadcrumbs ont été
   // supprimés de toutes les pages).
@@ -148,5 +151,8 @@ export function useClientDetail() {
     phoneOpen,
     openPhoneEdit,
     closePhoneEdit,
+    clientEditOpen,
+    openClientEdit,
+    closeClientEdit,
   }
 }

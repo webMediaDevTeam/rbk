@@ -123,6 +123,77 @@ class ClientController extends Controller
         ]);
     }
 
+    public function update(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'sometimes|nullable|string|max:255',
+            'enterprise_name' => 'sometimes|nullable|string|max:255',
+            'phone' => 'sometimes|nullable|string|max:40',
+            'email' => 'sometimes|nullable|email|max:255',
+            'representative_name' => 'sometimes|nullable|string|max:255',
+            'full_address' => 'sometimes|nullable|string|max:2000',
+            'municipality' => 'sometimes|nullable|string|max:255',
+            'administrative_region' => 'sometimes|nullable|string|max:255',
+            'neq' => 'sometimes|nullable|string|max:255',
+            'licence_number' => 'sometimes|nullable|string|max:255',
+            'licence_propre_numero' => 'sometimes|nullable|integer|min:0',
+            'licence_propre' => 'sometimes|boolean',
+            'licence_status' => 'sometimes|nullable|string|max:255',
+            'licence_start_date' => 'sometimes|nullable|date',
+            'licence_end_date' => 'sometimes|nullable|date',
+            'respondent_count' => 'sometimes|nullable|integer|min:0',
+            'respondents' => 'sometimes|nullable|array',
+            'sub_category_count' => 'sometimes|nullable|integer|min:0',
+            'categories' => 'sometimes|nullable|array',
+            'authorized_categories' => 'sometimes|nullable|array',
+            'surety_company' => 'sometimes|nullable|string|max:255',
+            'cautionnement_compagnie' => 'sometimes|nullable|array',
+            'surety_amount' => 'sometimes|nullable|numeric|min:0',
+        ]);
+
+        $client = Client::findOrFail($id);
+        $reservation = $this->latestReservationOf($client);
+        $user = $request->user();
+
+        if (! in_array($client->status, Client::HELD_STATUSES, true)
+            || $reservation === null
+            || ! in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)
+            || (string) $reservation->comercial_id !== (string) $user?->id) {
+            abort(403, 'Vous ne pouvez modifier que les clients de votre réservation active.');
+        }
+
+        foreach ([
+            'name', 'enterprise_name', 'email', 'representative_name', 'full_address',
+            'municipality', 'administrative_region', 'neq', 'licence_number', 'licence_status',
+            'surety_company',
+        ] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $validated[$field] = Client::cleanText($validated[$field]);
+            }
+        }
+
+        if (array_key_exists('phone', $validated)) {
+            $validated['phone'] = Client::cleanPhone($validated['phone']);
+        }
+
+        if (array_key_exists('authorized_categories', $validated)) {
+            $validated['categories'] = $validated['authorized_categories'];
+        }
+
+        $client->fill($validated);
+        $client->is_manually_updated = true;
+        $client->save();
+        $client->load(['reservations.comercial', 'reservations.rappel', 'notes.sender']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Fiche client enregistrée.',
+            'data' => [
+                'client' => $this->formatClient($client, true, true),
+            ],
+        ]);
+    }
+
     public function blacklist(Request $request, string $id): JsonResponse
     {
         $validated = $request->validate([

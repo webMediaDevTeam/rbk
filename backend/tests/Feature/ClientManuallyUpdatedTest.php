@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Reservation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -89,6 +90,16 @@ class ClientManuallyUpdatedTest extends TestCase
             ->assertJsonPath('data.client.phone', Client::cleanPhone($phone));
     }
 
+    private function reserveFor(Client $client, User $commercial): void
+    {
+        $client->update(['status' => Client::STATUS_RESERVED]);
+        Reservation::create([
+            'client_id' => $client->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+    }
+
     // ------------------------------------------------------- 1. import neuf
 
     public function test_imported_client_is_not_flagged_as_manually_updated(): void
@@ -112,6 +123,39 @@ class ClientManuallyUpdatedTest extends TestCase
         $fresh = $client->fresh();
         $this->assertSame('418-555-9999', $fresh->phone);
         $this->assertTrue($fresh->is_manually_updated);
+    }
+
+    public function test_commercial_can_edit_owned_client_and_marks_it_manually_updated(): void
+    {
+        $client = $this->importOne();
+        $this->reserveFor($client, $this->commercial);
+        Sanctum::actingAs($this->commercial);
+
+        $this->patchJson("/api/v1/clients/{$client->id}", [
+            'municipality' => 'Lévis',
+            'phone' => '418 555 9999',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.client.municipality', 'Lévis')
+            ->assertJsonPath('data.client.phone', '418-555-9999');
+
+        $this->assertSame('Lévis', $client->fresh()->municipality);
+        $this->assertSame('418-555-9999', $client->fresh()->phone);
+        $this->assertTrue($client->fresh()->is_manually_updated);
+    }
+
+    public function test_commercial_cannot_edit_a_client_reserved_by_another_commercial(): void
+    {
+        $client = $this->importOne();
+        $otherCommercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
+        $this->reserveFor($client, $otherCommercial);
+        Sanctum::actingAs($this->commercial);
+
+        $this->patchJson("/api/v1/clients/{$client->id}", ['municipality' => 'Lévis'])
+            ->assertForbidden();
+
+        $this->assertSame('Québec', $client->fresh()->municipality);
+        $this->assertFalse($client->fresh()->is_manually_updated);
     }
 
     // ---------------------------------- 3. resync qui refuse de réécrire

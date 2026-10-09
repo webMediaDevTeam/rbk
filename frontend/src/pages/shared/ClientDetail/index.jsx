@@ -6,6 +6,7 @@ import ClientDetailsTab from './components/ClientDetailsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
 import PhoneEditModal from '@/pages/shared/components/PhoneEditModal/index.jsx'
+import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
 import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import { cn } from '@/lib/utils.js'
 import { useClientDetail } from './useClientDetail.js'
@@ -40,6 +41,9 @@ export default function ClientDetailPage() {
     phoneOpen,
     openPhoneEdit,
     closePhoneEdit,
+    clientEditOpen,
+    openClientEdit,
+    closeClientEdit,
   } = useClientDetail()
 
   return (
@@ -179,6 +183,12 @@ export default function ClientDetailPage() {
           )}
 
           <div className="flex justify-end gap-2">
+            {!isAdmin && hasReservation && !client.is_blacklisted && (
+              <Button variant="outline" onClick={openClientEdit}>
+                <SquarePen className="mr-1.5 h-4 w-4" />
+                Modifier la fiche
+              </Button>
+            )}
             {/* Saisie du numéro (Admin / Super Admin) — voir PhoneEditModal. */}
             {isAdmin && (
               <Button variant="outline" onClick={openPhoneEdit}>
@@ -215,6 +225,7 @@ export default function ClientDetailPage() {
       )}
 
       <PhoneEditModal open={phoneOpen} client={client ?? null} onClose={closePhoneEdit} />
+      <ClientEditModal open={clientEditOpen} client={client ?? null} onClose={closeClientEdit} />
 
       <ActionModal
         open={actionOpen}
