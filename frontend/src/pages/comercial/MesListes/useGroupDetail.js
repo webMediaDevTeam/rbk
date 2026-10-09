@@ -12,18 +12,12 @@ export function useGroupDetail() {
   const qc = useQueryClient()
 
   // Filtre par **statut de réservation** : barre de badges identique à celle
-  // de « Grande liste » (Tous → statuts), sélection multiple. « En
-  // attente » (PENDING) est sélectionné dès l'ouverture de la page ; « Tous »
-  // retire toutes les sélections.
-  const [statusFilters, setStatusFilters] = useState(['PENDING'])
-  const handleStatusToggle = (key) =>
-    setStatusFilters((prev) =>
-      key === null
-        ? []
-        : prev.includes(key)
-          ? prev.filter((s) => s !== key)
-          : [...prev, key]
-    )
+  // Filtre unique par statut : « En attente » (PENDING) est sélectionné à
+  // l'ouverture ; cliquer sur un autre statut le remplace, et recliquer dessus
+  // ou sur « Tous » retire le filtre.
+  const [statusFilter, setStatusFilter] = useState('PENDING')
+  const handleStatusFilterChange = (key) =>
+    setStatusFilter((current) => (key === null || current === key ? null : key))
 
   const { data, isLoading } = useQuery({
     queryKey: ['reservation-group', id],
@@ -66,10 +60,9 @@ export function useGroupDetail() {
   // **toutes** les lignes de la liste (`GroupDetail.jsx`) : ils ne bougent
   // pas quand on sélectionne un badge (aucune ligne n'est masquée —
   // 27 lignes = badge « Tous » 27).
-  const visibleReservations =
-    statusFilters.length === 0
-      ? reservations
-      : reservations.filter((r) => statusFilters.includes(r.status))
+  const visibleReservations = statusFilter
+    ? reservations.filter((r) => r.status === statusFilter)
+    : reservations
 
   // Tri : les lignes **« En attente » (PENDING) passent toujours en tête**,
   // les autres statuts gardent l'ordre du serveur (created_at desc) — donc
@@ -84,8 +77,8 @@ export function useGroupDetail() {
     group,
     reservations,
     filteredReservations,
-    statusFilters,
-    handleStatusToggle,
+    statusFilter,
+    handleStatusFilterChange,
     rappelCount,
     isDesktop,
     renameMutation,

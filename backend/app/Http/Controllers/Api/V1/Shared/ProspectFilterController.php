@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Source;
 use Illuminate\Http\JsonResponse;
 
 class ProspectFilterController extends Controller
@@ -53,19 +54,15 @@ class ProspectFilterController extends Controller
     }
 
     /**
-     * Sources **réellement présentes** dans `clients.source`, sans doublons —
-     * alimente les onglets « Tous / Affaire / … » de la Grande liste admin
-     * (`GET /clients/sources`).
-     *
-     * Distinct de `GET /sources` (répertoire `SourceSeeder`) : ici seules les
-     * origines qui existent en base sont rendues, donc aucun onglet vide —
-     * et la liste est invalidée à chaque changement de client
-     * (`Client::forgetDistinctValues()`), cache hebdomadaire en filet de
-     * sécurité.
+     * Noms du répertoire `sources`, qui alimente les onglets « Tous / Affaire
+     * / … » de la Grande liste admin (`GET /clients/sources`).
      */
     public function sources(): JsonResponse
     {
-        return $this->values('source');
+        return response()->json([
+            'success' => true,
+            'data' => Source::query()->orderBy('name')->pluck('name')->all(),
+        ]);
     }
 
     /** @param  string  $column  une des colonnes de Client::DISTINCT_COLUMNS */

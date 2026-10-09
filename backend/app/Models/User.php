@@ -51,6 +51,14 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Profil employé du compte — `null` pour un admin / super admin.
+     * Génériques explicites : la relation porte le périmètre « source » d'un
+     * commercial (`employee.enterprise.source`), le chaînage doit rester
+     * typé pour PHPStan.
+     *
+     * @return HasOne<Employee, $this>
+     */
     public function employee(): HasOne
     {
         return $this->hasOne(Employee::class);

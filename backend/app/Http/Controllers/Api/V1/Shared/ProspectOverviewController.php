@@ -71,6 +71,7 @@ class ProspectOverviewController extends Controller
         // est actif, TOUS les compteurs suivent le filtre : l'invariant
         // « compteur du badge = lignes rendues après clic » (§9) doit tenir
         // sous chaque onglet, sinon les badges de statut mentiraient.
+        /** @var \Closure(): Builder<Client> $clients */
         $clients = fn (): Builder => $this->search->filterBySource(
             Client::query(),
             $request->input('source'),

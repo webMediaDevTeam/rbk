@@ -18,8 +18,8 @@ use Tests\TestCase;
  *  - **Grande liste admin** (`GET /commercials/clients`) : `?source=` filtre
  *    sur le libellé exact, absent / vide = « Tous » ; la route reste
  *    réservée ADMIN / SUPER_ADMIN (`CheckRole`) ;
- *  - **onglets** : `GET /clients/sources` rend les origines **réellement
- *    présentes** dans la base (distinctes, triées) ;
+ *  - **onglets** : `GET /clients/sources` rend les noms du répertoire
+ *    `sources` (triés) ;
  *  - **badges de statut** : `GET /clients/overview?source=` borne TOUS les
  *    compteurs à l'onglet actif — invariant « compteur du badge = lignes
  *    rendues » ;
@@ -165,20 +165,22 @@ class GrandeListeSourceFilterTest extends TestCase
 
     // ------------------------------------------------- Onglets : distincts
 
-    public function test_client_sources_endpoint_lists_present_origins_only(): void
+    public function test_client_sources_endpoint_lists_source_directory_entries(): void
     {
         $this->makeClient(['source' => 'Angalis']);
         $this->makeClient(['source' => 'Affaire']);
         $this->makeClient(['source' => 'Angalis']);
-        // Source du répertoire (`SourceSeeder` / `GET sources`) **sans aucun
-        // client** : aucun onglet vide n'en découle.
+
+        Source::firstOrCreate(['name' => 'Affaire']);
+        Source::firstOrCreate(['name' => 'Angalis']);
+        // Une source du répertoire reste disponible même sans client associé.
         Source::firstOrCreate(['name' => 'Répertoire']);
 
         Sanctum::actingAs($this->makeAdmin());
 
         $response = $this->getJson('/api/v1/clients/sources')->assertOk();
 
-        $this->assertSame(['Affaire', 'Angalis'], $response->json('data'));
+        $this->assertSame(['Affaire', 'Angalis', 'Répertoire'], $response->json('data'));
     }
 
     public function test_client_sources_endpoint_requires_authentication(): void

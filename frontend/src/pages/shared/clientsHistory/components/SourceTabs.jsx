@@ -8,9 +8,7 @@ import { useAuth } from '@/context/AuthContext.jsx'
  * source** (`?source=` de `GET commercials/clients`, origine du prospect —
  * répertoire `sources`, docs/RULES.md §13).
  *
- *  - Onglets = sources **réellement présentes** dans `clients.source`
- *    (`GET clients/sources` : distinctes + dédoublonnées, cache serveur) :
- *    aucun onglet vide, la liste se met à jour avec les imports ;
+ *  - Onglets = noms du répertoire `sources` (`GET clients/sources`, triés) ;
  *  - sélection **unique** : « Tous » (paramètre `source` vide = aucun filtre)
  *    ou une seule origine — un second clic sur l'onglet actif repasse à
  *    « Tous » ; tout changement ramène à la 1re page ;

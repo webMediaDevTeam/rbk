@@ -101,6 +101,9 @@ class ClientSearchService
      * Comparaison **exacte** (répertoire fermé : la casse doit être celle
      * stockée) ; valeur vide ou nulle = aucun filtre — c'est l'onglet
      * « Tous » de la Grande liste admin (`GET commercials/clients?source=`).
+     *
+     * @param  Builder<Client>  $query
+     * @return Builder<Client>
      */
     public function filterBySource(Builder $query, ?string $source): Builder
     {
@@ -546,6 +549,9 @@ class ClientSearchService
      * deux routes sont sous `CheckRole:COMERCIAL`) reste inchangé, et un
      * éventuel paramètre `source` venu du navigateur est **ignoré** : le
      * périmètre est décidé par le serveur.
+     *
+     * @param  Builder<Client>  $query
+     * @return Builder<Client>
      */
     public function applyCommercialSourceScope(Builder $query, ?User $user): Builder
     {

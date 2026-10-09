@@ -142,7 +142,6 @@ class ClientController extends Controller
         });
     }
 
-   
     private function latestReservationOf(Client $client): ?Reservation
     {
         if ($client->relationLoaded('latestReservation')) {
@@ -153,7 +152,6 @@ class ClientController extends Controller
             ->sortByDesc(fn (Reservation $r) => [$r->created_at, $r->id])
             ->first();
     }
-
 
     private function canSeePhone(Client $client, ?Reservation $activeReservation): bool
     {

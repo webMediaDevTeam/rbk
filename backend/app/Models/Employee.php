@@ -44,6 +44,12 @@ class Employee extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Entreprise de rattachement de l'employé — porte `source`, le périmètre
+     * « source » d'un commercial.
+     *
+     * @return BelongsTo<Enterprise, $this>
+     */
     public function enterprise(): BelongsTo
     {
         return $this->belongsTo(Enterprise::class);

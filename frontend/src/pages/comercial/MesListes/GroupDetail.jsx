@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff, Users } from 'lucide-react'
+import { ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff, Users, Copy, Info } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
@@ -71,8 +71,8 @@ export default function GroupDetailPage() {
     group,
     reservations,
     filteredReservations,
-    statusFilters,
-    handleStatusToggle,
+    statusFilter,
+    handleStatusFilterChange,
     rappelCount,
     isDesktop,
     renameMutation,
@@ -84,7 +84,7 @@ export default function GroupDetailPage() {
 
   // Barre de badges de statut de réservation — **même structure que la page
   // « Grande liste »** (ProspectKpis) : `Tous` en 1er, puis les statuts
-  // dans l'ordre du workflow (`En attente` en 2e), sélection multiple, couleur
+  // dans l'ordre du workflow (`En attente` en 2e), sélection unique, couleur
   // pleine à la sélection et **tous les compteurs affichés, même à 0**.
   const STATUS_PILLS = [
     {
@@ -132,6 +132,24 @@ export default function GroupDetailPage() {
       activeFg: 'text-white',
       title: 'Réservations au statut CALL_BACK — clique pour filtrer',
     },
+    {
+      key: 'DOUBLE',
+      label: 'Double',
+      icon: Copy,
+      iconClass: 'bg-primary/10 text-primary',
+      activeClass: 'border border-transparent bg-primary',
+      activeFg: 'text-white',
+      title: 'Réservations au statut DOUBLE — clique pour filtrer',
+    },
+    {
+      key: 'INFO',
+      label: 'Info',
+      icon: Info,
+      iconClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+      activeClass: 'border border-transparent bg-sky-600',
+      activeFg: 'text-white',
+      title: 'Réservations au statut INFO — clique pour filtrer',
+    },
   ]
 
   // Compteurs des badges calculés sur **toutes** les lignes de la liste
@@ -151,8 +169,8 @@ export default function GroupDetailPage() {
     iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
     activeClass: 'border border-transparent bg-blue-600',
     activeFg: 'text-white',
-    active: statusFilters.length === 0,
-    onClick: () => handleStatusToggle(null),
+    active: statusFilter === null,
+    onClick: () => handleStatusFilterChange(null),
     title: 'Tous les prospects de la liste — clique pour retirer tous les filtres de statut',
   }
 
@@ -160,8 +178,8 @@ export default function GroupDetailPage() {
     ...pill,
     primary: counts[pill.key] ?? 0,
     value: formatCount(counts[pill.key] ?? 0),
-    active: statusFilters.includes(pill.key),
-    onClick: () => handleStatusToggle(pill.key),
+    active: statusFilter === pill.key,
+    onClick: () => handleStatusFilterChange(pill.key),
     title: `${pill.title} (${counts[pill.key] ?? 0})`,
   }))
 
@@ -222,7 +240,7 @@ export default function GroupDetailPage() {
             </div>
           ) : filteredReservations.length === 0 ? (
             <div className="rounded-xl bg-card text-card-foreground shadow-sm h-32 flex items-center justify-center text-muted-foreground">
-              Aucun prospect pour le(s) statut(s) sélectionné(s).
+              Aucun prospect pour ce statut.
             </div>
           ) : isDesktop ? (
             <div className="rounded-xl bg-card text-card-foreground shadow-sm overflow-hidden">
