@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, Loader2, Save, X } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
 import { Textarea } from '@/components/ui/textarea.jsx'
-import { updateCommercialClientApi } from '@/api/commercial.api.js'
+import { getCommercialProspectApi, updateCommercialClientApi } from '@/api/commercial.api.js'
 
 const INVALIDATIONS = [
   ['commercial-prospect'],
@@ -90,16 +90,24 @@ export default function ClientEditModal({ open, client, onClose }) {
   const queryClient = useQueryClient()
   const [values, setValues] = useState(() => (client ? initialValues(client) : {}))
   const [error, setError] = useState(null)
+  const clientId = client?.id
+  const { data: detailResponse, isLoading: isLoadingClient, isError: isClientError } = useQuery({
+    queryKey: ['commercial-prospect', clientId],
+    queryFn: () => getCommercialProspectApi(clientId),
+    enabled: open && !!clientId,
+  })
+  const cachedClientIsDetailed = client && ('full_address' in client || 'intervenant_name' in client)
+  const editableClient = detailResponse?.data?.data?.client ?? (cachedClientIsDetailed ? client : null)
 
   useEffect(() => {
-    if (open && client) {
-      setValues(initialValues(client))
+    if (open && editableClient) {
+      setValues(initialValues(editableClient))
       setError(null)
     }
-  }, [open, client])
+  }, [open, editableClient])
 
   const mutation = useMutation({
-    mutationFn: (payload) => updateCommercialClientApi(client.id, payload),
+    mutationFn: (payload) => updateCommercialClientApi(clientId, payload),
     onSuccess: () => {
       toast.success('Fiche client enregistrée.')
       INVALIDATIONS.forEach((queryKey) => queryClient.invalidateQueries({ queryKey }))
@@ -114,6 +122,18 @@ export default function ClientEditModal({ open, client, onClose }) {
   })
 
   if (!open || !client) return null
+
+  if (!editableClient) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+        <div role="dialog" aria-modal="true" className="flex items-center gap-3 rounded-lg bg-card p-5 text-card-foreground shadow-xl" onClick={(event) => event.stopPropagation()}>
+          {isLoadingClient ? <Loader2 className="h-5 w-5 animate-spin" /> : <AlertCircle className="h-5 w-5 text-destructive" />}
+          <span>{isClientError ? 'Impossible de charger la fiche client.' : 'Chargement de la fiche client…'}</span>
+          <Button type="button" variant="secondary" onClick={onClose}>Fermer</Button>
+        </div>
+      </div>
+    )
+  }
 
   const change = (event) => {
     const { name, value, type, checked } = event.target
@@ -155,7 +175,7 @@ export default function ClientEditModal({ open, client, onClose }) {
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 id="client-edit-title" className="text-lg font-semibold">Modifier la fiche client</h2>
-            <p className="text-sm text-muted-foreground">{client.enterprise_name || client.name}</p>
+            <p className="text-sm text-muted-foreground">{editableClient.enterprise_name || editableClient.name}</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Fermer" className="rounded p-1.5 text-muted-foreground hover:bg-muted">
             <X className="h-4 w-4" />

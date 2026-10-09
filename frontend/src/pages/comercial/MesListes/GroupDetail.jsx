@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff, Users, Copy, Info } from 'lucide-react'
+import { ArrowLeft, Eye, Pencil, Check, X, Loader2, Hourglass, ThumbsUp, ThumbsDown, Voicemail, PhoneOff, Users, Copy, Info, SquarePen } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
@@ -8,6 +8,7 @@ import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import Input from '@/components/ui/input.jsx'
 import Button from '@/components/ui/button.jsx'
 import CallButton from '@/pages/shared/components/CallButton/index.jsx'
+import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
 
 function GroupNameEditor({ group, renameMutation }) {
   const [editing, setEditing] = useState(false)
@@ -66,6 +67,7 @@ function GroupNameEditor({ group, renameMutation }) {
 }
 
 export default function GroupDetailPage() {
+  const [clientToEdit, setClientToEdit] = useState(null)
   const {
     isLoading,
     group,
@@ -292,7 +294,22 @@ export default function GroupDetailPage() {
                             (résolu par l'API), `to` = numéro du client. */}
                         <div className="flex items-center justify-end gap-1">
                           <CallButton phone={r.client?.phone} name={r.client?.name} clientId={r.client?.id} />
+                          {r.client && !r.client.is_blacklisted && ['RESERVED', 'CONFIRMED', 'DOUBLE', 'INFO'].includes(r.client.status) && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setClientToEdit(r.client)
+                              }}
+                              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              aria-label={`Modifier la fiche de ${r.client.name ?? 'ce prospect'}`}
+                              title="Modifier la fiche"
+                            >
+                              <SquarePen className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
+                            type="button"
                             onClick={openProspectStopClick(r.client?.id)}
                             className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                             aria-label="Voir détail"
@@ -347,7 +364,23 @@ export default function GroupDetailPage() {
                       (docs/RULES.md §9) + appel direct du client. */}
                   <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-border">
                     {statusCell(r)}
-                    <CallButton phone={r.client?.phone} name={r.client?.name} clientId={r.client?.id} />
+                    <div className="flex items-center gap-1">
+                      <CallButton phone={r.client?.phone} name={r.client?.name} clientId={r.client?.id} />
+                      {r.client && !r.client.is_blacklisted && ['RESERVED', 'CONFIRMED', 'DOUBLE', 'INFO'].includes(r.client.status) && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setClientToEdit(r.client)
+                          }}
+                          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          aria-label={`Modifier la fiche de ${r.client.name ?? 'ce prospect'}`}
+                          title="Modifier la fiche"
+                        >
+                          <SquarePen className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -355,6 +388,11 @@ export default function GroupDetailPage() {
           )}
         </>
       )}
+      <ClientEditModal
+        open={!!clientToEdit}
+        client={clientToEdit}
+        onClose={() => setClientToEdit(null)}
+      />
     </div>
   )
 }

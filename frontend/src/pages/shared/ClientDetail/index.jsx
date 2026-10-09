@@ -54,21 +54,21 @@ export default function ClientDetailPage() {
         <div className="h-48 flex items-center justify-center text-muted-foreground">Prospect introuvable.</div>
       ) : (
         <>
-      <div className="rounded-xl bg-[#f8f9fa] border border-gray-200 overflow-hidden shadow-sm">
+      <div className="rounded-xl border border-border bg-card text-card-foreground overflow-hidden shadow-sm">
   {/* Top row: back arrow + title + phone + status badge */}
   <div className="px-4 sm:px-6 pt-5 pb-4">
     <div className="flex items-center gap-3">
       <Button variant="ghost" size="icon-sm" onClick={handleBack} aria-label="Retour">
-        <ArrowLeft className="h-5 w-5 text-gray-700" />
+        <ArrowLeft className="h-5 w-5 text-foreground" />
       </Button>
       <div>
-        <h1 className="text-lg sm:text-xl font-bold tracking-tight text-gray-900 truncate">
+        <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
           {client.name ?? '—'}
         </h1>
         <p className="text-sm text-muted-foreground flex items-center">
           {client.phone ?? '—'}
           <button
-            className="ml-2 text-gray-500 hover:text-gray-700 transition-colors" 
+            className="ml-2 text-muted-foreground hover:text-foreground transition-colors"
             onClick={handleCopyPhone} 
             title="Copier le numéro"
             type="button"
@@ -79,7 +79,7 @@ export default function ClientDetailPage() {
 
         {/* Courriel — panneau d'informations principal (en-tête de la fiche). */}
         <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-          <Mail className="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
+          <Mail className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           {client.email ? (
             <a
               href={`mailto:${client.email}`}
@@ -109,7 +109,7 @@ export default function ClientDetailPage() {
   </div>
 
   {/* Underlined tabs and call actions */}
-  <div className="px-4 sm:px-6 flex flex-col gap-3 border-t border-gray-200 sm:flex-row sm:items-center sm:justify-between">
+  <div className="px-4 sm:px-6 flex flex-col gap-3 border-t border-border sm:flex-row sm:items-center sm:justify-between">
     <nav className="flex gap-6 -mb-px" aria-label="Onglets du client" role="tablist">
       <button
         id="client-details-tab"
@@ -122,7 +122,7 @@ export default function ClientDetailPage() {
           'border-b-2 px-1 py-3 text-sm transition-colors',
           activeTab === 'details'
             ? 'border-primary font-semibold text-primary'
-            : 'border-transparent font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700',
+            : 'border-transparent font-medium text-muted-foreground hover:border-border hover:text-foreground',
         )}
       >
         Détails
@@ -138,7 +138,7 @@ export default function ClientDetailPage() {
           'border-b-2 px-1 py-3 text-sm transition-colors',
           activeTab === 'history'
             ? 'border-primary font-semibold text-primary'
-            : 'border-transparent font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700',
+            : 'border-transparent font-medium text-muted-foreground hover:border-border hover:text-foreground',
         )}
       >
         Historique ({historyCount})
