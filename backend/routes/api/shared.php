@@ -30,7 +30,7 @@ Route::post('auth/resend-verification', [AuthController::class, 'resendVerificat
 // par `config/cors.php` (`paths` = `api/*`, `allowed_headers` = `*`), lot
 // borné par `public_api.max_items`. Déclarées avant toute route
 // `clients/{…}` pour ne jamais être capturées par un paramètre de route.
-Route::middleware(VerifyExternalSystemKey::class)->group(function () {
+
     Route::post('clients/bulk-upsert', [PublicClientController::class, 'bulkUpsert']);
 
     // Suppression en masse, même règle de sécurité de bout en bout : un client
@@ -61,7 +61,6 @@ Route::middleware(VerifyExternalSystemKey::class)->group(function () {
     // `NO_RESERVATIONS_STATUS_LIMIT`). Une ligne `reservations` `NO` par client
     // visé, attribuée à **un seul employé**, sans effet de bord métier.
     Route::post('clients/create-no-reservations', [PublicClientController::class, 'createNoReservations']);
-});
 
 // ── Authenticated: All roles ────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
