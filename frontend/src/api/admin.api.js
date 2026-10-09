@@ -11,6 +11,10 @@ export function getEntrepriseStatsApi(id, params = {}) {
   return api.get(`/entreprises/${id}/stats`, { params })
 }
 
+export function checkEntrepriseRingCentralApi(id) {
+  return api.get(`/entreprises/${id}/ringcentral-status`)
+}
+
 export function createEntrepriseApi(payload) {
   return api.post('/enterprises', payload)
 }

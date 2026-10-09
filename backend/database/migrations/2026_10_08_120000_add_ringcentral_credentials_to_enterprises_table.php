@@ -18,9 +18,8 @@ return new class extends Migration
      *     libellé choisi dans le répertoire `sources` (table sans CRUD,
      *     lue par `GET /api/v1/sources`).
      *
-     * NULL = « pas de compte d'entreprise » : `Enterprise::
-     * getRingCentralCredentials()` retombe alors sur `services.ringcentral.*`
-     * (`.env`) — comportement strictement inchangé pour les existants.
+    * NULL = « pas de compte RingCentral configuré pour cette entreprise » ;
+    * les appels qui sélectionnent cette entreprise n'utilisent pas `.env`.
      *
      * Aucune donnée supprimée : `php artisan migrate` uniquement.
      */

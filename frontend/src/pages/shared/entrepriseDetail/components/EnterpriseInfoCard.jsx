@@ -1,4 +1,4 @@
-import { Building2 } from 'lucide-react'
+import { Building2, RefreshCw } from 'lucide-react'
 import Badge from '@/components/ui/badge.jsx'
 
 function Field({ label, value }) {
@@ -14,7 +14,13 @@ function Field({ label, value }) {
  * Onglet « Détails entreprise » — identité et coordonnées de la fiche
  * (`GET entreprises/{id}/stats` → `entreprise`).
  */
-export default function EnterpriseInfoCard({ entreprise }) {
+export default function EnterpriseInfoCard({
+  entreprise,
+  ringCentralStatus,
+  isCheckingRingCentral,
+  ringCentralCheckFailed,
+  onCheckRingCentral,
+}) {
   if (!entreprise) return null
 
   const createdAt = entreprise.created_at
@@ -36,11 +42,30 @@ export default function EnterpriseInfoCard({ entreprise }) {
               <Badge variant="success">Active</Badge>
             )}
             <span>RingCentral</span>
-            {entreprise.ringcentral_configured ? (
+            {isCheckingRingCentral ? (
+              <Badge variant="secondary">Vérification…</Badge>
+            ) : ringCentralCheckFailed ? (
+              <Badge variant="destructive" title="La vérification RingCentral a échoué.">Inactif</Badge>
+            ) : ringCentralStatus?.active ? (
               <Badge variant="success">Actif</Badge>
             ) : (
-              <Badge variant="secondary">Inactif</Badge>
+              <Badge variant="destructive" title={ringCentralStatus?.reason === 'credentials_missing'
+                ? 'Credentials RingCentral absents en base.'
+                : 'Authentification RingCentral non disponible.'}
+              >
+                Inactif
+              </Badge>
             )}
+            <button
+              type="button"
+              onClick={() => onCheckRingCentral?.()}
+              disabled={isCheckingRingCentral}
+              aria-label="Vérifier les credentials RingCentral"
+              title="Vérifier les credentials RingCentral"
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isCheckingRingCentral ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
       </div>

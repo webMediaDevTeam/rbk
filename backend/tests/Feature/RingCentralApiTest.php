@@ -125,6 +125,7 @@ class RingCentralApiTest extends TestCase
         ]);
 
         $mock = $this->mockService();
+        $mock->shouldReceive('configure')->once();
         // Les softphones ont `phoneLines: []` : le numéro vient de
         // `/account/~/phone-number`, rattaché par `extension.id`.
         $mock->shouldReceive('getDevices')->once()->with(50)->andReturn([
@@ -157,6 +158,7 @@ class RingCentralApiTest extends TestCase
         ]);
 
         $mock = $this->mockService();
+        $mock->shouldReceive('configure')->once();
         $mock->shouldReceive('getDevices')->once()->andReturn([
             ['id' => 'dev-1', 'name' => 'Bureau', 'extension' => ['id' => 'ext-101']],
         ]);

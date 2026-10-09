@@ -10,6 +10,7 @@ use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
 use App\Services\Client\ClientSearchService;
+use App\Services\RingCentralService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -18,8 +19,7 @@ use Illuminate\Support\Str;
 class EnterpriseController extends Controller
 {
     /**
-     * Identifiants RingCentral **optionnels** de l'entreprise (compte propre,
-     * repli `.env` quand ils sont vides).
+ * Identifiants RingCentral optionnels de l'entreprise, sans repli `.env`.
      */
     private const RINGCENTRAL_RULES = [
         'ringcentral_client_id' => 'nullable|string|max:255',
@@ -204,6 +204,46 @@ class EnterpriseController extends Controller
             'success' => true,
             'data' => [
                 'entreprise' => $this->formatEnterprise($enterprise),
+            ],
+        ]);
+    }
+
+    public function checkRingCentralCredentials(string $id, RingCentralService $ringCentral): JsonResponse
+    {
+        $enterprise = Enterprise::findOrFail($id);
+
+        if (! $enterprise->hasOwnRingCentralAccount()) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'active' => false,
+                    'reason' => 'credentials_missing',
+                    'checked_at' => now()->toIso8601String(),
+                ],
+            ]);
+        }
+
+        $ringCentral->configure($enterprise->getRingCentralCredentials());
+
+        try {
+            $ringCentral->getAccount();
+        } catch (\Throwable) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'active' => false,
+                    'reason' => 'connection_failed',
+                    'checked_at' => now()->toIso8601String(),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'active' => true,
+                'reason' => null,
+                'checked_at' => now()->toIso8601String(),
             ],
         ]);
     }

@@ -34,6 +34,10 @@ export default function EntrepriseDetailPage() {
     handleStatusToggle,
     badges,
     entreprise,
+    ringCentralStatus,
+    isCheckingRingCentral,
+    ringCentralCheckFailed,
+    checkRingCentral,
     analytics,
     employees,
     historique,
@@ -74,7 +78,15 @@ export default function EntrepriseDetailPage() {
 
           <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
-          {activeTab === 'details' && <EnterpriseInfoCard entreprise={entreprise} />}
+          {activeTab === 'details' && (
+            <EnterpriseInfoCard
+              entreprise={entreprise}
+              ringCentralStatus={ringCentralStatus}
+              isCheckingRingCentral={isCheckingRingCentral}
+              ringCentralCheckFailed={ringCentralCheckFailed}
+              onCheckRingCentral={checkRingCentral}
+            />
+          )}
 
           {activeTab === 'employes' && (
             <EmployeesCard employees={employees} companyName={companyName} />

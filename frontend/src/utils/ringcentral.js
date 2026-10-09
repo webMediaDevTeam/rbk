@@ -2,7 +2,7 @@
  * Libellés des appareils RingCentral — partagés par les modales employé
  * (select « Appareil / numéro source »).
  *
- * `GET /call-logs/devices` renvoie chaque appareil enrichi de
+ * `GET /call-logs/devices?enterprise_id=…` renvoie chaque appareil enrichi de
  * `phoneNumbers` (numéros de son extension, cf. `RingCentralController::
  * withPhoneNumbers`) ; les softphones, eux, ont toujours `phoneLines: []`.
  */

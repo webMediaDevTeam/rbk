@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Enterprise;
 use App\Models\User;
 use App\Services\RingCentralService;
+use Exception;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -15,8 +16,8 @@ use Tests\TestCase;
  * Identifiants RingCentral **propres à une entreprise** — migration
  * `2026_10_08_120000_add_ringcentral_credentials_to_enterprises_table`.
  *
- *  - `Enterprise::getRingCentralCredentials()` : valeurs d'entreprise avec
- *    repli champ par champ sur `.env` (`services.ringcentral.*`) ;
+ *  - `Enterprise::getRingCentralCredentials()` : valeurs exclusivement
+ *    stockées sur l'entreprise ;
  *  - `RingCentralService::configure()` : reconfigure la requête en cours
  *    (jeton + listes en cache isolés par compte) ;
  *  - `GET /call-logs/devices?enterprise_id=` : la sélection « Appareil /
@@ -195,6 +196,55 @@ class EnterpriseRingCentralCredentialsTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.0.id', 'dev-ent')
             ->assertJsonPath('data.0.phoneNumber', '+15145550111');
+    }
+
+    public function test_enterprise_credential_check_reports_success_without_exposing_secrets(): void
+    {
+        $this->admin('ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'Compte RC vérifié',
+            'ringcentral_client_id' => 'database-client-id',
+            'ringcentral_client_secret' => 'database-secret',
+            'ringcentral_token' => 'database-jwt',
+        ]);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        $mock->shouldReceive('configure')->once()->with(Mockery::on(
+            fn (array $credentials) => $credentials['client_id'] === 'database-client-id'
+                && $credentials['client_secret'] === 'database-secret'
+                && $credentials['token'] === 'database-jwt'
+        ));
+        $mock->shouldReceive('getAccount')->once()->andReturn(['id' => 'account-1']);
+
+        $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-status")
+            ->assertOk()
+            ->assertJsonPath('data.active', true)
+            ->assertJsonPath('data.reason', null)
+            ->assertJsonMissingPath('data.client_secret')
+            ->assertJsonMissingPath('data.token');
+    }
+
+    public function test_enterprise_credential_check_reports_inactive_when_ringcentral_auth_fails(): void
+    {
+        $this->admin('ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'Compte RC inaccessible',
+            'ringcentral_client_id' => 'database-client-id',
+            'ringcentral_client_secret' => 'database-secret',
+            'ringcentral_token' => 'database-jwt',
+        ]);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        $mock->shouldReceive('configure')->once();
+        $mock->shouldReceive('getAccount')->once()->andThrow(new Exception('Private credential error'));
+
+        $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-status")
+            ->assertOk()
+            ->assertJsonPath('data.active', false)
+            ->assertJsonPath('data.reason', 'connection_failed')
+            ->assertJsonMissingPath('data.error');
     }
 
     /** L'endpoint des choix exige une entreprise en base. */

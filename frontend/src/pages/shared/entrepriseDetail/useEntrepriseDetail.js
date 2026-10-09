@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
-import { getEntrepriseStatsApi } from '@/api/admin.api.js'
+import { checkEntrepriseRingCentralApi, getEntrepriseStatsApi } from '@/api/admin.api.js'
 import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 // Même structure d'onglets que le détail d'un employé (composants partagés),
@@ -63,6 +63,20 @@ export function useEntrepriseDetailPage() {
     rowsPerPage,
   })
 
+  const {
+    data: ringCentralStatusResponse,
+    isLoading: isCheckingRingCentral,
+    isFetching: isRefreshingRingCentral,
+    isError: ringCentralCheckFailed,
+    refetch: checkRingCentral,
+  } = useQuery({
+    queryKey: ['enterprise-ringcentral-status', id],
+    queryFn: () => checkEntrepriseRingCentralApi(id),
+    enabled: !!id && activeTab === 'details',
+    staleTime: 60_000,
+    retry: false,
+  })
+
   // Enveloppe du serveur : `EnterpriseController::stats()` répond
   // `{success, data: {entreprise, analytics, employees, historique}}`
   // (comme les autres endpoints « entreprises » — cf. `useEntrepriseList`,
@@ -71,6 +85,7 @@ export function useEntrepriseDetailPage() {
   // quand l'API répond 200.
   const data = body?.data
   const entreprise = data?.entreprise
+  const ringCentralStatus = ringCentralStatusResponse?.data?.data ?? null
   const analytics = data?.analytics
   const employees = data?.employees ?? []
   const historique = data?.historique
@@ -121,6 +136,10 @@ export function useEntrepriseDetailPage() {
     handleStatusToggle,
     badges,
     entreprise,
+    ringCentralStatus,
+    isCheckingRingCentral: isCheckingRingCentral || isRefreshingRingCentral,
+    ringCentralCheckFailed,
+    checkRingCentral,
     analytics,
     employees,
     historique,

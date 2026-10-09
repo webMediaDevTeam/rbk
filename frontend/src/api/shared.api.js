@@ -74,9 +74,8 @@ export function listClientSourcesApi() {
 // des modales employé.
 // Réponse : `{success, data: [{id, name, phoneLines, phoneNumbers, …}]}`.
 //
-// `enterpriseId` (modales employé) : appareils **du compte RingCentral de
-// cette entreprise** (`enterprises.ringcentral_*`, repli `.env` sans champ
-// renseigné). Omis = compte `.env`.
+// `enterpriseId` (modales employé) est obligatoire : appareils du compte
+// RingCentral enregistré sur cette entreprise (aucun repli `.env`).
 export function listRingCentralDevicesApi(enterpriseId = null) {
   return api.get('/call-logs/devices', {
     params: enterpriseId ? { per_page: 1000, enterprise_id: enterpriseId } : { per_page: 1000 },
