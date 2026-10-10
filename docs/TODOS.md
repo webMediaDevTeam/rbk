@@ -227,7 +227,8 @@ Consolidation de `UDAPTE.md` + `permission_and_rules.md` (ces deux fichiers ont
 ### ✅ Identifiants RingCentral par entreprise
 
 Chaque entreprise peut brancher **son propre compte** RingCentral (application
-OAuth + jeton) ; un champ vide retombe sur `.env`.
+OAuth + jeton) ; les credentials du compte entreprise viennent uniquement de
+la base, sans fallback vers `.env`.
 
 - [x] **1. Migration** : `enterprises.ringcentral_client_id`,
       `enterprises.ringcentral_client_secret`, `enterprises.ringcentral_token`
@@ -236,8 +237,8 @@ OAuth + jeton) ; un champ vide retombe sur `.env`.
       `2026_10_08_120000_add_ringcentral_credentials_to_enterprises_table`
       (`php artisan migrate`, aucune donnée supprimée).
 - [x] **2. Modèle** : `Enterprise::$fillable` + `getRingCentralCredentials()`
-      (repli **champ par champ** sur `config('services.ringcentral.*')`) +
-      `hasOwnRingCentralAccount()`.
+      (valeurs exclusivement enregistrées sur l'entreprise) +
+      `hasOwnRingCentralAccount()` (client ID, secret et JWT présents).
 - [x] **3. Service** : `RingCentralService::configure()` reconfigure la
       requête en cours (SDK + jeton d'authentification) ; les clés de cache
       sont dérivées des identifiants (`scoped()`) pour qu'aucun compte ne
@@ -246,8 +247,11 @@ OAuth + jeton) ; un champ vide retombe sur `.env`.
       `store` / `update` (champ **absent** = conservé, `''` = retiré, valeur
       = remplacé, `trim` systématique) ; `formatEnterprise()` renvoie
       `ringcentral_client_id` / `source` et seulement
-      `ringcentral_client_secret_set` / `ringcentral_token_set` — le secret
-      et le jeton ne quittent jamais l'API (ADMIN + SUPER_ADMIN).
+      `ringcentral_client_secret_set` / `ringcentral_token_set` ; une route
+      credentials dédiée et `no-store` les révèle aux admins depuis le détail.
+- [x] **Check live / détails** : l'onglet entreprise contrôle l'authentification
+      RingCentral, affiche le résumé du compte et tous les numéros rattachés;
+      le badge indique Actif/Inactif.
 - [x] **5. Frontend** : 3 champs optionnels (Client ID, Client Secret,
       Token) dans la section « RingCentral » d'`EnterpriseCreateModal` +
       `EnterpriseUpdateModal` (« laisser vide pour conserver »).

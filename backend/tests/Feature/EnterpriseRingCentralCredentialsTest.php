@@ -34,6 +34,20 @@ class EnterpriseRingCentralCredentialsTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['role' => $role, 'status' => 'ACTIVE']));
     }
 
+    /**
+     * `Cache-Control` des endpoints « secrets » : Symfony trie les
+     * directives (`must-revalidate, no-cache, no-store, private`) —
+     * l'ordre n'est pas contractuel, seule la présence de `no-store` l'est.
+     */
+    private function assertNoStore(\Illuminate\Testing\TestResponse $response): void
+    {
+        $response->assertHeader('Cache-Control');
+        $this->assertStringContainsString(
+            'no-store',
+            (string) $response->headers->get('Cache-Control'),
+        );
+    }
+
     public function test_admin_stores_the_ringcentral_credentials_on_creation(): void
     {
         $this->admin();
@@ -198,6 +212,25 @@ class EnterpriseRingCentralCredentialsTest extends TestCase
             ->assertJsonPath('data.0.phoneNumber', '+15145550111');
     }
 
+    public function test_credentials_endpoint_returns_stored_values_without_cache_headers(): void
+    {
+        $this->admin('ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'Credentials en base',
+            'ringcentral_client_id' => 'stored-client-id',
+            'ringcentral_client_secret' => 'stored-client-secret',
+            'ringcentral_token' => 'stored-jwt',
+        ]);
+
+        $response = $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-credentials")
+            ->assertOk()
+            ->assertJsonPath('data.client_id', 'stored-client-id')
+            ->assertJsonPath('data.client_secret', 'stored-client-secret')
+            ->assertJsonPath('data.jwt', 'stored-jwt');
+
+        $this->assertNoStore($response);
+    }
+
     public function test_enterprise_credential_check_reports_success_without_exposing_secrets(): void
     {
         $this->admin('ADMIN');
@@ -215,14 +248,135 @@ class EnterpriseRingCentralCredentialsTest extends TestCase
                 && $credentials['client_secret'] === 'database-secret'
                 && $credentials['token'] === 'database-jwt'
         ));
-        $mock->shouldReceive('getAccount')->once()->andReturn(['id' => 'account-1']);
+        $mock->shouldReceive('getAccount')->once()->andReturn([
+            'id' => 'account-1',
+            'companyName' => 'Entreprise RingCentral',
+            'mainNumber' => '+15145550100',
+            'status' => 'Confirmed',
+            'type' => 'Company',
+        ]);
+        $mock->shouldReceive('getPhoneNumbers')->once()->with(1000)->andReturn([
+            [
+                'phoneNumber' => '+15145550101',
+                'type' => 'Voice',
+                'status' => 'Enabled',
+                'extension' => ['id' => 'ext-1', 'extensionNumber' => '101'],
+            ],
+            [
+                'phoneNumber' => '+15145550102',
+                'type' => 'Voice',
+                'status' => 'Enabled',
+                'extension' => ['id' => 'ext-2', 'extensionNumber' => '102'],
+            ],
+        ]);
+        // 3ᵉ appel du contrôle : `GET /account/~/extension`
+        // (`type=User&status=Enabled&perPage=`) — postes de l'entreprise.
+        $mock->shouldReceive('getAllUsers')->once()->with(100)->andReturn([
+            [
+                'id' => 'ext-1',
+                'extensionNumber' => '101',
+                'name' => 'Accueil',
+                'status' => 'Enabled',
+                'type' => 'User',
+                'permissions' => ['ReadOnlyExtension'],
+            ],
+            [
+                'id' => 'ext-2',
+                'extensionNumber' => '102',
+                'name' => 'Ventes',
+                'status' => 'Enabled',
+                'type' => 'User',
+            ],
+        ]);
 
         $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-status")
             ->assertOk()
             ->assertJsonPath('data.active', true)
             ->assertJsonPath('data.reason', null)
+            ->assertJsonPath('data.account.id', 'account-1')
+            ->assertJsonPath('data.account.company_name', 'Entreprise RingCentral')
+            ->assertJsonPath('data.phone_numbers.0.number', '+15145550101')
+            ->assertJsonPath('data.phone_numbers.1.number', '+15145550102')
+            ->assertJsonPath('data.extensions.0.extension_number', '101')
+            ->assertJsonPath('data.extensions.0.name', 'Accueil')
+            ->assertJsonPath('data.extensions.1.extension_number', '102')
+            ->assertJsonPath('data.extensions_available', true)
             ->assertJsonMissingPath('data.client_secret')
             ->assertJsonMissingPath('data.token');
+    }
+
+    /** Un poste inaccessible n'invalide pas le compte : signalé seulement. */
+    public function test_enterprise_credential_check_stays_active_when_extensions_fail(): void
+    {
+        $this->admin('ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'Compte RC sans postes',
+            'ringcentral_client_id' => 'database-client-id',
+            'ringcentral_client_secret' => 'database-secret',
+            'ringcentral_token' => 'database-jwt',
+        ]);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        $mock->shouldReceive('configure')->once();
+        $mock->shouldReceive('getAccount')->once()->andReturn(['id' => 'account-1']);
+        $mock->shouldReceive('getPhoneNumbers')->once()->andReturn([]);
+        $mock->shouldReceive('getAllUsers')->once()->andThrow(new Exception('Service down'));
+
+        $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-status")
+            ->assertOk()
+            ->assertJsonPath('data.active', true)
+            ->assertJsonPath('data.extensions', [])
+            ->assertJsonPath('data.extensions_available', false)
+            ->assertJsonPath('data.raw.extensions_error.message', 'Service down');
+    }
+
+    /** `GET /call-logs/users` (les postes) lit les identifiants **en base**. */
+    public function test_users_endpoint_uses_the_enterprise_credentials(): void
+    {
+        $this->admin('ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'Compte propre (postes)',
+            'ringcentral_client_id' => 'ent-client-id',
+            'ringcentral_client_secret' => 'ent-client-secret',
+            'ringcentral_token' => 'ent-jwt',
+        ]);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        $mock->shouldReceive('configure')->once()->with(Mockery::on(
+            fn (array $credentials) => $credentials['client_id'] === 'ent-client-id'
+                && $credentials['client_secret'] === 'ent-client-secret'
+                && $credentials['token'] === 'ent-jwt'
+        ));
+        $mock->shouldReceive('getAllUsers')->once()->with(100)->andReturn([
+            ['id' => 'ext-ent', 'name' => 'Poste', 'extensionNumber' => '110'],
+        ]);
+
+        $this->getJson("/api/v1/call-logs/users?enterprise_id={$enterprise->id}")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.0.id', 'ext-ent')
+            ->assertJsonPath('data.0.extensionNumber', '110');
+    }
+
+    /** Pas de repli silencieux sur le `.env` : 422 tant que c'est incomplet. */
+    public function test_users_endpoint_rejects_enterprise_without_complete_database_credentials(): void
+    {
+        $this->admin('ADMIN');
+        config()->set('services.ringcentral.client_id', 'env-client-id');
+        config()->set('services.ringcentral.client_secret', 'env-client-secret');
+        config()->set('services.ringcentral.jwt', 'env-jwt');
+        $enterprise = Enterprise::create(['name' => 'Sans compte RingCentral']);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        $mock->shouldReceive('configure')->never();
+        $mock->shouldReceive('getAllUsers')->never();
+
+        $this->getJson("/api/v1/call-logs/users?enterprise_id={$enterprise->id}")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['enterprise_id']);
     }
 
     public function test_enterprise_credential_check_reports_inactive_when_ringcentral_auth_fails(): void
@@ -305,10 +459,88 @@ class EnterpriseRingCentralCredentialsTest extends TestCase
 
         $this->getJson('/api/v1/entreprises')->assertForbidden();
         $this->getJson("/api/v1/entreprises/{$enterprise->id}")->assertForbidden();
+        $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-credentials")->assertForbidden();
+        $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-token")->assertForbidden();
         $this->putJson("/api/v1/entreprises/{$enterprise->id}", [
             'ringcentral_client_id' => 'pirate-id',
         ])->assertForbidden();
 
         $this->assertSame('hidden-id', $enterprise->refresh()->ringcentral_client_id);
+    }
+
+    // ── Onglet « RingCentral » de la fiche entreprise ─────────────────────
+
+    /** `GET /entreprises/{id}/ringcentral-token` : JWT échangé, métadonnées masquées. */
+    public function test_ringcentral_token_endpoint_returns_masked_token_metadata(): void
+    {
+        $this->admin('ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'Compte RC token',
+            'ringcentral_client_id' => 'token-client-id',
+            'ringcentral_client_secret' => 'token-secret',
+            'ringcentral_token' => 'token-jwt',
+        ]);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        // L'échange part des identifiants **en base**, jamais du `.env`.
+        $mock->shouldReceive('configure')->once()->with(Mockery::on(
+            fn (array $credentials) => $credentials['client_id'] === 'token-client-id'
+                && $credentials['client_secret'] === 'token-secret'
+                && $credentials['token'] === 'token-jwt'
+        ));
+        $mock->shouldReceive('accessTokenInfo')->once()->andReturn([
+            'access_token' => 'eyJhbGciOiJS…a1b2c3',
+            'token_type' => 'bearer',
+            'expire_time' => gmdate('Y-m-d\TH:i:s\Z', time() + 3600),
+            'expires_in' => 3600,
+        ]);
+
+        $response = $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-token")
+            ->assertOk()
+            ->assertJsonPath('data.access_token', 'eyJhbGciOiJS…a1b2c3')
+            ->assertJsonPath('data.token_type', 'bearer')
+            ->assertJsonPath('data.expires_in', 3600)
+            // Le secret / le JWT de l'entreprise ne figurent jamais ici.
+            ->assertJsonMissingPath('data.client_secret')
+            ->assertJsonMissingPath('data.jwt');
+
+        $this->assertNoStore($response);
+    }
+
+    /** Sans compte complet en base, aucun échange n'est tenté (422). */
+    public function test_ringcentral_token_endpoint_requires_complete_credentials(): void
+    {
+        $this->admin('ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'Compte RC incomplet',
+            'ringcentral_client_id' => 'only-id',
+        ]);
+
+        $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-token")
+            ->assertStatus(422)
+            ->assertJsonPath('success', false);
+    }
+
+    /** JWT refusé par RingCentral → 502 + détail (erreur + indice). */
+    public function test_ringcentral_token_endpoint_returns_502_when_the_exchange_fails(): void
+    {
+        $this->admin('SUPER_ADMIN');
+        $enterprise = Enterprise::create([
+            'name' => 'JWT refusé',
+            'ringcentral_client_id' => 'refused-id',
+            'ringcentral_client_secret' => 'refused-secret',
+            'ringcentral_token' => 'refused-jwt',
+        ]);
+
+        $mock = Mockery::mock(RingCentralService::class);
+        $this->app->instance(RingCentralService::class, $mock);
+        $mock->shouldReceive('configure')->once();
+        $mock->shouldReceive('accessTokenInfo')->once()->andThrow(new Exception('invalid_grant'));
+
+        $this->getJson("/api/v1/entreprises/{$enterprise->id}/ringcentral-token")
+            ->assertStatus(502)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('error.message', 'invalid_grant');
     }
 }

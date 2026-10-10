@@ -16,7 +16,12 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
     // Aliases
     Route::get('entreprises', [EnterpriseController::class, 'index']);
     Route::post('entreprises', [EnterpriseController::class, 'store']);
+    Route::get('entreprises/{id}/ringcentral-credentials', [EnterpriseController::class, 'ringCentralCredentials']);
+    Route::put('entreprises/{id}/ringcentral-credentials', [EnterpriseController::class, 'updateRingCentralCredentials']);
     Route::get('entreprises/{id}/ringcentral-status', [EnterpriseController::class, 'checkRingCentralCredentials']);
+    // Onglet « RingCentral » de la fiche entreprise : JWT → access_token
+    // (métadonnées masquées) puis compte via `ringcentral-status`.
+    Route::get('entreprises/{id}/ringcentral-token', [EnterpriseController::class, 'ringCentralToken']);
     Route::get('entreprises/{id}/stats', [EnterpriseController::class, 'stats']);
     Route::get('entreprises/{id}', [EnterpriseController::class, 'show']);
     Route::put('entreprises/{id}', [EnterpriseController::class, 'update']);

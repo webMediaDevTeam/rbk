@@ -21,6 +21,24 @@ class RingCentralService
     protected $platform = null;
 
     /**
+     * Jeton OAuth déjà obtenu (et persisté en base par l'appelant) —
+     * `access_token` / `refresh_token` / `expire_time`… Chaque entreprise a
+     * les siens : il est chargé par `configure()` puis **réutilisé** sans
+     * refaire l'échange JWT, sauf expiration (le SDK rafraîchit via
+     * `refresh_token`).
+     */
+    protected ?array $storedAuth = null;
+
+    /**
+     * Callback appelé après chaque (ré)authentification avec le tableau
+     * d'authentification complet : c'est le point où l'appelant **persiste
+     * le nouveau token en base** (une entreprise = ses propres jetons).
+     *
+     * @var (callable(array): void)|null
+     */
+    protected $authPersister = null;
+
+    /**
      * Identifiants courants : `.env` par défaut, remplacés pour la requête
      * en cours par `configure()` (compte RingCentral d'une entreprise).
      *
@@ -54,7 +72,12 @@ class RingCentralService
      * `void` (jamais de valeur de retour) : l'instance est propre à la
      * requête — elle n'est ni partagée ni stockée dans le conteneur.
      *
-     * @param  array{client_id?: ?string, client_secret?: ?string, token?: ?string, server_url?: string}  $credentials
+     * Deux clés supplémentaires, propres à l'entreprise :
+     *   - `auth`           → jeton OAuth déjà obtenu (base `ringcentral_auth`) ;
+     *   - `auth_persister` → callback `(array $auth) => void` invoqué après
+     *     chaque (ré)authentification pour **réécrire le token en base**.
+     *
+     * @param  array{client_id?: ?string, client_secret?: ?string, token?: ?string, server_url?: string, auth?: ?array, auth_persister?: ?callable}  $credentials
      */
     public function configure(array $credentials = []): void
     {
@@ -71,6 +94,11 @@ class RingCentralService
             'server_url' => $credentials['server_url']
                 ?? config('services.ringcentral.server_url', 'https://platform.ringcentral.com'),
         ];
+
+        $this->storedAuth = is_array($credentials['auth'] ?? null) && $credentials['auth'] !== []
+            ? $credentials['auth']
+            : null;
+        $this->authPersister = $credentials['auth_persister'] ?? null;
 
         $this->cacheScope = ':'.substr(
             hash('sha256', implode('|', [
@@ -130,7 +158,14 @@ class RingCentralService
         //    `refresh_token_expire_time` sont absolus, il est donc valable
         //    tel quel. La clé porte l'empreinte des identifiants : un jeton
         //    n'est jamais réutilisé pour un autre compte d'entreprise.
+        //    Cache (rapide) **puis** jeton persisté en base (survit aux
+        //    restarts / au cache vide) : une entreprise = ses propres jetons.
         $cached = Cache::get($this->scoped(self::AUTH_CACHE));
+
+        if (! is_array($cached) || $cached === []) {
+            $cached = $this->storedAuth;
+        }
+
         if (is_array($cached) && $cached !== []) {
             $this->platform->auth()->setData($cached);
         }
@@ -152,7 +187,7 @@ class RingCentralService
         $this->storeAuth();
     }
 
-    /** Re-persiste le jeton courant (TTL = durée résiduelle − 60 s de marge). */
+    /** Re-persiste le jeton courant (cache + base via `auth_persister`). */
     protected function storeAuth(): void
     {
         try {
@@ -174,6 +209,56 @@ class RingCentralService
             // Déjà expiré : la prochaine requête refera l'échange JWT.
             Cache::forget($this->scoped(self::AUTH_CACHE));
         }
+
+        // Base (`enterprises.ringcentral_auth`) : le jeton ne concerne que
+        // cette entreprise, il est réécrit à chaque (ré)authentification —
+        // mais seulement quand il a **changé**, pour ne pas écrire à chaque
+        // appel.
+        if ($this->authPersister !== null
+            && ($this->storedAuth['access_token'] ?? null) !== ($data['access_token'] ?? null)) {
+            ($this->authPersister)($data);
+            $this->storedAuth = $data;
+        }
+    }
+
+    /**
+     * Jeton OAuth courant (JWT échangé si nécessaire via `authenticate()`)
+     * — métadonnées destinées à l'onglet « RingCentral » de la fiche
+     * entreprise : la valeur est **masquée** (extrémités seules lisibles),
+     * le secret / le JWT complets étant déjà révélés par l'endpoint dédié
+     * `ringcentral-credentials`.
+     *
+     * Côté serveur, le jeton reste persisté (cache + `enterprises.ringcentral_auth`) :
+     * l'appel suivant (`getAccount()`, call-log…) le réutilise **sans**
+     * nouvel échange `/oauth/token`.
+     *
+     * @return array{access_token: ?string, token_type: string, expire_time: ?string, expires_in: int}
+     *               `expire_time` en ISO-8601 (UTC) ; `expires_in` en secondes.
+     *
+     * @throws Exception échange JWT refusé (client_id/secret ou JWT invalides)
+     */
+    public function accessTokenInfo(): array
+    {
+        $this->authenticate();
+
+        try {
+            $data = $this->platform->auth()->data();
+        } catch (Throwable) {
+            $data = [];
+        }
+
+        $token = (string) ($data['access_token'] ?? '');
+        $expireAt = (int) ($data['expire_time'] ?? 0);
+        $remaining = $expireAt > time() ? $expireAt - time() : 0;
+
+        return [
+            'access_token' => $token === ''
+                ? null
+                : substr($token, 0, 12).'…'.substr($token, -6),
+            'token_type' => (string) ($data['token_type'] ?? 'bearer'),
+            'expire_time' => $remaining > 0 ? gmdate('Y-m-d\TH:i:s\Z', $expireAt) : null,
+            'expires_in' => $remaining,
+        ];
     }
 
     /**

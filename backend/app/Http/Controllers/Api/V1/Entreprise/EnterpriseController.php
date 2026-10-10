@@ -63,9 +63,8 @@ class EnterpriseController extends Controller
                 : null,
             'status' => $enterprise->status ?? 'ACTIVE',
             'employees_count' => $enterprise->employees_count ?? 0,
-            // Compte RingCentral : `client_id` et `source` en clair, le
-            // secret et le jeton uniquement par « enregistré oui/non » —
-            // ils ne quittent jamais l'API.
+            // La réponse générale garde secret/JWT masqués. Leur lecture
+            // explicite passe par une route admin dédiée avec `no-store`.
             'ringcentral_client_id' => $enterprise->ringcentral_client_id,
             'ringcentral_client_secret_set' => filled($enterprise->ringcentral_client_secret),
             'ringcentral_token_set' => filled($enterprise->ringcentral_token),
@@ -218,6 +217,11 @@ class EnterpriseController extends Controller
                 'data' => [
                     'active' => false,
                     'reason' => 'credentials_missing',
+                    'account' => null,
+                    'phone_numbers' => [],
+                    'phone_numbers_available' => false,
+                    'extensions' => [],
+                    'extensions_available' => false,
                     'checked_at' => now()->toIso8601String(),
                 ],
             ]);
@@ -226,26 +230,252 @@ class EnterpriseController extends Controller
         $ringCentral->configure($enterprise->getRingCentralCredentials());
 
         try {
-            $ringCentral->getAccount();
-        } catch (\Throwable) {
+            $account = $ringCentral->getAccount();
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => true,
                 'data' => [
                     'active' => false,
                     'reason' => 'connection_failed',
+                    'account' => null,
+                    'phone_numbers' => [],
+                    'phone_numbers_available' => false,
+                    'extensions' => [],
+                    'extensions_available' => false,
                     'checked_at' => now()->toIso8601String(),
+                    // Détail de l'échec (débogage) : message + statut HTTP +
+                    // corps `error` / `error_description` renvoyé par
+                    // RingCentral (`invalid_client` = client_id/secret,
+                    // `invalid_grant` = JWT expiré/révoqué…).
+                    'raw' => ['error' => $this->ringCentralError($e)],
                 ],
             ]);
         }
+
+        $phoneNumbersAvailable = true;
+        $phoneNumbersError = null;
+        try {
+            $phoneNumbers = $ringCentral->getPhoneNumbers(1000);
+        } catch (\Throwable $e) {
+            $phoneNumbers = [];
+            $phoneNumbersAvailable = false;
+            $phoneNumbersError = $this->ringCentralError($e);
+        }
+
+        // 3. Postes / extensions — `GET /account/~/extension`
+        //    (`type=User&status=Enabled&perPage=`) : dernière étape du
+        //    contrôle (compte → numéros → postes), comme l'appel direct
+        //    `GET /call-logs/users`. Best-effort : un échec n'invalide pas
+        //    le compte, il est juste signalé (`extensions_available`).
+        $extensionsAvailable = true;
+        $extensionsError = null;
+        $extensions = [];
+        try {
+            $extensions = $ringCentral->getAllUsers(100);
+        } catch (\Throwable $e) {
+            $extensions = [];
+            $extensionsAvailable = false;
+            $extensionsError = $this->ringCentralError($e);
+        }
+
+        $accountInfo = array_filter([
+            'id' => data_get($account, 'id'),
+            'company_name' => data_get($account, 'companyName'),
+            'main_number' => data_get($account, 'mainNumber'),
+            'status' => data_get($account, 'status'),
+            'type' => data_get($account, 'type'),
+        ], fn ($value) => $value !== null && $value !== '');
 
         return response()->json([
             'success' => true,
             'data' => [
                 'active' => true,
                 'reason' => null,
+                'account' => $accountInfo,
+                'phone_numbers' => collect($phoneNumbers)
+                    ->map(fn ($number) => [
+                        'number' => data_get($number, 'phoneNumber'),
+                        'type' => data_get($number, 'type'),
+                        'status' => data_get($number, 'status'),
+                        'extension_id' => data_get($number, 'extension.id'),
+                        'extension_number' => data_get($number, 'extension.extensionNumber'),
+                    ])
+                    ->filter(fn ($number) => filled($number['number']))
+                    ->values(),
+                'phone_numbers_available' => $phoneNumbersAvailable,
+                'extensions' => collect($extensions)
+                    ->map(fn ($extension) => [
+                        'id' => data_get($extension, 'id'),
+                        'extension_number' => data_get($extension, 'extensionNumber'),
+                        'name' => data_get($extension, 'name'),
+                        'status' => data_get($extension, 'status'),
+                        'type' => data_get($extension, 'type'),
+                        'permissions' => data_get($extension, 'permissions'),
+                    ])
+                    ->filter(fn ($extension) => filled($extension['id']))
+                    ->values(),
+                'extensions_available' => $extensionsAvailable,
                 'checked_at' => now()->toIso8601String(),
+                // Réponses **brutes** de l'API RingCentral (débogage).
+                'raw' => array_merge(
+                    [
+                        'account' => $account,
+                        'phone_numbers' => $phoneNumbers,
+                        'extensions' => $extensions,
+                    ],
+                    $phoneNumbersAvailable ? [] : ['phone_numbers_error' => $phoneNumbersError],
+                    $extensionsAvailable ? [] : ['extensions_error' => $extensionsError],
+                ),
             ],
         ]);
+    }
+
+    /**
+     * Détail d'une exception RingCentral (débogage) : message PHP + statut
+     * HTTP + corps `error` / `error_description` renvoyé par l'API (source
+     * réelle du blocage : `invalid_client`, `invalid_grant`, `CMN-301`…).
+     */
+    private function ringCentralError(\Throwable $e): array
+    {
+        $error = [
+            'message' => $e->getMessage(),
+            'status' => null,
+            'body' => null,
+            'hint' => 'Erreur locale PHP (aucune requête n\'est partie) — config:check les identifiants de l\'entreprise.',
+        ];
+
+        if (! method_exists($e, 'apiResponse')) {
+            return $error;
+        }
+
+        $apiResponse = $e->apiResponse();
+        $response = $apiResponse ? $apiResponse->response() : null;
+
+        if (! $response) {
+            return $error;
+        }
+
+        $error['status'] = $response->getStatusCode();
+
+        $body = trim((string) $response->getBody());
+        $decoded = $body === '' ? null : json_decode($body, true);
+
+        $error['body'] = is_array($decoded) ? $decoded : ($body === '' ? null : $body);
+        $error['hint'] = $this->ringCentralErrorHint($error['status'], $decoded);
+
+        return $error;
+    }
+
+    /**
+     * Quel(s) identifiant(s) est(sont) en cause selon l'erreur RingCentral :
+     * c'est la réponse à « quel credential est le mauvais ? ».
+     */
+    private function ringCentralErrorHint(?int $status, ?array $body): string
+    {
+        $code = (string) (data_get($body, 'errors.0.errorCode') ?? data_get($body, 'error') ?? '');
+
+        // JWT échangé contre un access_token : c'est le jeton qui est refusé.
+        return match (true) {
+            in_array($code, ['OAU-345', 'OAU-344', 'OAU-353', 'invalid_grant'], true) =>
+                'JWT (`ringcentral_token`) invalide ou expiré — régénéré depuis l\'application RingCentral qui possède ce client_id/secret (même environnement : production vs sandbox).',
+            $code === 'invalid_client' || $status === 401 =>
+                'client_id / client_secret refusés — vérifier `ringcentral_client_id` et `ringcentral_client_secret` (et qu\'ils viennent du même environnement que le JWT).',
+            $status === 429 =>
+                'Limite de requêtes RingCentral atteinte (CMN-301) — réessayer dans quelques secondes, aucun identifiant n\'est en cause.',
+            $code === 'CMN-102' || $status === 404 =>
+                'Ressource introuvable sur ce compte — identifiants valides mais compte/extension différent.',
+            default =>
+                'Voir `message` / `body` ci-dessus.',
+        };
+    }
+
+    public function ringCentralCredentials(string $id): JsonResponse
+    {
+        $enterprise = Enterprise::findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'client_id' => $enterprise->ringcentral_client_id,
+                'client_secret' => $enterprise->ringcentral_client_secret,
+                'jwt' => $enterprise->ringcentral_token,
+            ],
+        ])->header('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+            ->header('Pragma', 'no-cache');
+    }
+
+    /**
+     * `PUT /entreprises/{id}/ringcentral-credentials` — **correction** des
+     * identifiants RingCentral depuis l'onglet « RingCentral » de la fiche
+     * entreprise (ADMIN / SUPER_ADMIN) : sémantique identique à `update()`
+     * — clé absente = conservée, non vide = remplacée (trim), `''` / `null`
+     * = retirée (`Enterprise::updateRingCentralCredentials()`).
+     *
+     * `no-store` : la réponse contient `ringcentral_client_id` (le secret /
+     * le JWT ne reviennent jamais — seuls les indicateurs `*_set`).
+     */
+    public function updateRingCentralCredentials(Request $request, string $id): JsonResponse
+    {
+        $enterprise = Enterprise::findOrFail($id);
+
+        $validated = $request->validate([
+            'ringcentral_client_id' => 'sometimes|nullable|string|max:255',
+            'ringcentral_client_secret' => 'sometimes|nullable|string|max:500',
+            'ringcentral_token' => 'sometimes|nullable|string|max:4000',
+        ]);
+
+        $enterprise->updateRingCentralCredentials($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Identifiants RingCentral enregistrés.',
+            'data' => [
+                'entreprise' => $this->formatEnterprise($enterprise->fresh()),
+            ],
+        ])->header('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+            ->header('Pragma', 'no-cache');
+    }
+
+    /**
+     * `GET /entreprises/{id}/ringcentral-token` — échange le JWT de
+     * l'entreprise contre un `access_token` OAuth (grant `jwt-bearer`,
+     * via `RingCentralService::authenticate()`) et renvoie ses
+     * métadonnées (valeur **masquée**, type, expiration) : première étape
+     * de l'onglet « RingCentral » de la fiche entreprise, qui enchaîne
+     * ensuite sur `ringcentral-status` (compte / numéros / postes) avec
+     * ce même jeton réutilisé côté serveur (cache + `ringcentral_auth`).
+     *
+     * 422 si l'entreprise n'a pas de compte RingCentral complet en base ;
+     * 502 + détail (`ringCentralError`) si RingCentral refuse l'échange.
+     */
+    public function ringCentralToken(string $id, RingCentralService $ringCentral): JsonResponse
+    {
+        $enterprise = Enterprise::findOrFail($id);
+
+        if (! $enterprise->hasOwnRingCentralAccount()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cette entreprise n\'a pas de compte RingCentral complet en base (client ID, secret et JWT requis).',
+            ], 422);
+        }
+
+        $ringCentral->configure($enterprise->getRingCentralCredentials());
+
+        try {
+            $token = $ringCentral->accessTokenInfo();
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Échange JWT → access_token refusé par RingCentral.',
+                'error' => $this->ringCentralError($e),
+            ], 502);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $token,
+        ])->header('Cache-Control', 'private, no-store, no-cache, must-revalidate')
+            ->header('Pragma', 'no-cache');
     }
 
     public function update(Request $request, string $id): JsonResponse

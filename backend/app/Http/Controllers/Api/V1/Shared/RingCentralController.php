@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Shared;
 
+use App\Http\Controllers\Api\V1\Shared\Concerns\ConfiguresRingCentralEnterprise;
 use App\Http\Controllers\Controller;
 use App\Models\CallLog;
 use App\Models\Client;
@@ -55,6 +56,8 @@ use Throwable;
  */
 class RingCentralController extends Controller
 {
+    use ConfiguresRingCentralEnterprise;
+
     public function __construct(
         private RingCentralService $ringCentral,
         private RingCentralSyncService $ringCentralSync
@@ -62,9 +65,15 @@ class RingCentralController extends Controller
 
     /**
      * 1. Compte / entreprise : `account_id`, société, plan, état.
+     *
+     * Compte RingCentral : **champs en base** de l'entreprise (trait) —
+     * `?enterprise_id=` ou l'entreprise de l'utilisateur connecté, jamais
+     * le `.env` quand une entreprise est résoluble.
      */
-    public function account(): JsonResponse
+    public function account(Request $request): JsonResponse
     {
+        $this->configureRingCentral($request, $this->ringCentral);
+
         return $this->pass(fn () => $this->ringCentral->getAccount());
     }
 

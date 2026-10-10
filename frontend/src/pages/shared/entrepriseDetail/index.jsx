@@ -8,6 +8,8 @@ import HistoryToolbar from '@/pages/shared/comercialDetail/components/HistoryToo
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 import EnterpriseInfoCard from './components/EnterpriseInfoCard.jsx'
 import EmployeesCard from './components/EmployeesCard.jsx'
+import RingCentralResponseJson from './components/RingCentralResponseJson.jsx'
+import RingCentralTab from './components/RingCentralTab.jsx'
 
 /**
  * Fiche d'une entreprise — `/entreprises/:id` (ADMIN / SUPER_ADMIN).
@@ -21,6 +23,7 @@ import EmployeesCard from './components/EmployeesCard.jsx'
 export default function EntrepriseDetailPage() {
   const {
     TABS,
+    id,
     isLoading,
     activeTab,
     setActiveTab,
@@ -35,6 +38,8 @@ export default function EntrepriseDetailPage() {
     badges,
     entreprise,
     ringCentralStatus,
+    ringCentralResponseRaw,
+    ringCentralErrorRaw,
     isCheckingRingCentral,
     ringCentralCheckFailed,
     checkRingCentral,
@@ -79,12 +84,27 @@ export default function EntrepriseDetailPage() {
           <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
           {activeTab === 'details' && (
-            <EnterpriseInfoCard
-              entreprise={entreprise}
-              ringCentralStatus={ringCentralStatus}
-              isCheckingRingCentral={isCheckingRingCentral}
-              ringCentralCheckFailed={ringCentralCheckFailed}
-              onCheckRingCentral={checkRingCentral}
+            <>
+              <EnterpriseInfoCard
+                entreprise={entreprise}
+                ringCentralStatus={ringCentralStatus}
+                isCheckingRingCentral={isCheckingRingCentral}
+                ringCentralCheckFailed={ringCentralCheckFailed}
+                onCheckRingCentral={checkRingCentral}
+              />
+              {/* Réponse brute de `GET entreprises/{id}/ringcentral-status`
+                  (corps JSON complet, succès ou erreur) — débogage. */}
+              <RingCentralResponseJson
+                response={ringCentralResponseRaw}
+                errorResponse={ringCentralErrorRaw}
+              />
+            </>
+          )}
+
+          {activeTab === 'ringcentral' && (
+            <RingCentralTab
+              id={id}
+              ringCentralConfigured={entreprise.ringcentral_configured}
             />
           )}
 

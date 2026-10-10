@@ -9,6 +9,7 @@ import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index
 // moins l'onglet « Appels » (journal RingCentral propre à un employé).
 const TABS = [
   { value: 'details', label: 'Détails entreprise' },
+  { value: 'ringcentral', label: 'RingCentral' },
   { value: 'employes', label: 'Employés' },
   { value: 'historique', label: 'Historique' },
 ]
@@ -65,6 +66,7 @@ export function useEntrepriseDetailPage() {
 
   const {
     data: ringCentralStatusResponse,
+    error: ringCentralError,
     isLoading: isCheckingRingCentral,
     isFetching: isRefreshingRingCentral,
     isError: ringCentralCheckFailed,
@@ -85,7 +87,9 @@ export function useEntrepriseDetailPage() {
   // quand l'API répond 200.
   const data = body?.data
   const entreprise = data?.entreprise
-  const ringCentralStatus = ringCentralStatusResponse?.data?.data ?? null
+  // L'intercepteur axios renvoie déjà `response.data` (l'enveloppe
+  // `{success, data}`) : UNE seule couche `data` reste à déballer.
+  const ringCentralStatus = ringCentralStatusResponse?.data ?? null
   const analytics = data?.analytics
   const employees = data?.employees ?? []
   const historique = data?.historique
@@ -96,6 +100,12 @@ export function useEntrepriseDetailPage() {
 
   const name = entreprise?.name ?? 'Chargement…'
   const companyName = entreprise?.name ?? '—'
+
+  // Réponse brute de l'appel RingCentral (corps JSON complet, succès ou
+  // erreur) — affichée par `RingCentralResponseJson` (débogage).
+  const ringCentralResponseRaw = ringCentralStatusResponse ?? null
+  const ringCentralErrorRaw = ringCentralError?.response?.data
+    ?? (ringCentralError ? { message: ringCentralError.message } : null)
 
   // Message serveur d'un échec (`404 Entreprise introuvable.`, `403 Accès
   // non autorisé.`…) : la page l'affiche plutôt que le texte générique.
@@ -137,6 +147,8 @@ export function useEntrepriseDetailPage() {
     badges,
     entreprise,
     ringCentralStatus,
+    ringCentralResponseRaw,
+    ringCentralErrorRaw,
     isCheckingRingCentral: isCheckingRingCentral || isRefreshingRingCentral,
     ringCentralCheckFailed,
     checkRingCentral,

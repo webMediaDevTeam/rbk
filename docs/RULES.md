@@ -1267,11 +1267,28 @@ Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/externa
 * **Compte par entreprise (optionnel)** : `enterprises.ringcentral_client_id`,
   `enterprises.ringcentral_client_secret`, `enterprises.ringcentral_token`,
   saisis dans les modales « Créer / Modifier une entreprise » (ADMIN +
-  SUPER_ADMIN). Remplis → ce compte est utilisé ; vide **champ par champ** →
-  repli sur `.env` (`Enterprise::getRingCentralCredentials()`). Le secret et
-  le jeton ne sont jamais renvoyés par l'API : seulement
+  SUPER_ADMIN). Les champs sont lus **uniquement depuis la base** pour les
+  comptes d'entreprise; les valeurs globales de `.env` ne les complètent pas.
+  Les réponses générales n'exposent que les indicateurs
   `ringcentral_client_secret_set` / `ringcentral_token_set` /
-  `ringcentral_configured`.
+  `ringcentral_configured`. Un endpoint ADMIN / SUPER_ADMIN dédié permet de
+  révéler les valeurs stockées depuis la fiche entreprise (`no-store`). Le
+  badge « RingCentral » vérifie la connexion réelle; le détail montre le
+  résumé du compte, les numéros **et les postes** (`GET /account/~/extension`,
+  indicateurs `phone_numbers_available` / `extensions_available`) retournés
+  par RingCentral.
+* **Onglet « RingCentral » de la fiche entreprise** (ADMIN / SUPER_ADMIN,
+  `/entreprises/:id`) : révèle les identifiants en base puis, via
+  `GET /api/v1/entreprises/{id}/ringcentral-token` (`no-store`), échange le
+  JWT contre un `access_token` (grant `jwt-bearer`) et en renvoie les
+  métadonnées — valeur **masquée** (extrémités seules), type, expiration ;
+  le résumé du compte / numéros / postes suit avec **le même** jeton via
+  `ringcentral-status` (réutilisé côté serveur : aucun second échange
+  `/oauth/token`). Compte incomplet → **422** ; échange refusé → **502**
+  avec le détail `ringCentralError` (erreur + indice). Correction des
+  identifiants depuis ce même onglet : `PUT /api/v1/entreprises/{id}/ringcentral-credentials`
+  (sémantique `update()` : clé absente = conservée, non vide = remplacée
+  avec trim, `''` / `null` = retirée — `Enterprise::updateRingCentralCredentials()`).
 * **Source de l'entreprise** : **sans rapport avec RingCentral** — colonne
   `enterprises.source` remplie par le sélecteur « Source » du formulaire,
   dont les options viennent de la table `sources` (`GET /api/v1/sources`,
@@ -1282,8 +1299,15 @@ Intégration du SDK officiel `ringcentral/ringcentral-php` (spec : `docs/externa
   identifiants (aucun mélange entre comptes).
 * **Endpoints** (`auth:sanctum`) :
   - `GET /api/v1/call-logs/users` : liste des utilisateurs / extensions
+    (`GET /account/~/extension`, `type=User&status=Enabled`)
   - `GET /api/v1/call-logs/users/{extensionId}` : historique d'appels d'une extension
   - `GET /api/v1/call-logs/by-phone/{phone}` : historique d'appels vers un numéro cible
+  Ces trois routes **et** `GET /call-logs/account` lisent les identifiants
+  **en base** (trait `ConfiguresRingCentralEnterprise`) : `?enterprise_id=`
+  explicite, sinon l'entreprise de l'utilisateur connecté
+  (`users → employees.enterprise_id`) → `configure($credentials)` ; compte
+  incomplet ou entreprise inconnue → **422** (jamais de repli silencieux
+  sur `.env`), aucune entreprise résoluble → configuration courante.
 * **Contrôle d'appel** (`RingCentralController`, **SUPER_ADMIN** — phase de
   test, **aucune écriture en base**) :
   - `GET /api/v1/call-logs/account` : compte / entreprise (`id` = `account_id`)

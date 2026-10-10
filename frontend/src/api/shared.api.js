@@ -82,8 +82,10 @@ export function listRingCentralDevicesApi(enterpriseId = null) {
   })
 }
 
-export function listRingCentralUsersApi() {
-  return api.get('/call-logs/users', { params: { per_page: 250 } })
+export function listRingCentralUsersApi(enterpriseId = null) {
+  return api.get('/call-logs/users', {
+    params: enterpriseId ? { per_page: 250, enterprise_id: enterpriseId } : { per_page: 250 },
+  })
 }
 
 // RingCentral — synchronisation (ADMIN + SUPER_ADMIN) :
