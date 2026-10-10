@@ -9,6 +9,7 @@ import Input from '@/components/ui/input.jsx'
 import Button from '@/components/ui/button.jsx'
 import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
+import { useAuth } from '@/context/AuthContext.jsx'
 
 function GroupNameEditor({ group, renameMutation }) {
   const [editing, setEditing] = useState(false)
@@ -88,7 +89,13 @@ export default function GroupDetailPage() {
   // « Grande liste »** (ProspectKpis) : `Tous` en 1er, puis les statuts
   // dans l'ordre du workflow (`En attente` en 2e), sélection unique, couleur
   // pleine à la sélection et **tous les compteurs affichés, même à 0**.
-  const STATUS_PILLS = [
+  // Privilège commercial (docs/RULES.md §7.1) : sans `has_permission`, le
+  // badge « Double » n'existe pas pour ce connecté (aucune ligne DOUBLE ne
+  // lui est de toute façon rendue — voir `useGroupDetail`).
+  const { user } = useAuth()
+  const canSeeDouble = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
+
+  const STATUS_PILLS = ([
     {
       key: 'PENDING',
       label: 'En attente',
@@ -152,7 +159,7 @@ export default function GroupDetailPage() {
       activeFg: 'text-white',
       title: 'Réservations au statut INFO — clique pour filtrer',
     },
-  ]
+  ]).filter((pill) => canSeeDouble || pill.key !== 'DOUBLE')
 
   // Compteurs des badges calculés sur **toutes** les lignes de la liste
   // (`reservations`), pas sur la sélection de statut : le badge dit toujours

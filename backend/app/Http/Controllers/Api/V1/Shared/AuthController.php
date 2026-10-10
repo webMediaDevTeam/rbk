@@ -505,6 +505,9 @@ class AuthController extends Controller
             'role' => $user->role,
             'status' => $user->status,
             'avatar' => $user->avatar,
+            // Privilège commercial (§7.1) — le front masque les doubles et
+            // l'écoute des vocaux des non-privilégiés (le serveur impose).
+            'has_permission' => (bool) $user->has_permission,
             'created_at' => $user->created_at,
         ];
     }

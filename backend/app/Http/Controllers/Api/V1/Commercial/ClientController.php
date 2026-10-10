@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Note;
 use App\Models\Reservation;
+use App\Models\User;
 use App\Services\CallWorkflowService;
 use App\Services\Client\ClientSearchService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +40,10 @@ class ClientController extends Controller
         // ou sans source, liste vide (jamais de repli vers toute la base).
         // Un paramètre `source` éventuel est ignoré, le serveur décide.
         $query = $this->search->applyCommercialSourceScope($query, $request->user());
+
+        // Privilège commercial (§7.1) : sans `has_permission`, les doubles
+        // disparaissent de la liste — même pour leur titulaire.
+        $query = $this->excludeDoubleForUnprivileged($query, $request->user());
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
@@ -70,6 +76,10 @@ class ClientController extends Controller
             ->whereHas('reservations', function ($q) use ($user) {
                 $q->where('comercial_id', $user->id);
             });
+
+        // Privilège commercial (§7.1) : sans `has_permission`, les doubles
+        // disparaissent de « Mes listes » — même pour leur titulaire.
+        $query = $this->excludeDoubleForUnprivileged($query, $user);
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
@@ -222,6 +232,27 @@ class ClientController extends Controller
         return $client->reservations
             ->sortByDesc(fn (Reservation $r) => [$r->created_at, $r->id])
             ->first();
+    }
+
+    /**
+     * Commercial **sans** privilège (`users.has_permission = false`, §7.1) :
+     * les prospects « Double » (statut client `DOUBLE`) sont exclus de ses
+     * listes — même lorsqu'il en est le titulaire (`current_comercial_id`).
+     * Statut client et réservation `DOUBLE` sont posés **ensemble** par le
+     * workflow (`CallWorkflowService::handleHeldOutcome`) : la colonne
+     * client suffit. ADMIN / SUPER_ADMIN et les commerciaux privilégiés ne
+     * sont jamais filtrés ; un statut `NULL` reste visible (comparaison
+     * SQL « != » qui exclurait les lignes nulles).
+     */
+    private function excludeDoubleForUnprivileged(Builder $query, ?User $user): Builder
+    {
+        if (! $user || $user->role !== 'COMERCIAL' || $user->has_permission) {
+            return $query;
+        }
+
+        return $query->where(fn (Builder $q) => $q
+            ->whereNull('status')
+            ->orWhere('status', '!=', Client::STATUS_DOUBLE));
     }
 
     private function canSeePhone(Client $client, ?Reservation $activeReservation): bool

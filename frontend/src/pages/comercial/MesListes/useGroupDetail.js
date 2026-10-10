@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getReservationGroupApi, updateReservationGroupApi } from '@/api/commercial.api.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
+import { useAuth } from '@/context/AuthContext.jsx'
 import { toast } from 'sonner'
 
 export function useGroupDetail() {
@@ -32,7 +33,18 @@ export function useGroupDetail() {
   // affichées, y compris celles avec rappel planifié (BV / À rappeler).
   // Le rappel est montré dans la colonne « Rappel » ; le compteur
   // `rappelCount` sert d'info dans l'en-tête.
-  const reservations = allReservations
+  //
+  // Privilège commercial (docs/RULES.md §7.1) : sans `has_permission`, un
+  // commercial ne voit **aucun** prospect DOUBLE (statut réservation ou
+  // client) — même dans ses propres listes, même quand il en est le
+  // titulaire. Le serveur exclut déjà ces lignes de `GET clients` /
+  // `clients/mes` : filtre de cohérence ici.
+  const { user } = useAuth()
+  const canSeeDouble = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
+
+  const reservations = canSeeDouble
+    ? allReservations
+    : allReservations.filter((r) => r.status !== 'DOUBLE' && r.client?.status !== 'DOUBLE')
   const rappelCount = allReservations.filter((r) => r.recall_at).length
 
   const renameMutation = useMutation({
