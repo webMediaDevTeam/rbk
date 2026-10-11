@@ -2,7 +2,6 @@ import { Headphones, Trash2 } from 'lucide-react'
 import Badge from '@/components/ui/badge.jsx'
 import ClientCallDetailsModal from './ClientCallDetailsModal.jsx'
 import { useNoteTimeline } from './useNoteTimeline.js'
-import { useAuth } from '@/context/AuthContext.jsx'
 import { useState } from 'react'
 
 /**
@@ -14,12 +13,6 @@ import { useState } from 'react'
  */
 export default function NoteTimeline({ notes = [], readOnly = false }) {
   const [selectedCallId, setSelectedCallId] = useState(null)
-  // Privilège commercial (docs/RULES.md §7.1) : sans `has_permission`,
-  // aucun accès à l'historique vocal — le bouton « Voir l'appel » n'est
-  // pas rendu (le serveur répond 403 sur `call-logs/client-calls/*` de
-  // toute façon, y compris pour un appel passé par le connecté).
-  const { user } = useAuth()
-  const canListenVoices = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
   const {
     allItems,
     formatRelativeDate,
@@ -75,7 +68,7 @@ export default function NoteTimeline({ notes = [], readOnly = false }) {
                       <span className="text-xs text-muted-foreground">{sender}</span>
                     </>
                   )}
-                  {item.call_log_id && canListenVoices && (
+                  {item.call_log_id && (
                     <button
                       type="button"
                       onClick={() => setSelectedCallId(item.call_log_id)}

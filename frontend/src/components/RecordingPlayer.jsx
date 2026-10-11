@@ -84,12 +84,22 @@ export default function RecordingPlayer({
 
     let disposed = false
     const container = waveRef.current
+
+    // Couleurs lues dans les variables du thème courant (dark **et**
+    // light) au moment de la création : les couleurs en dur (`#e9d5ff`
+    // sur fond violet) étaient invisibles sur un fond clair.
+    const theme = getComputedStyle(document.documentElement)
+    const colorOf = (name, fallback) => theme.getPropertyValue(name).trim() || fallback
+    const primary = colorOf('--color-primary', '#a21caf')
+    const ring = colorOf('--color-ring', '#d946ef')
+    const waveColor = colorOf('--color-muted-foreground', '#a78bfa')
+
     const gradient = document.createElement('canvas').getContext('2d')
       ?.createLinearGradient(0, 0, Math.max(container.clientWidth, 1), 0)
 
     if (gradient) {
-      gradient.addColorStop(0, '#a21caf') // --color-primary
-      gradient.addColorStop(1, '#d946ef') // --color-ring
+      gradient.addColorStop(0, primary)
+      gradient.addColorStop(1, ring)
     }
 
     const surf = WaveSurfer.create({
@@ -100,9 +110,9 @@ export default function RecordingPlayer({
       barRadius: 3,
       normalize: true,
       dragToSeek: true,
-      waveColor: '#e9d5ff',
-      progressColor: gradient ?? '#a21caf',
-      cursorColor: '#701a75',
+      waveColor,
+      progressColor: gradient ?? primary,
+      cursorColor: ring,
       cursorWidth: 2,
     })
 
