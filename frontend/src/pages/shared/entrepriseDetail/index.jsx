@@ -8,7 +8,6 @@ import HistoryToolbar from '@/pages/shared/comercialDetail/components/HistoryToo
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 import EnterpriseInfoCard from './components/EnterpriseInfoCard.jsx'
 import EmployeesCard from './components/EmployeesCard.jsx'
-import RingCentralResponseJson from './components/RingCentralResponseJson.jsx'
 import RingCentralTab from './components/RingCentralTab.jsx'
 
 /**
@@ -37,12 +36,6 @@ export default function EntrepriseDetailPage() {
     handleStatusToggle,
     badges,
     entreprise,
-    ringCentralStatus,
-    ringCentralResponseRaw,
-    ringCentralErrorRaw,
-    isCheckingRingCentral,
-    ringCentralCheckFailed,
-    checkRingCentral,
     analytics,
     employees,
     historique,
@@ -84,21 +77,7 @@ export default function EntrepriseDetailPage() {
           <Tabs tabs={TABS} active={activeTab} onChange={setActiveTab} />
 
           {activeTab === 'details' && (
-            <>
-              <EnterpriseInfoCard
-                entreprise={entreprise}
-                ringCentralStatus={ringCentralStatus}
-                isCheckingRingCentral={isCheckingRingCentral}
-                ringCentralCheckFailed={ringCentralCheckFailed}
-                onCheckRingCentral={checkRingCentral}
-              />
-              {/* Réponse brute de `GET entreprises/{id}/ringcentral-status`
-                  (corps JSON complet, succès ou erreur) — débogage. */}
-              <RingCentralResponseJson
-                response={ringCentralResponseRaw}
-                errorResponse={ringCentralErrorRaw}
-              />
-            </>
+            <EnterpriseInfoCard entreprise={entreprise} />
           )}
 
           {activeTab === 'ringcentral' && (

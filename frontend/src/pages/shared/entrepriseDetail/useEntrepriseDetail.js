@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
-import { checkEntrepriseRingCentralApi, getEntrepriseStatsApi } from '@/api/admin.api.js'
+import { getEntrepriseStatsApi } from '@/api/admin.api.js'
 import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 // Même structure d'onglets que le détail d'un employé (composants partagés),
@@ -64,21 +64,6 @@ export function useEntrepriseDetailPage() {
     rowsPerPage,
   })
 
-  const {
-    data: ringCentralStatusResponse,
-    error: ringCentralError,
-    isLoading: isCheckingRingCentral,
-    isFetching: isRefreshingRingCentral,
-    isError: ringCentralCheckFailed,
-    refetch: checkRingCentral,
-  } = useQuery({
-    queryKey: ['enterprise-ringcentral-status', id],
-    queryFn: () => checkEntrepriseRingCentralApi(id),
-    enabled: !!id && activeTab === 'details',
-    staleTime: 60_000,
-    retry: false,
-  })
-
   // Enveloppe du serveur : `EnterpriseController::stats()` répond
   // `{success, data: {entreprise, analytics, employees, historique}}`
   // (comme les autres endpoints « entreprises » — cf. `useEntrepriseList`,
@@ -87,9 +72,6 @@ export function useEntrepriseDetailPage() {
   // quand l'API répond 200.
   const data = body?.data
   const entreprise = data?.entreprise
-  // L'intercepteur axios renvoie déjà `response.data` (l'enveloppe
-  // `{success, data}`) : UNE seule couche `data` reste à déballer.
-  const ringCentralStatus = ringCentralStatusResponse?.data ?? null
   const analytics = data?.analytics
   const employees = data?.employees ?? []
   const historique = data?.historique
@@ -100,12 +82,6 @@ export function useEntrepriseDetailPage() {
 
   const name = entreprise?.name ?? 'Chargement…'
   const companyName = entreprise?.name ?? '—'
-
-  // Réponse brute de l'appel RingCentral (corps JSON complet, succès ou
-  // erreur) — affichée par `RingCentralResponseJson` (débogage).
-  const ringCentralResponseRaw = ringCentralStatusResponse ?? null
-  const ringCentralErrorRaw = ringCentralError?.response?.data
-    ?? (ringCentralError ? { message: ringCentralError.message } : null)
 
   // Message serveur d'un échec (`404 Entreprise introuvable.`, `403 Accès
   // non autorisé.`…) : la page l'affiche plutôt que le texte générique.
@@ -146,12 +122,6 @@ export function useEntrepriseDetailPage() {
     handleStatusToggle,
     badges,
     entreprise,
-    ringCentralStatus,
-    ringCentralResponseRaw,
-    ringCentralErrorRaw,
-    isCheckingRingCentral: isCheckingRingCentral || isRefreshingRingCentral,
-    ringCentralCheckFailed,
-    checkRingCentral,
     analytics,
     employees,
     historique,

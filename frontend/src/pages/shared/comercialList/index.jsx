@@ -26,6 +26,7 @@ export default function ComercialListPage() {
     syncRingCentral,
     isSyncingRingCentral,
     commerciaux,
+    duplicateRingCentralNumbers,
     sortBy,
     sortOrder,
     handleSort,
@@ -78,6 +79,7 @@ export default function ComercialListPage() {
       {isDesktop ? (
         <ComercialTable
           commerciaux={commerciaux}
+          duplicateRingCentralNumbers={duplicateRingCentralNumbers}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
           canDelete={canUpdate}
           onToggleStatus={handleToggleStatus}
@@ -88,7 +90,7 @@ export default function ComercialListPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {commerciaux.map((c) => (
-            <ComercialCard key={c.id} comercial={c} onAvatarClick={setAvatarTarget} onEdit={setEditTarget} onToggleStatus={handleToggleStatus} onDelete={handleDelete} canDelete={canUpdate} />
+            <ComercialCard key={c.id} comercial={c} duplicateRingCentralNumbers={duplicateRingCentralNumbers} onAvatarClick={setAvatarTarget} onEdit={setEditTarget} onToggleStatus={handleToggleStatus} onDelete={handleDelete} canDelete={canUpdate} />
           ))}
         </div>
       )}

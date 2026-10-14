@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuth } from '@/context/AuthContext.jsx'
@@ -97,6 +97,29 @@ export function useToggleCommercialStatus() {
   })
 }
 
+/**
+ * Clé de comparaison d'un numéro RingCentral : chiffres seuls
+ * (`+1 (416) 572-4961` = `14165724961`), pour ignorer le format saisi.
+ */
+export const normalizeRcNumber = (value) => String(value ?? '').replace(/\D+/g, '')
+
+/**
+ * Numéros RingCentral (`profil.ringcentral_from_number`) présents chez **au
+ * moins deux** employés de la liste : une `Set` de clés normalisées. L'ADMIN
+ * est alerté sur chaque ligne concernée pour corriger la source d'appel.
+ */
+export function computeDuplicateRingCentralNumbers(commerciaux = []) {
+  const counts = new Map()
+
+  for (const c of commerciaux) {
+    const key = normalizeRcNumber(c?.profil?.ringcentral_from_number)
+    if (key === '') continue
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+
+  return new Set([...counts].filter(([, n]) => n > 1).map(([key]) => key))
+}
+
 export function useComercialListPage() {
   const { canAccess } = useAuth()
   const isDesktop = useIsDesktop()
@@ -127,6 +150,12 @@ export function useComercialListPage() {
   const ringCentralSync = useSyncRingCentral()
 
   const commerciaux = data?.data?.utilisateurs ?? []
+  // Numéros RingCentral partagés par plusieurs employés (alerte ADMIN) —
+  // périmètre : la page affichée.
+  const duplicateRingCentralNumbers = useMemo(
+    () => computeDuplicateRingCentralNumbers(commerciaux),
+    [commerciaux],
+  )
   const total = data?.data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage))
   const canCreate = canAccess('commercials:create')
@@ -176,6 +205,7 @@ export function useComercialListPage() {
     syncRingCentral: ringCentralSync.mutate,
     isSyncingRingCentral: ringCentralSync.isPending,
     commerciaux,
+    duplicateRingCentralNumbers,
     sortBy,
     sortOrder,
     handleSort,

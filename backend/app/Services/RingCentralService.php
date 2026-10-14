@@ -613,27 +613,16 @@ class RingCentralService
     {
         $this->authenticate();
 
-        try {
-            // ⚠️ Aucun corps : le SDK n'encode qu'un tableau **non vide**
-            // (`parseProperties()` teste `!empty($body)`), Guzzle recevrait
-            // donc `[]` et planterait avec `Invalid resource type: array`.
-            return $this->decode($this->platform->post(
-                "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings"
-            ));
-        } catch (Throwable $e) {
-            // Variante documentée (docs/ringcentral.md §Task 2) :
-            // `POST …/parties/{partyId}/record` avec un identifiant de
-            // demande — repli seulement si l'URL n'existe pas (404/405),
-            // un 400 « partie pas encore connectée » n'appelle pas ça.
-            if (! in_array($this->httpStatus($e), [404, 405], true)) {
-                throw $e;
-            }
-
-            return $this->decode($this->platform->post(
-                "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/record",
-                ['id' => 'recording-request']
-            ));
-        }
+        // `POST …/parties/{partyId}/recordings` est le seul point d'entrée
+        // réel de RingCentral pour démarrer un enregistrement (la variante
+        // `…/record` évoquée dans docs/ringcentral.md n'existe pas).
+        //
+        // ⚠️ Aucun corps : le SDK n'encode qu'un tableau **non vide**
+        // (`parseProperties()` teste `!empty($body)`), Guzzle recevrait
+        // donc `[]` et planterait avec `Invalid resource type: array`.
+        return $this->decode($this->platform->post(
+            "/account/~/telephony/sessions/{$sessionId}/parties/{$partyId}/recordings"
+        ));
     }
 
     /** Statut HTTP de la réponse attachée à l'exception du SDK, sinon `null`. */

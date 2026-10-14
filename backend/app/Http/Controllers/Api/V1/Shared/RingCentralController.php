@@ -952,15 +952,19 @@ class RingCentralController extends Controller
         $extensionId = (string) ($extension->id ?? '');
         $extensionNumber = (string) ($extension->extensionNumber ?? '');
 
+        // `getDevices()` renvoie des tableaux associatifs (via `decode()`),
+        // contrairement à `getAllUsers()` (objets) : d'où `data_get` ici.
         foreach ($this->ringCentral->getDevices(250) as $device) {
-            $deviceExtensionId = (string) ($device->extension->id ?? '');
-            $deviceExtensionNumber = (string) ($device->extensionNumber ?? '');
+            $deviceExtensionId = (string) data_get($device, 'extension.id');
+            $deviceExtensionNumber = (string) data_get($device, 'extensionNumber');
 
             $match = ($extensionId !== '' && $deviceExtensionId === $extensionId)
                 || ($extensionNumber !== '' && $deviceExtensionNumber === $extensionNumber);
 
-            if ($match && ! empty($device->id)) {
-                return (string) $device->id;
+            $deviceId = (string) data_get($device, 'id');
+
+            if ($match && $deviceId !== '') {
+                return $deviceId;
             }
         }
 

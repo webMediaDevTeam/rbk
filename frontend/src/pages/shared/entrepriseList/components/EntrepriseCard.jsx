@@ -26,13 +26,6 @@ export default function EntrepriseCard(props) {
         <RowMenu>
           {(closeMenu) => (
             <>
-              <Link
-                to={`/entreprises/${entreprise.id}`}
-                onClick={closeMenu}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-              >
-                <Eye className="h-3.5 w-3.5" /> Voir
-              </Link>
               <button
                 onClick={() => handleEdit(closeMenu)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
@@ -85,9 +78,12 @@ export default function EntrepriseCard(props) {
 
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
         <StatusBadge status={entreprise.status} />
-        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-          Entreprise
-        </span>
+        <Link
+          to={`/entreprises/${entreprise.id}`}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Eye className="h-4 w-4" /> Voir
+        </Link>
       </div>
     </div>
   )

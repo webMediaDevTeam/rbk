@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
+import { AlertTriangle, Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import StatusBadge from './StatusBadge'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
@@ -22,6 +22,7 @@ export default function ComercialTable(props) {
               <SortHeader column="email" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Adresse e-mail</SortHeader>
             </TableHead>
             <TableHead>Téléphone</TableHead>
+            <TableHead>N° RingCentral</TableHead>
             <TableHead>Entreprise</TableHead>
             <TableHead>
               <SortHeader column="status" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Statut</SortHeader>
@@ -40,36 +41,62 @@ export default function ComercialTable(props) {
               </TableCell>
               <TableCell className="text-muted-foreground">{row.c.email}</TableCell>
               <TableCell className="text-muted-foreground">{row.phone}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {row.rcNumber ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="tabular-nums">{row.rcNumber}</span>
+                    {row.rcDuplicate && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-600"
+                        title="Ce numéro RingCentral est partagé avec un autre employé — corrigez la source d'appel"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" /> Doublon
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  '—'
+                )}
+              </TableCell>
               <TableCell className="text-muted-foreground">{row.enterpriseName}</TableCell>
               <TableCell><StatusBadge status={row.c.status} /></TableCell>
               <TableCell className="text-right">
-                <RowMenu>
-                  {(closeMenu) => (
-                    <>
-                      <Link to={`/comercialDetail/${row.c.id}`} className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"><Eye className="h-3.5 w-3.5" /> Voir</Link>
-                      <button
-                        onClick={() => row.handleEdit(closeMenu)}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <Pencil className="h-3.5 w-3.5" /> Modifier
-                      </button>
-                      <button
-                        onClick={() => row.handleToggleStatus(closeMenu)}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <Power className="h-3.5 w-3.5" /> {row.toggleLabel}
-                      </button>
-                      {canDelete && (
+                <div className="flex items-center justify-end gap-1">
+                  <Link
+                    to={`/comercialDetail/${row.c.id}`}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                    title="Voir"
+                    aria-label="Voir"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Link>
+                  <RowMenu>
+                    {(closeMenu) => (
+                      <>
                         <button
-                          onClick={() => row.handleDelete(closeMenu)}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
+                          onClick={() => row.handleEdit(closeMenu)}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
                         >
-                          <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                          <Pencil className="h-3.5 w-3.5" /> Modifier
                         </button>
-                      )}
-                    </>
-                  )}
-                </RowMenu>
+                        <button
+                          onClick={() => row.handleToggleStatus(closeMenu)}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <Power className="h-3.5 w-3.5" /> {row.toggleLabel}
+                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => row.handleDelete(closeMenu)}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </RowMenu>
+                </div>
               </TableCell>
             </TableRow>
           ))}

@@ -1,4 +1,5 @@
-import { Pencil, Power, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
@@ -10,6 +11,8 @@ export default function ComercialCard(props) {
     name,
     enterpriseName,
     phone,
+    rcNumber,
+    rcDuplicate,
     toggleLabel,
     canDelete,
     handleAvatarClick,
@@ -63,6 +66,26 @@ export default function ComercialCard(props) {
           <p className="truncate">{phone}</p>
         </div>
         <div>
+          <span className="text-muted-foreground text-xs">N° RingCentral</span>
+          <p className="flex items-center gap-1.5 truncate">
+            {rcNumber ? (
+              <>
+                <span className="tabular-nums">{rcNumber}</span>
+                {rcDuplicate && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-600"
+                    title="Ce numéro RingCentral est partagé avec un autre employé — corrigez la source d'appel"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" /> Doublon
+                  </span>
+                )}
+              </>
+            ) : (
+              '—'
+            )}
+          </p>
+        </div>
+        <div>
           <span className="text-muted-foreground text-xs">Entreprise</span>
           <p className="truncate">{enterpriseName}</p>
         </div>
@@ -70,9 +93,12 @@ export default function ComercialCard(props) {
 
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
         <StatusBadge status={comercial.status} />
-        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-          Employé
-        </span>
+        <Link
+          to={`/comercialDetail/${comercial.id}`}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Eye className="h-4 w-4" /> Voir
+        </Link>
       </div>
     </div>
   )

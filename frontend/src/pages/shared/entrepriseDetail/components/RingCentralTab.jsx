@@ -4,7 +4,6 @@ import { Building2, Eye, EyeOff, KeyRound, Loader2, Pencil, RefreshCw, Smartphon
 import {
   checkEntrepriseRingCentralApi,
   getEntrepriseRingCentralCredentialsApi,
-  getEntrepriseRingCentralTokenApi,
   updateEntrepriseRingCentralCredentialsApi,
 } from '@/api/admin.api.js'
 
@@ -35,16 +34,14 @@ function ErrorBox({ title, response }) {
 
 /**
  * Onglet « RingCentral » de la fiche entreprise (`/entreprises/:id`) —
- * ADMIN / SUPER_ADMIN. Triple affichage, dans l'ordre du flux :
+ * ADMIN / SUPER_ADMIN. Deux blocs :
  *
  *  1. **Identifiants** (`GET entreprises/{id}/ringcentral-credentials`) —
  *     client ID / secret / JWT stockés en base, révélés sur demande ;
- *  2. **Access token** (`GET entreprises/{id}/ringcentral-token`) —
- *     échange JWT → access_token côté serveur ; la valeur renvoyée est
- *     masquée (extrémités seules) avec type + expiration ;
- *  3. **Compte** (`GET entreprises/{id}/ringcentral-status`) — appelé
- *     automatiquement après un token valide (jeton réutilisé, aucun nouvel
- *     échange) : résumé du compte, numéros et postes.
+ *  2. **Compte** (`GET entreprises/{id}/ringcentral-status`) — chargé
+ *     **dès l'ouverture de l'onglet** : l'échange JWT → access_token se
+ *     fait côté serveur (jeton réutilisé), le compte, les numéros et les
+ *     postes sont donc visibles sans action supplémentaire.
  */
 export default function RingCentralTab({ id, ringCentralConfigured = false }) {
   const [credentialsVisible, setCredentialsVisible] = useState(false)
@@ -98,10 +95,9 @@ export default function RingCentralTab({ id, ringCentralConfigured = false }) {
     updateMutation.mutate(undefined, {
       onSuccess: async () => {
         setEditing(false)
-        // Identifiants corrigés : jeton / compte affichés deviennent périmés.
-        tokenMutation.reset()
-        accountMutation.reset()
+        // Identifiants corrigés : le compte affiché est périmé → rechargement.
         await refetchCredentials()
+        await queryClient.invalidateQueries({ queryKey: ['enterprise-ringcentral-account', id] })
         await queryClient.invalidateQueries({ queryKey: ['entreprise-stats', id] })
       },
     })
@@ -109,26 +105,24 @@ export default function RingCentralTab({ id, ringCentralConfigured = false }) {
 
   const setFormField = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))
 
-  // 2. JWT → access_token (le serveur persiste le jeton : réutilisé ensuite).
-  const tokenMutation = useMutation({
-    mutationFn: () => getEntrepriseRingCentralTokenApi(id),
+  // Compte / numéros / postes — chargé **dès l'ouverture de l'onglet** :
+  // `GET …/ringcentral-status` effectue l'échange JWT côté serveur et
+  // réutilise le jeton persisté, d'où l'absence d'un bouton « Obtenir le
+  // token » : les données sont visibles en un clic sur l'onglet.
+  const {
+    data: accountResponse,
+    isFetching: isAccountLoading,
+    error: accountQueryError,
+    refetch: refetchAccount,
+  } = useQuery({
+    queryKey: ['enterprise-ringcentral-account', id],
+    queryFn: () => checkEntrepriseRingCentralApi(id),
+    enabled: !!id && ringCentralConfigured,
+    staleTime: 60_000,
+    retry: false,
   })
-  const token = tokenMutation.data?.data
-  const tokenError = tokenMutation.error?.response?.data
-
-  // 3. Compte / numéros / postes — suit le token (auto) ou se rafraîchit seul.
-  const accountMutation = useMutation({
-    mutationFn: () => checkEntrepriseRingCentralApi(id),
-  })
-  const accountStatus = accountMutation.data?.data
-  const accountError = accountMutation.error?.response?.data
-
-  const handleGetToken = () => {
-    tokenMutation.mutate(undefined, {
-      // Jeton obtenu → on affiche immédiatement le compte qu'il ouvre.
-      onSuccess: () => accountMutation.mutate(),
-    })
-  }
+  const accountStatus = accountResponse?.data
+  const accountError = accountQueryError?.response?.data
 
   const toggleCredentials = () => {
     if (credentialsVisible) {
@@ -139,13 +133,6 @@ export default function RingCentralTab({ id, ringCentralConfigured = false }) {
     setCredentialsVisible(true)
     refetchCredentials()
   }
-
-  const expiresAtLabel = token?.expire_time
-    ? new Date(token.expire_time).toLocaleString('fr-FR')
-    : null
-  const expiresInMinutes = token?.expires_in
-    ? Math.max(1, Math.round(token.expires_in / 60))
-    : null
 
   return (
     <div className="rounded-xl bg-card text-card-foreground shadow-sm p-6 space-y-6">
@@ -218,8 +205,8 @@ export default function RingCentralTab({ id, ringCentralConfigured = false }) {
         )}
 
         {/* Correction des identifiants en base : clé vidée = valeur retirée,
-            clé remplie = remplacée ; après enregistrement, « Obtenir le
-            token » teste la nouvelle paire. */}
+            clé remplie = remplacée ; après enregistrement, le compte est
+            rechargé automatiquement pour tester la nouvelle paire. */}
         {editing && (
           <div className="space-y-3 rounded-md border border-border p-3">
             <p className="text-xs text-muted-foreground">
@@ -287,53 +274,7 @@ export default function RingCentralTab({ id, ringCentralConfigured = false }) {
         )}
       </section>
 
-      {/* 2. Access token (JWT → /oauth/token) */}
-      <section className="space-y-3 border-t border-border pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <RefreshCw className="h-4 w-4 text-primary" /> Access token
-            </h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Échange du JWT contre un jeton OAuth (grant <code>jwt-bearer</code>) — réutilisé côté
-              serveur jusqu’à expiration.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleGetToken}
-            disabled={tokenMutation.isPending || !ringCentralConfigured}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
-            {tokenMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <KeyRound className="h-4 w-4" />
-            )}
-            {token ? 'Rafraîchir le token' : 'Obtenir le token'}
-          </button>
-        </div>
-
-        {tokenError && <ErrorBox title="Échange JWT refusé." response={tokenError} />}
-
-        {token && (
-          <div className="grid grid-cols-1 gap-3 rounded-md border border-border p-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Field label="Access token (masqué)" value={token.access_token} />
-            </div>
-            <Field label="Type" value={token.token_type} />
-            <Field
-              label="Expire dans"
-              value={expiresInMinutes ? `≈ ${expiresInMinutes} min` : null}
-            />
-            <div className="sm:col-span-2">
-              <Field label="Expire le" value={expiresAtLabel} />
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* 3. Compte RingCentral ouvert par ce token */}
+      {/* 2. Compte RingCentral — chargé automatiquement à l'ouverture */}
       <section className="space-y-3 border-t border-border pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -341,16 +282,16 @@ export default function RingCentralTab({ id, ringCentralConfigured = false }) {
               <Building2 className="h-4 w-4 text-primary" /> Compte RingCentral
             </h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Compte, numéros et postes — chargés avec le token ci-dessus.
+              Compte, numéros et postes — chargés dès l'ouverture de l'onglet.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => accountMutation.mutate()}
-            disabled={accountMutation.isPending || !ringCentralConfigured}
+            onClick={() => refetchAccount()}
+            disabled={isAccountLoading || !ringCentralConfigured}
             className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:bg-muted disabled:opacity-50"
           >
-            {accountMutation.isPending ? (
+            {isAccountLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4" />
@@ -358,6 +299,12 @@ export default function RingCentralTab({ id, ringCentralConfigured = false }) {
             Rafraîchir
           </button>
         </div>
+
+        {isAccountLoading && !accountStatus && (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Chargement du compte RingCentral…
+          </p>
+        )}
 
         {accountError && <ErrorBox title="Lecture du compte impossible." response={accountError} />}
 

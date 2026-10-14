@@ -49,39 +49,42 @@ export default function EntrepriseTable(props) {
               <TableCell className="text-muted-foreground">{row.taxNumber}</TableCell>
               <TableCell><StatusBadge status={row.ent.status} /></TableCell>
               <TableCell className="text-right">
-                <RowMenu>
-                  {(closeMenu) => (
-                    <>
-                      <Link
-                        to={`/entreprises/${row.ent.id}`}
-                        onClick={closeMenu}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <Eye className="h-3.5 w-3.5" /> Voir
-                      </Link>
-                      <button
-                        onClick={() => row.handleEdit(closeMenu)}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <Pencil className="h-3.5 w-3.5" /> Modifier
-                      </button>
-                      <button
-                        onClick={() => row.handleToggleStatus(closeMenu)}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
-                      >
-                        <Power className="h-3.5 w-3.5" /> {row.toggleLabel}
-                      </button>
-                      {canDelete && (
+                <div className="flex items-center justify-end gap-1">
+                  <Link
+                    to={`/entreprises/${row.ent.id}`}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                    title="Voir le détail de l'entreprise"
+                    aria-label="Voir"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Link>
+                  <RowMenu>
+                    {(closeMenu) => (
+                      <>
                         <button
-                          onClick={() => row.handleDelete(closeMenu)}
-                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
+                          onClick={() => row.handleEdit(closeMenu)}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
                         >
-                          <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                          <Pencil className="h-3.5 w-3.5" /> Modifier
                         </button>
-                      )}
-                    </>
-                  )}
-                </RowMenu>
+                        <button
+                          onClick={() => row.handleToggleStatus(closeMenu)}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <Power className="h-3.5 w-3.5" /> {row.toggleLabel}
+                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => row.handleDelete(closeMenu)}
+                            className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-destructive/10 text-destructive transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Supprimer
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </RowMenu>
+                </div>
               </TableCell>
             </TableRow>
           ))}
