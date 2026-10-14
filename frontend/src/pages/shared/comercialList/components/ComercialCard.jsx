@@ -10,7 +10,6 @@ export default function ComercialCard(props) {
     comercial,
     name,
     enterpriseName,
-    phone,
     rcNumber,
     rcDuplicate,
     toggleLabel,
@@ -62,18 +61,14 @@ export default function ComercialCard(props) {
 
       <div className="space-y-2 text-sm flex-1">
         <div>
-          <span className="text-muted-foreground text-xs">Téléphone</span>
-          <p className="truncate">{phone}</p>
-        </div>
-        <div>
           <span className="text-muted-foreground text-xs">N° RingCentral</span>
           <p className="flex items-center gap-1.5 truncate">
             {rcNumber ? (
               <>
-                <span className="tabular-nums">{rcNumber}</span>
+                <span className={`tabular-nums ${rcDuplicate ? 'font-semibold text-red-600' : ''}`}>{rcNumber}</span>
                 {rcDuplicate && (
                   <span
-                    className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-600"
+                    className="inline-flex animate-bounce items-center gap-1 rounded-md bg-red-500/15 px-1.5 py-0.5 text-xs font-semibold text-red-600 ring-1 ring-red-500/40"
                     title="Ce numéro RingCentral est partagé avec un autre employé — corrigez la source d'appel"
                   >
                     <AlertTriangle className="h-3.5 w-3.5" /> Doublon
