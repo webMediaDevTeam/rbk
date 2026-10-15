@@ -40,7 +40,7 @@ export default function ClientCallDetailsModal({ callLogId, onClose }) {
         onClick={(event) => event.stopPropagation()}
       >
         <header className="mb-5 flex items-center justify-between gap-4">
-          <h2 id="client-call-dialog-title" className="text-lg font-semibold">Détails de l’appel</h2>
+          <h2 id="client-call-dialog-title" className="text-lg font-semibold text-foreground">Détails de l’appel</h2>
           <button type="button" onClick={onClose} className="rounded-md p-1 hover:bg-muted" aria-label="Fermer">
             <X className="h-4 w-4" />
           </button>

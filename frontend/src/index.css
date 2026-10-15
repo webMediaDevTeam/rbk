@@ -47,6 +47,15 @@ a {
   color: inherit;
 }
 
+/* Sélection de texte cohérente avec le thème. Par défaut le navigateur
+   applique un fond clair + texte sombre : sur une modale sombre (ex.
+   l'en-tête « Détails de l'appel »), le surlignage apparaissait comme un
+   bandeau blanc. On cale la sélection sur les variables du thème courant. */
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
