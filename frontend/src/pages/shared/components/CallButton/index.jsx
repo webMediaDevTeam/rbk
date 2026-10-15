@@ -35,9 +35,9 @@ export default function CallButton({ phone, name = '', clientId, label, classNam
       title={`${accessibleLabel} (${phone})`}
     >
       {isCalling ? (
-        <Loader2 className={cn('h-4 w-4 animate-spin', label ? 'text-white' : 'text-emerald-600')} />
+        <Loader2 className={cn('h-4 w-4 animate-spin', label ? 'text-white' : 'text-primary')} />
       ) : (
-        <Phone className={cn('h-4 w-4', label ? 'text-white' : 'text-emerald-600')} />
+        <Phone className={cn('h-4 w-4', label ? 'text-white' : 'text-primary')} />
       )}
       {label && <span>{label}</span>}
     </button>
@@ -71,7 +71,7 @@ export default function CallButton({ phone, name = '', clientId, label, classNam
                   setConfirmOpen(false)
                   callClient(destination.trim(), clientId)
                 }}
-                className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-60"
               >
                 {isCalling && <Loader2 className="h-4 w-4 animate-spin" />}
                 Appeler
