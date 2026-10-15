@@ -559,6 +559,12 @@ parameters:
 			path: app/Http/Controllers/Api/V1/Shared/CommercialAdminController.php
 
 		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$call_log_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Api/V1/Shared/CommercialAdminController.php
+
+		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$comercial\.$#'
 			identifier: property.notFound
 			count: 1

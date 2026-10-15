@@ -443,6 +443,12 @@ class CommercialAdminController extends Controller
                         'type' => $n->type,
                         'description' => $n->description,
                         'created_at' => $n->created_at,
+                        // Pointeur vers le journal d'appel RingCentral : la
+                        // frise (`NoteTimeline`) n'affiche « Voir l'appel »
+                        // (journal + enregistrement) que si ce champ est
+                        // présent — les notes d'appel en sont les seules
+                        // porteuses (`type = NOTE` + `call_log_id`).
+                        'call_log_id' => $n->call_log_id,
                         'sender' => $n->sender ? [
                             'id' => $n->sender->id,
                             'first_name' => $n->sender->first_name,
