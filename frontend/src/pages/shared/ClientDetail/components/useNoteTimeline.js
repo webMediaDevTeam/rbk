@@ -1,4 +1,4 @@
-import { Bookmark, FileText, PhoneIncoming, PhoneMissed, PhoneOff, RotateCcw, ShieldAlert, Voicemail } from 'lucide-react'
+import { Bookmark, FileText, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, RotateCcw, ShieldAlert, Voicemail } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDeleteNote } from '../useNotes.js'
 
@@ -68,6 +68,15 @@ const NOTE_TYPE_CONFIG = {
     variant: 'secondary',
     nodeClass: 'bg-gray-400 dark:bg-gray-500',
   },
+  // Note « appel passé » : `type = NOTE` MAIS porte un `call_log_id` (posée
+  // par le workflow RingCentral). Elle se distingue d'un simple commentaire
+  // par une icône d'appel, la couleur **verte** et le libellé « Appelé ».
+  CALL: {
+    icon: PhoneCall,
+    label: 'Appelé',
+    variant: 'success',
+    nodeClass: 'bg-emerald-500',
+  },
 }
 
 export function useNoteTimeline({ notes = [] }) {
@@ -92,9 +101,11 @@ export function useNoteTimeline({ notes = [] }) {
     return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
-  /** Config visuelle de l'événement (type inconnu -> repli « Note »). */
+  /** Config visuelle de l'événement (type inconnu -> repli « Note »).
+   *  Une note portant un `call_log_id` est un appel passé : elle prime sur
+   *  son `type` (`NOTE`) pour afficher l'icône d'appel verte « Appelé ». */
   const getItemConfig = (item) =>
-    NOTE_TYPE_CONFIG[item.type] ?? NOTE_TYPE_CONFIG.NOTE
+    item.call_log_id ? NOTE_TYPE_CONFIG.CALL : (NOTE_TYPE_CONFIG[item.type] ?? NOTE_TYPE_CONFIG.NOTE)
 
   /** Émetteur affiché : nom de l'employé, « Système » pour les crons. */
   const senderName = (item) => {

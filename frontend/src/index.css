@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import './styles/theme.css';
 
+/* Thème piloté par une classe. Tailwind v4 branche `dark:` sur
+   `prefers-color-scheme` par défaut ; or le sélecteur manuel (Profil →
+   Clair / Sombre / Système) bascule la classe `.dark` sur `<html>` (cf.
+   `context/theme-provider.jsx`) et les variables dans `styles/theme.css`.
+   Sans cette variante, les variables de base suivent le choix manuel mais
+   TOUTES les classes `dark:` restent calées sur l'OS → désynchronisation
+   (ex. en-tête de modale clair sur fond sombre). On aligne `dark:` sur la
+   classe `.dark`. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
   background: var(--background);
