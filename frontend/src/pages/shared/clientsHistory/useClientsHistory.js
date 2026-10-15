@@ -38,10 +38,11 @@ export function useClientsHistoryPage() {
   const [municipality, setMunicipality] = useState('')
   const [categories, setCategories] = useState('')
   const [region, setRegion] = useState('')
-  // Filtres « Entreprise » / « Employé » : un client est retenu s'il a interagi
-  // (≥ 1 note) avec l'employé choisi, ou avec un employé de l'entreprise
-  // choisie. `''` = « Toutes / Tous » (aucun paramètre envoyé). Le choix
-  // d'entreprise réinitialise l'employé (ses options en dépendent).
+  // Filtres « Entreprise » / « Employé ». « Entreprise » ne **filtre plus les
+  // clients** : il borne uniquement la liste déroulante « Employé » (cascade —
+  // seuls les employés de cette entreprise restent choisissables). C'est la
+  // sélection d'« Employé » qui filtre réellement la liste. Le choix
+  // d'entreprise réinitialise l'employé. `''` = « Toutes / Tous ».
   const [enterprise, setEnterprise] = useState('')
   const [employee, setEmployee] = useState('')
   // Onglet « source » actif (origine du prospect, §13) : `''` = « Tous »
@@ -64,20 +65,26 @@ export function useClientsHistoryPage() {
   const reservationStatuses = statusFilter && !CLIENT_STATUS_KEYS.includes(statusFilter) ? [statusFilter] : []
   const statusFilters = statusFilter ? [statusFilter] : []
 
-  const { data, isLoading } = useAdminClientsHistory({
+  // Périmètre **partagé** entre la liste et les badges KPI : recherche,
+  // facettes (municipalité / catégorie / région), onglet « source » et
+  // « Employé ». Volontairement **sans « Entreprise »** : ce filtre ne porte
+  // plus que la liste déroulante « Employé » (cascade entreprise → employés),
+  // il ne filtre pas les clients — seul « Employé » le fait. Les badges
+  // doivent compter le **même** périmètre que les lignes rendues (invariant
+  // « compteur du badge = lignes », §9), hors statut / tri / pagination.
+  const filterParams = {
     search: searchParam,
-    status: clientStatuses.length > 0 ? clientStatuses.join(',') : undefined,
-    reservation_status: reservationStatuses.length > 0 ? reservationStatuses.join(',') : undefined,
     municipality: municipality || undefined,
     category: categories || undefined,
     administrative_region: region || undefined,
-    // Filtres « Entreprise » / « Employé » (interactions via notes) : omis
-    // quand vide (« Toutes / Tous »).
-    enterprise_id: enterprise || undefined,
     employee_id: employee || undefined,
-    // Onglet « source » : omis pour « Tous » (paramètre vide = périmètre
-    // entier côté serveur).
     source: source || undefined,
+  }
+
+  const { data, isLoading } = useAdminClientsHistory({
+    ...filterParams,
+    status: clientStatuses.length > 0 ? clientStatuses.join(',') : undefined,
+    reservation_status: reservationStatuses.length > 0 ? reservationStatuses.join(',') : undefined,
     page: currentPage,
     per_page: rowsPerPage,
     sort_by: sortBy,
@@ -209,6 +216,10 @@ export function useClientsHistoryPage() {
     handleSearchChange,
     statusFilters,
     handleStatusToggle,
+    // Périmètre courant des badges KPI (liste + facettes + source + employé) :
+    // la barre `<ProspectKpis filters>` le renvoie à `GET clients/overview`
+    // pour que « compteur du badge = lignes rendues » tienne **sous filtres**.
+    kpFilters: filterParams,
     municipality,
     handleMunicipalityChange,
     categories,

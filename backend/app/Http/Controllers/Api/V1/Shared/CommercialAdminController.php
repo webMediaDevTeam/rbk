@@ -354,13 +354,8 @@ class CommercialAdminController extends Controller
      */
     private function applyInteractionFilters(Builder $query, Request $request): Builder
     {
-        if ($enterpriseId = $request->input('enterprise_id')) {
-            $query->whereHas('notes.sender.employee', fn ($q) => $q->where('enterprise_id', $enterpriseId));
-        }
-
-        if ($employeeId = $request->input('employee_id')) {
-            $query->whereHas('notes', fn ($q) => $q->where('sender_id', $employeeId));
-        }
+        $this->search->filterByInteractionEnterprise($query, $request->input('enterprise_id'));
+        $this->search->filterByInteractionEmployee($query, $request->input('employee_id'));
 
         return $query;
     }

@@ -18,13 +18,13 @@ class ProspectOverviewController extends Controller
      * GET /clients/overview — cartes KPI « Overview » des deux listes de
      * prospects (panel commercial et panel admin).
      *
-     * Chiffres **globaux** (système entier), indépendants des filtres de la
-     * liste : ce sont des totaux, pas un découpage de la page courante —
-     * sauf `?source=` (onglet actif de la Grande liste admin), qui borne
-     * **tous** les compteurs à la source demandée pour que l'invariant
-     * « compteur du badge = lignes rendues » tienne sous chaque onglet
-     * (`ClientSearchService::filterBySource()`, absent / vide = périmètre
-     * entier).
+     * Chiffres **globaux par défaut**, mais **alignés sur les filtres de la
+     * liste** quand celle en fournit (`search`, `municipality`, `category`,
+     * `administrative_region`, `source`, `employee_id`) — l'invariant
+     * « compteur du badge = lignes rendues après clic » (§9) doit tenir
+     * **sous filtres**. Le statut n'est pas un paramètre d'entrée : chaque
+     * badge le ajoute lui-même, et « Entreprise » est ignoré (il ne borne que
+     * la liste déroulante « Employé » côté UI). Voir `applyScopeFilters()`.
      *
      * Définitions métier :
      *  - « traité » (`processed`) : le client porte au moins une issue
@@ -66,16 +66,16 @@ class ProspectOverviewController extends Controller
      */
     public function overview(Request $request): JsonResponse
     {
-        // ── 0. Périmètre « source » (onglets de la Grande liste admin) ──
-        // Paramètre **vide ou absent = périmètre entier**. Quand un onglet
-        // est actif, TOUS les compteurs suivent le filtre : l'invariant
-        // « compteur du badge = lignes rendues après clic » (§9) doit tenir
-        // sous chaque onglet, sinon les badges de statut mentiraient.
+        // ── 0. Périmètre « filtres de la liste » ──────────────────────────
+        // Paramètres **vides ou absents = périmètre entier**. Quand la Grande
+        // liste applique des filtres (recherche, facettes, onglet « source »,
+        // employé), TOUS les compteurs les suivent : l'invariant « compteur du
+        // badge = lignes rendues après clic » (§9) doit tenir **sous filtres**,
+        // sinon les badges de statut mentiraient. **Sans** le filtre « Entreprise »
+        // — celui-ci ne borne que la liste déroulante « Employé » côté UI et ne
+        // filtre pas les clients.
         /** @var \Closure(): Builder<Client> $clients */
-        $clients = fn (): Builder => $this->search->filterBySource(
-            Client::query(),
-            $request->input('source'),
-        );
+        $clients = fn (): Builder => $this->applyScopeFilters(Client::query(), $request);
 
         // ── 1. Prospects ────────────────────────────────────────────────
         $system = $clients()->count();
@@ -183,5 +183,43 @@ class ProspectOverviewController extends Controller
                 'by_display_status' => $displayCounts,
             ],
         ]);
+    }
+
+    /**
+     * Périmètre **hors statut** des badges : les filtres de la Grande liste que
+     * les compteurs doivent suivre — recherche « toutes colonnes », facettes
+     * (municipalité / catégorie / région), onglet « source » et « Employé ».
+     * Exactement les critères de la liste (`CommercialAdminController::clients()`),
+     * **sauf** le statut : chaque badge ajoute le sien via
+     * `filterByStatuses()` / `filterByReservationStatuses()`.
+     *
+     * « Entreprise » volontairement absent : il ne borne que la liste déroulante
+     * « Employé » côté UI et ne filtre pas les clients (donc pas les compteurs).
+     *
+     * @param  Builder<Client>  $query
+     * @return Builder<Client>
+     */
+    private function applyScopeFilters(Builder $query, Request $request): Builder
+    {
+        if ($search = $request->input('search')) {
+            $this->search->search($query, $search);
+        }
+
+        if ($municipality = $request->input('municipality')) {
+            $this->search->filterByMunicipalities($query, $municipality);
+        }
+
+        if ($category = $request->input('category')) {
+            $this->search->filterByCategories($query, $category);
+        }
+
+        if ($region = $request->input('administrative_region')) {
+            $this->search->filterByAdministrativeRegions($query, $region);
+        }
+
+        $this->search->filterBySource($query, $request->input('source'));
+        $this->search->filterByInteractionEmployee($query, $request->input('employee_id'));
+
+        return $query;
     }
 }

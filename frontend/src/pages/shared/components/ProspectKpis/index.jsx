@@ -159,14 +159,22 @@ export const STATUS_FILTER_KEYS = STATUS_PILLS.map((pill) => pill.key)
  *                                        `undefined` (défaut) = compteurs
  *                                        globaux ; `null` = chargement en
  *                                        cours → squelette.
- * @param {string}   [source]             origine active (onglet de la Grande
- *                                        liste admin) : bornée côté serveur
- *                                        (`GET clients/overview?source=`),
- *                                        aucun effet ailleurs (paramètre omis
- *                                        = périmètre entier).
+ * @param {string}   [source]             **déprécié** — l'origine active est
+ *                                        désormais transmise via `filters.source`.
+ * @param {object}   [filters]            périmètre de la liste (Grande liste
+ *                                        admin) appliqué aux compteurs :
+ *                                        `search`, `municipality`, `category`,
+ *                                        `administrative_region`, `employee_id`,
+ *                                        `source`. Chaque valeur vide/absente =
+ *                                        aucun filtre ; **`enterprise_id` n'y
+ *                                        figure pas** — « Entreprise » ne porte
+ *                                        que la liste déroulante « Employé » et
+ *                                        ne filtre pas les clients. Les compteurs
+ *                                        suivent ainsi le **même** périmètre que
+ *                                        les lignes rendues (invariant §9).
  */
-export default function ProspectKpis({ statusFilters = [], onStatusFilterChange, counts, source }) {
-  const { kpis, isLoading, isError } = useProspectKpis(counts, { source })
+export default function ProspectKpis({ statusFilters = [], onStatusFilterChange, counts, source, filters }) {
+  const { kpis, isLoading, isError } = useProspectKpis(counts, { source, filters })
 
   if (isError) return null
 

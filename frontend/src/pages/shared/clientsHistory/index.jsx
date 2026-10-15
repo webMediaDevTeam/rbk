@@ -15,6 +15,7 @@ export default function ClientsHistoryPage() {
     handleSearchChange,
     statusFilters,
     handleStatusToggle,
+    kpFilters,
     municipality,
     handleMunicipalityChange,
     categories,
@@ -56,9 +57,10 @@ export default function ClientsHistoryPage() {
       {/* Badges de la colonne « Statut » = filtre (sélection **unique**,
           couleur pleine pour l'état sélectionné) : une seule valeur par
           ligne, deux dimensions disjointes (statut client / réservation).
-          `source` borne les compteurs à l'onglet actif : compteur de badge =
-          lignes rendues **dans cet onglet**. */}
-      <ProspectKpis statusFilters={statusFilters} onStatusFilterChange={handleStatusToggle} source={source} />
+          `filters` (recherche, facettes, onglet « source », employé) borne les
+          compteurs au **même** périmètre que les lignes rendues — changer un
+          filtre ré-render donc les valeurs des badges. */}
+      <ProspectKpis statusFilters={statusFilters} onStatusFilterChange={handleStatusToggle} filters={kpFilters} />
 
       {/* Onglets « Tous / Affaire / … » = filtre `?source=` (origine du
           prospect) — **réservés ADMIN / SUPER_ADMIN** : la barre n'est pas

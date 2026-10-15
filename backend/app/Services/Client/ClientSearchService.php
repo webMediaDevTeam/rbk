@@ -113,6 +113,51 @@ class ClientSearchService
     }
 
     /**
+     * Filtre « **Employé** » de la Grande liste : ne retient que les clients
+     * rattachés à l'employé choisi par **au moins une note** — le lien passe
+     * par `notes.sender_id` (id utilisateur de l'employé).
+     *
+     *   $search->filterByInteractionEmployee(Client::query(), $request->input('employee_id'));
+     *
+     * Valeur vide ou nulle = aucune contrainte (paramètre absent). Partagé
+     * entre la liste (`CommercialAdminController::applyInteractionFilters()`)
+     * et les compteurs KPI (`ProspectOverviewController`), pour que
+     * « compteur du badge = lignes rendues » tienne **sous filtre employé**.
+     *
+     * @param  Builder<Client>  $query
+     * @return Builder<Client>
+     */
+    public function filterByInteractionEmployee(Builder $query, int|string|null $employeeId): Builder
+    {
+        $value = $employeeId === null ? '' : trim((string) $employeeId);
+
+        return $value === ''
+            ? $query
+            : $query->whereHas('notes', fn ($q) => $q->where('sender_id', $value));
+    }
+
+    /**
+     * Filtre « **Entreprise** » de la Grande liste : clients ayant interagi
+     * avec **un employé de l'entreprise** choisie (`notes.sender.employee
+     * .enterprise_id`). Vide / nul = aucune contrainte.
+     *
+     * ⚠️ Réservé aux appels API directs : l'UI Grande liste ne l'envoie plus —
+     * « Entreprise » n'y borne que la liste déroulante « Employé » (cascade) et
+     * ne filtre pas les clients. Les compteurs KPI ignorent donc ce critère.
+     *
+     * @param  Builder<Client>  $query
+     * @return Builder<Client>
+     */
+    public function filterByInteractionEnterprise(Builder $query, int|string|null $enterpriseId): Builder
+    {
+        $value = $enterpriseId === null ? '' : trim((string) $enterpriseId);
+
+        return $value === ''
+            ? $query
+            : $query->whereHas('notes.sender.employee', fn ($q) => $q->where('enterprise_id', $value));
+    }
+
+    /**
      * Filtre par **statut client** — un ou plusieurs statuts à la fois,
      * pour les badges « Tous + 4 statuts » de l'overview :
      *
