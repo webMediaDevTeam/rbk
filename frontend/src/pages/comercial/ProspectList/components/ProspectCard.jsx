@@ -23,6 +23,7 @@ export default function ProspectCard({
   rowClickable = true,
   onToggleBlacklist,
   onEditPhone,
+  showPhone = false,
   blacklistId = null,
 }) {
   const clickable = rowClickable && typeof onViewDetail === 'function'
@@ -49,8 +50,8 @@ export default function ProspectCard({
             <button
               onClick={(e) => { e.stopPropagation(); onEditPhone(client) }}
               className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-              aria-label={client.phone ? 'Modifier le numéro de téléphone' : 'Ajouter un numéro de téléphone'}
-              title={client.phone ? 'Modifier le numéro' : 'Ajouter un numéro'}
+              aria-label="Modifier le client"
+              title="Modifier le client"
             >
               <SquarePen className="h-4 w-4 text-muted-foreground" />
             </button>
@@ -91,6 +92,12 @@ export default function ProspectCard({
           <span className="text-muted-foreground text-xs">E-mail</span>
           <p className="truncate">{client.email ?? '—'}</p>
         </div>
+        {showPhone && (
+          <div>
+            <span className="text-muted-foreground text-xs">Téléphone</span>
+            <p className="truncate">{client.phone || '—'}</p>
+          </div>
+        )}
        
         <div>
           <span className="text-muted-foreground text-xs">Municipalité</span>

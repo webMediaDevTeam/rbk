@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Enterprise;
+use App\Models\Source;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -72,6 +73,12 @@ class AppDataSeeder extends Seeder
     private function seedEnterprisesAndAgents(): void
     {
         $categories = $this->seedCategories();
+
+        // Répertoires des « sources » (liste fermée du modèle `Source`) : on
+        // s'assure qu'elles existent, puis on répartit les prospects semés sur
+        // ces valeurs — sinon tout retomberait sur `Client::DEFAULT_SOURCE`.
+        $this->call(SourceSeeder::class);
+        $sources = Source::pluck('name')->all() ?: [Client::DEFAULT_SOURCE];
 
         $enterprises = [
             [
@@ -167,12 +174,12 @@ class AppDataSeeder extends Seeder
             for ($clientIndex = 1; $clientIndex <= self::CLIENTS_PER_ENTERPRISE; $clientIndex++) {
                 $commercial = $commerciaux[($clientIndex - 1) % count($commerciaux)];
 
-                $this->seedClient($enterprise, $data, $index, $clientIndex, $commercial, $categories);
+                $this->seedClient($enterprise, $data, $index, $clientIndex, $commercial, $categories, $sources);
             }
         }
     }
 
-    private function seedClient(Enterprise $enterprise, array $data, int $enterpriseIndex, int $clientIndex, User $commercial, $categories): void
+    private function seedClient(Enterprise $enterprise, array $data, int $enterpriseIndex, int $clientIndex, User $commercial, $categories, array $sources): void
     {
         $prefixes = [
             'Construction', 'Excavation', 'Toiture', 'Plomberie', 'Électricité',
@@ -243,6 +250,9 @@ class AppDataSeeder extends Seeder
 
         $intervenant = sprintf('%s %s', $this->firstName($clientIndex), $family);
 
+        // Répartition round-robin sur le répertoire `sources` lu en amont.
+        $source = $sources[($clientIndex - 1 + $enterpriseIndex) % count($sources)];
+
         Client::updateOrCreate(
             ['licence_number' => sprintf('RBQ-%s-%03d', $data['code'], $clientIndex)],
             [
@@ -250,6 +260,7 @@ class AppDataSeeder extends Seeder
                 'name' => $name,
                 'enterprise_name' => $enterprise->name,
                 'status' => 'AVAILABLE',
+                'source' => $source,
                 'is_blacklisted' => false,
                 'licence_propre' => true,
                 'intervenant_name' => $intervenant,

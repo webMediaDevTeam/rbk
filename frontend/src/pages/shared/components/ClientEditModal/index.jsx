@@ -1,248 +1,199 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, Loader2, Save, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { AlertCircle, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import Button from '@/components/ui/button.jsx'
-import Input from '@/components/ui/input.jsx'
-import { Textarea } from '@/components/ui/textarea.jsx'
-import { getCommercialProspectApi, updateCommercialClientApi } from '@/api/commercial.api.js'
+import Select from '@/components/ui/select'
+import { cn } from '@/lib/utils.js'
+import { adminUpdateClientApi } from '@/api/commercial.api.js'
+import { listClientSourcesApi } from '@/api/shared.api.js'
 
-const INVALIDATIONS = [
-  ['commercial-prospect'],
-  ['commercial-prospects'],
-  ['reservation-group'],
-  ['reservation-groups'],
-  ['prospect-kpis'],
-  ['active-reservations-count'],
-]
-
-const formatList = (value) => (Array.isArray(value)
-  ? value.map((item) => {
-    if (typeof item === 'string') return item
-    return item?.label ?? item?.name ?? ''
-  }).filter(Boolean).join('\n')
-  : '')
-
-const formatRespondents = (value) => (Array.isArray(value)
-  ? value.map((item) => {
-    if (typeof item === 'string') return item
-    return [item?.name, item?.role].filter(Boolean).join(' | ')
-  }).filter(Boolean).join('\n')
-  : '')
-
-const dateValue = (value) => (value ? String(value).slice(0, 10) : '')
-
-function initialValues(client) {
-  return {
-    name: client.name ?? '',
-    enterprise_name: client.enterprise_name ?? '',
-    phone: client.phone ?? '',
-    email: client.email ?? '',
-    representative_name: client.representative_name ?? '',
-    full_address: client.full_address ?? '',
-    municipality: client.municipality ?? '',
-    administrative_region: client.administrative_region ?? '',
-    neq: client.neq ?? '',
-    licence_number: client.licence_number ?? '',
-    licence_propre_numero: client.licence_propre_numero ?? '',
-    licence_propre: Boolean(client.licence_propre),
-    licence_status: client.licence_status ?? '',
-    licence_start_date: dateValue(client.licence_start_date),
-    licence_end_date: dateValue(client.licence_end_date),
-    respondents: formatRespondents(client.respondents),
-    respondent_count: client.respondent_count ?? '',
-    sub_category_count: client.sub_category_count ?? '',
-    authorized_categories: formatList(client.authorized_categories),
-    surety_company: client.surety_company ?? '',
-    cautionnement_compagnie: formatList(client.cautionnement_compagnie),
-    surety_amount: client.surety_amount ?? '',
-  }
+/**
+ * Modale **« Modifier le client »** (Admin / Super Admin) —
+ * `PUT commercials/clients/{id}`.
+ *
+ * Ouvre la fiche entière en édition : identité, contact, adresse, licence et
+ * **source** (répertoire `clients.source`). Elle remplace l'ancienne saisie
+ * limitée au seul téléphone dans la Grande liste — le téléphone n'est plus
+ * qu'un champ parmi d'autres.
+ *
+ * Comme la saisie de numéro, l'enregistrement positionne `is_manually_updated`
+ * côté serveur : l'import scraper / n8n ne réécrira plus cette fiche. Toutes
+ * les vues portant une ligne ou un compteur de ce client sont invalidées.
+ */
+const EMPTY = {
+  name: '',
+  enterprise_name: '',
+  source: '',
+  representative_name: '',
+  intervenant_name: '',
+  neq: '',
+  phone: '',
+  email: '',
+  full_address: '',
+  municipality: '',
+  administrative_region: '',
+  licence_number: '',
+  licence_end_date: '',
 }
 
-function Field({ label, name, value, onChange, type = 'text', ...props }) {
-  return (
-    <label className="space-y-1.5 text-sm">
-      <span className="font-medium text-foreground">{label}</span>
-      <Input name={name} type={type} value={value} onChange={onChange} {...props} />
-    </label>
-  )
-}
+// `YYYY-MM-DD` attendu par `<input type="date">` (la base renvoie parfois un
+// datetime complet).
+const toDateInput = (value) => (value ? String(value).slice(0, 10) : '')
 
-function TextField({ label, name, value, onChange, ...props }) {
-  return (
-    <label className="space-y-1.5 text-sm">
-      <span className="font-medium text-foreground">{label}</span>
-      <Textarea name={name} value={value} onChange={onChange} rows={3} {...props} />
-    </label>
-  )
-}
+const FIELD_CLASS = cn(
+  'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background',
+  'placeholder:text-muted-foreground',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+)
 
-function Section({ title, children }) {
+function Field({ label, htmlFor, className, ...props }) {
   return (
-    <section className="space-y-3 border-t border-border pt-4">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{children}</div>
-    </section>
+    <div className={className}>
+      <label htmlFor={htmlFor} className="block text-sm font-bold mb-1">
+        {label}
+      </label>
+      <input id={htmlFor} className={FIELD_CLASS} {...props} />
+    </div>
   )
 }
 
 export default function ClientEditModal({ open, client, onClose }) {
-  const queryClient = useQueryClient()
-  const [values, setValues] = useState(() => (client ? initialValues(client) : {}))
+  const qc = useQueryClient()
+  const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState(null)
-  const clientId = client?.id
-  const { data: detailResponse, isLoading: isLoadingClient, isError: isClientError } = useQuery({
-    queryKey: ['commercial-prospect', clientId],
-    queryFn: () => getCommercialProspectApi(clientId),
-    enabled: open && !!clientId,
-  })
-  const cachedClientIsDetailed = client && ('full_address' in client || 'intervenant_name' in client)
-  const editableClient = detailResponse?.data?.data?.client ?? (cachedClientIsDetailed ? client : null)
 
+  const clientId = client?.id ?? null
+
+  const { data: sourcesData } = useQuery({
+    queryKey: ['client-sources'],
+    queryFn: () => listClientSourcesApi(),
+    enabled: open,
+    staleTime: 1000 * 60 * 60,
+    retry: false,
+  })
+  const sources = Array.isArray(sourcesData?.data) ? sourcesData.data : []
+
+  // Réinitialisation à chaque ouverture / changement de client.
   useEffect(() => {
-    if (open && editableClient) {
-      setValues(initialValues(editableClient))
+    if (open && client) {
       setError(null)
+      setForm({
+        name: client.name ?? '',
+        enterprise_name: client.enterprise_name ?? '',
+        source: client.source ?? '',
+        representative_name: client.representative_name ?? '',
+        intervenant_name: client.intervenant_name ?? '',
+        neq: client.neq ?? '',
+        phone: client.phone ?? '',
+        email: client.email ?? '',
+        full_address: client.full_address ?? '',
+        municipality: client.municipality ?? '',
+        administrative_region: client.administrative_region ?? '',
+        licence_number: client.licence_number ?? '',
+        licence_end_date: toDateInput(client.licence_end_date),
+      })
     }
-  }, [open, editableClient])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, clientId])
 
   const mutation = useMutation({
-    mutationFn: (payload) => updateCommercialClientApi(clientId, payload),
-    onSuccess: () => {
-      toast.success('Fiche client enregistrée.')
-      INVALIDATIONS.forEach((queryKey) => queryClient.invalidateQueries({ queryKey }))
+    mutationFn: () => {
+      const payload = {}
+      Object.entries(form).forEach(([key, value]) => {
+        payload[key] = typeof value === 'string' ? value.trim() : value
+      })
+      return adminUpdateClientApi(clientId, payload)
+    },
+    onSuccess: (res) => {
+      toast.success(res?.data?.message || 'Fiche client mise à jour.')
+      qc.invalidateQueries({ queryKey: ['admin-clients-history'] })
+      qc.invalidateQueries({ queryKey: ['prospect-kpis'] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospects'] })
+      qc.invalidateQueries({ queryKey: ['admin-client'] })
+      qc.invalidateQueries({ queryKey: ['commercial-prospect'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
       onClose()
     },
     onError: (err) => {
-      const validationError = Object.values(err?.response?.data?.errors ?? {})[0]?.[0]
-      const message = validationError || err?.response?.data?.message || 'Impossible d’enregistrer la fiche.'
-      setError(message)
-      toast.error(message)
+      const msg = err?.response?.data?.message || 'Une erreur est survenue.'
+      setError(msg)
+      toast.error(msg)
     },
   })
 
   if (!open || !client) return null
 
-  if (!editableClient) {
-    return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-        <div role="dialog" aria-modal="true" className="flex items-center gap-3 rounded-lg bg-card p-5 text-card-foreground shadow-xl" onClick={(event) => event.stopPropagation()}>
-          {isLoadingClient ? <Loader2 className="h-5 w-5 animate-spin" /> : <AlertCircle className="h-5 w-5 text-destructive" />}
-          <span>{isClientError ? 'Impossible de charger la fiche client.' : 'Chargement de la fiche client…'}</span>
-          <Button type="button" variant="secondary" onClick={onClose}>Fermer</Button>
-        </div>
-      </div>
-    )
-  }
+  const set = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
-  const change = (event) => {
-    const { name, value, type, checked } = event.target
-    setValues((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
-  }
-
-  const splitLines = (value) => value.split('\n').map((line) => line.trim()).filter(Boolean)
-
-  const submit = (event) => {
-    event.preventDefault()
-    setError(null)
-    const respondents = splitLines(values.respondents).map((line) => {
-      const [name, ...roles] = line.split('|').map((part) => part.trim())
-      return roles.length ? { name, role: roles.join(' | ') } : name
-    })
-    const payload = {
-      ...values,
-      respondents,
-      authorized_categories: splitLines(values.authorized_categories),
-      categories: splitLines(values.authorized_categories),
-      cautionnement_compagnie: splitLines(values.cautionnement_compagnie),
-      licence_propre_numero: values.licence_propre_numero === '' ? null : Number(values.licence_propre_numero),
-      respondent_count: values.respondent_count === '' ? null : Number(values.respondent_count),
-      sub_category_count: values.sub_category_count === '' ? null : Number(values.sub_category_count),
-      surety_amount: values.surety_amount === '' ? null : Number(values.surety_amount),
-    }
-    mutation.mutate(payload)
-  }
+  // La source courante peut être absente du répertoire : on l'ajoute pour ne
+  // jamais perdre la valeur enregistrée.
+  const sourceOptions = form.source && !sources.includes(form.source)
+    ? [form.source, ...sources]
+    : sources
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-3 sm:p-5" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="client-edit-title"
-        className="relative flex max-h-[92vh] w-full max-w-4xl flex-col rounded-lg bg-card text-card-foreground shadow-xl"
-        onClick={(event) => event.stopPropagation()}
+        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-card p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <div>
-            <h2 id="client-edit-title" className="text-lg font-semibold">Modifier la fiche client</h2>
-            <p className="text-sm text-muted-foreground">{editableClient.enterprise_name || editableClient.name}</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="rounded p-1.5 text-muted-foreground hover:bg-muted">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-foreground">Modifier le client</h2>
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={submit} className="min-h-0 space-y-5 overflow-y-auto px-5 py-4">
-          <Section title="Contact">
-            <Field label="Nom affiché" name="name" value={values.name ?? ''} onChange={change} />
-            <Field label="Entreprise" name="enterprise_name" value={values.enterprise_name ?? ''} onChange={change} />
-            <Field label="Téléphone" name="phone" type="tel" value={values.phone ?? ''} onChange={change} />
-            <Field label="Courriel" name="email" type="email" value={values.email ?? ''} onChange={change} />
-            <Field label="Représentant" name="representative_name" value={values.representative_name ?? ''} onChange={change} />
-            <Field label="NEQ" name="neq" value={values.neq ?? ''} onChange={change} />
-            <div className="sm:col-span-2">
-              <TextField label="Adresse complète" name="full_address" value={values.full_address ?? ''} onChange={change} />
-            </div>
-            <Field label="Municipalité" name="municipality" value={values.municipality ?? ''} onChange={change} />
-            <Field label="Région administrative" name="administrative_region" value={values.administrative_region ?? ''} onChange={change} />
-          </Section>
-
-          <Section title="Licence">
-            <Field label="Numéro de licence" name="licence_number" value={values.licence_number ?? ''} onChange={change} />
-            <Field label="Licence (propre) numéro" name="licence_propre_numero" type="number" min="0" value={values.licence_propre_numero ?? ''} onChange={change} />
-            <Field label="Statut de licence" name="licence_status" value={values.licence_status ?? ''} onChange={change} />
-            <label className="flex items-center gap-2 self-end pb-2 text-sm">
-              <input type="checkbox" name="licence_propre" checked={Boolean(values.licence_propre)} onChange={change} />
-              Licence propre
-            </label>
-            <Field label="Date de début" name="licence_start_date" type="date" value={values.licence_start_date ?? ''} onChange={change} />
-            <Field label="Date de fin" name="licence_end_date" type="date" value={values.licence_end_date ?? ''} onChange={change} />
-          </Section>
-
-          <Section title="Répondants et catégories">
-            <Field label="Nombre de répondants" name="respondent_count" type="number" min="0" value={values.respondent_count ?? ''} onChange={change} />
-            <Field label="Nombre de sous-catégories" name="sub_category_count" type="number" min="0" value={values.sub_category_count ?? ''} onChange={change} />
+        <form id="client-edit-form" onSubmit={(e) => { e.preventDefault(); setError(null); mutation.mutate() }} className="flex-1 space-y-5 overflow-y-auto pr-1">
+          {/* Identité */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Nom" htmlFor="client-name" value={form.name} onChange={set('name')} placeholder="Nom du prospect" autoFocus />
+            <Field label="Entreprise" htmlFor="client-enterprise" value={form.enterprise_name} onChange={set('enterprise_name')} placeholder="Raison sociale" />
             <div>
-              <TextField label="Répondants (un par ligne, rôle après |)" name="respondents" value={values.respondents ?? ''} onChange={change} />
+              <label htmlFor="client-source" className="block text-sm font-bold mb-1">Source</label>
+              <Select id="client-source" value={form.source} onChange={set('source')} className="cursor-pointer">
+                <option value="">— Aucune —</option>
+                {sourceOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+              </Select>
             </div>
-            <div>
-              <TextField label="Catégories autorisées (une par ligne)" name="authorized_categories" value={values.authorized_categories ?? ''} onChange={change} />
-            </div>
-          </Section>
+            <Field label="Représentant" htmlFor="client-representative" value={form.representative_name} onChange={set('representative_name')} placeholder="Personne de contact" />
+            <Field label="Intervenant" htmlFor="client-intervenant" value={form.intervenant_name} onChange={set('intervenant_name')} placeholder="Intervenant" />
+            <Field label="NEQ" htmlFor="client-neq" value={form.neq} onChange={set('neq')} placeholder="Numéro d'entreprise (QB)" />
+          </div>
 
-          <Section title="Cautionnement">
-            <Field label="Compagnie / association" name="surety_company" value={values.surety_company ?? ''} onChange={change} />
-            <Field label="Montant ($)" name="surety_amount" type="number" min="0" step="0.01" value={values.surety_amount ?? ''} onChange={change} />
-            <div className="sm:col-span-2">
-              <TextField label="Compagnies de cautionnement (une par ligne)" name="cautionnement_compagnie" value={values.cautionnement_compagnie ?? ''} onChange={change} />
-            </div>
-          </Section>
+          {/* Contact */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Téléphone" htmlFor="client-phone" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} placeholder="514 555-0100" />
+            <Field label="Courriel" htmlFor="client-email" type="email" value={form.email} onChange={set('email')} placeholder="info@exemple.com" />
+            <Field label="Adresse" htmlFor="client-address" className="sm:col-span-2" value={form.full_address} onChange={set('full_address')} placeholder="Adresse complète" />
+            <Field label="Municipalité" htmlFor="client-municipality" value={form.municipality} onChange={set('municipality')} placeholder="Québec" />
+            <Field label="Région administrative" htmlFor="client-region" value={form.administrative_region} onChange={set('administrative_region')} placeholder="—" />
+          </div>
+
+          {/* Licence */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Numéro de licence" htmlFor="client-licence" value={form.licence_number} onChange={set('licence_number')} placeholder="—" />
+            <Field label="Fin de licence" htmlFor="client-licence-end" type="date" value={form.licence_end_date} onChange={set('licence_end_date')} />
+          </div>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
-
-          <div className="sticky bottom-0 flex justify-end gap-2 border-t border-border bg-card py-3">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>Annuler</Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Enregistrer
-            </Button>
-          </div>
         </form>
+
+        <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={mutation.isPending}>
+            Annuler
+          </Button>
+          <Button type="submit" form="client-edit-form" disabled={mutation.isPending}>
+            {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Enregistrer
+          </Button>
+        </div>
       </div>
     </div>
   )

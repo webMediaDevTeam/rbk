@@ -7,6 +7,9 @@ const variants = {
   outline: 'border border-border bg-transparent text-foreground shadow-sm hover:bg-muted',
   ghost: 'bg-transparent text-foreground hover:bg-muted',
   destructive: 'bg-destructive text-white shadow-sm hover:bg-destructive/90',
+  // Avertissement : ambre plein — attire l'œil sur une action qui modifie la
+  // donnée (ex. « Modifier » la fiche client), sans être destructive (rouge).
+  warning: 'bg-amber-500 text-white shadow-sm hover:bg-amber-600',
   // Liste noire : noir plein en mode clair, gris en mode sombre — les mêmes
   // variables que la pastille « Liste noire » (`ClientStatus`), pour que le
   // bouton et le badge parlent de la même couleur.

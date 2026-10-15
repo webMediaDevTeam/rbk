@@ -48,14 +48,8 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
     // `from` est résolu côté API dans `employees.ringcentral_from_number`,
     // le navigateur n'envoie que la destination `to`.
     Route::post('call-logs/my-call', [RingCentralController::class, 'callAsEmployee']);
-    // Historique vocal d'un client : le **détail** de l'appel (journal)
-    // reste consultable par tout commercial — y compris ses propres
-    // appels — mais l'**écoute** de l'enregistrement exige le privilège
-    // (`users.has_permission`, §7.1) : 403 sinon, sans exception
-    // « propriétaire » pour un appel passé par le connecté.
-    Route::get('call-logs/client-calls/{callLog}', [RingCentralController::class, 'clientCallDetails']);
-    Route::get('call-logs/client-calls/{callLog}/recordings/{recordingId}/content', [RingCentralController::class, 'clientCallRecordingContent'])
-        ->middleware(CheckPermission::class);
+    // Le détail / l'écoute d'un appel (`call-logs/client-calls/…`) n'est plus
+    // ouvert aux COMERCIAL : voir `routes/api/shared.php` (ADMIN / SUPER_ADMIN).
 });
 
 // Renommage de liste : propriétaire (COMERCIAL) ou ADMIN / SUPER_ADMIN.

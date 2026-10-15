@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { isSearchActive } from '@/lib/search.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
 import { listAdminClientsApi, adminBlacklistClientApi, adminUnblockClientApi } from '@/api/commercial.api.js'
-import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
+import { CLIENT_STATUS_KEYS, STATUS_FILTER_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
 
 export function useAdminClientsHistory(params = {}) {
   return useQuery({
@@ -17,6 +17,7 @@ export function useAdminClientsHistory(params = {}) {
 
 export function useClientsHistoryPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isDesktop = useIsDesktop()
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
@@ -26,10 +27,23 @@ export function useClientsHistoryPage() {
   // statut **client**, Oui / Non / BV / À rappeler le statut de la
   // **réservation courante**.
   // Les deux paramètres serveur sont distincts et combinés en `OR`.
-  const [statusFilter, setStatusFilter] = useState(null)
+  // Le filtre peut être **pré-appliqué par les cartes KPI du tableau de
+  // bord** (`/clients-historique?status=YES`…) : la valeur d'URL est lue au
+  // montage, puis maintenue en phase avec les badges pour qu'un
+  // rafraîchissement conserve la sélection.
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const value = searchParams.get('status')
+    return value && STATUS_FILTER_KEYS.includes(value) ? value : null
+  })
   const [municipality, setMunicipality] = useState('')
   const [categories, setCategories] = useState('')
   const [region, setRegion] = useState('')
+  // Filtres « Entreprise » / « Employé » : un client est retenu s'il a interagi
+  // (≥ 1 note) avec l'employé choisi, ou avec un employé de l'entreprise
+  // choisie. `''` = « Toutes / Tous » (aucun paramètre envoyé). Le choix
+  // d'entreprise réinitialise l'employé (ses options en dépendent).
+  const [enterprise, setEnterprise] = useState('')
+  const [employee, setEmployee] = useState('')
   // Onglet « source » actif (origine du prospect, §13) : `''` = « Tous »
   // (aucun `?source=` envoyé). Sert aussi aux compteurs des badges de statut
   // (`<ProspectKpis source>` → `GET clients/overview?source=`).
@@ -57,6 +71,10 @@ export function useClientsHistoryPage() {
     municipality: municipality || undefined,
     category: categories || undefined,
     administrative_region: region || undefined,
+    // Filtres « Entreprise » / « Employé » (interactions via notes) : omis
+    // quand vide (« Toutes / Tous »).
+    enterprise_id: enterprise || undefined,
+    employee_id: employee || undefined,
     // Onglet « source » : omis pour « Tous » (paramètre vide = périmètre
     // entier côté serveur).
     source: source || undefined,
@@ -127,9 +145,18 @@ export function useClientsHistoryPage() {
 
   // Badges en **sélection unique** : cliquer un badge le rend seul actif,
   // un second clic dessus repasse à « Tous » (`null`), et « Tous » retire
-  // l'unique filtre actif. Revient toujours à la 1re page.
+  // l'unique filtre actif. Revient toujours à la 1re page. Le paramètre
+  // d'URL suit la sélection (remplacement : un clic de badge n'empile pas
+  // dans l'historique de navigation).
   const handleStatusToggle = (value) => {
-    setStatusFilter((prev) => (value === null || prev === value ? null : value))
+    const next = value === null || statusFilter === value ? null : value
+    setStatusFilter(next)
+
+    const params = new URLSearchParams(searchParams)
+    if (next) params.set('status', next)
+    else params.delete('status')
+    setSearchParams(params, { replace: true })
+
     setCurrentPage(1)
   }
 
@@ -145,6 +172,20 @@ export function useClientsHistoryPage() {
 
   const handleRegionChange = (value) => {
     setRegion(value)
+    setCurrentPage(1)
+  }
+
+  // Entreprise : change le périmètre des options d'employé → on réinitialise
+  // l'employé sélectionné (il n'appartient peut-être plus à la nouvelle
+  // entreprise) et revient à la 1re page.
+  const handleEnterpriseChange = (value) => {
+    setEnterprise(value)
+    setEmployee('')
+    setCurrentPage(1)
+  }
+
+  const handleEmployeeChange = (value) => {
+    setEmployee(value)
     setCurrentPage(1)
   }
 
@@ -174,6 +215,10 @@ export function useClientsHistoryPage() {
     handleCategoryChange,
     region,
     handleRegionChange,
+    enterprise,
+    handleEnterpriseChange,
+    employee,
+    handleEmployeeChange,
     source,
     handleSourceChange,
     currentPage,

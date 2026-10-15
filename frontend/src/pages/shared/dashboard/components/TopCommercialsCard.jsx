@@ -7,9 +7,9 @@ export default function TopCommercialsCard({ commercials = [] }) {
   return (
     <div className="rounded-2xl bg-card p-6 text-card-foreground shadow-sm">
       <h3 className="text-base font-semibold">Meilleurs employés</h3>
-      <p className="text-sm text-muted-foreground">Classés par clients convertis (OUI)</p>
+      <p className="text-sm text-muted-foreground">Tous les employés — classés par appels validés (OUI)</p>
 
-      <ul className="mt-5 space-y-5">
+      <ul className="mt-5 max-h-[360px] space-y-5 overflow-y-auto pr-1">
         {items.length === 0 ? (
           <li className="text-sm text-muted-foreground">Aucune donnée pour le moment.</li>
         ) : (
@@ -23,7 +23,7 @@ export default function TopCommercialsCard({ commercials = [] }) {
                   <p className="truncate text-sm font-medium">{commercial.name}</p>
                   <p className="truncate text-xs text-muted-foreground">{commercial.email}</p>
                 </div>
-                <Badge variant="success">{commercial.clients_oui} OUI</Badge>
+                <Badge variant="success">{commercial.oui} OUI</Badge>
               </div>
               <div className="flex items-center gap-3">
                 <div className="h-2 flex-1 rounded-full bg-muted">

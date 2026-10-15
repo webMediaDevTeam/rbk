@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, Lock, X } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import RecordingPlayer from '@/components/RecordingPlayer.jsx'
-import { getClientCallDetailsApi, getClientCallRecordingApi } from '@/api/commercial.api.js'
-import { useAuth } from '@/context/AuthContext.jsx'
+import { getClientCallDetailsApi, getClientCallRecordingApi } from '@/api/shared.api.js'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -17,12 +16,9 @@ function formatDuration(value) {
 }
 
 export default function ClientCallDetailsModal({ callLogId, onClose }) {
-  // Privilège commercial (docs/RULES.md §7.1) : le **journal** d'appel se
-  // consulte par tout commercial (y compris ses propres appels), mais
-  // l'**écoute** reste réservée aux privilégiés — sans `has_permission`,
-  // le lecteur n'est pas rendu (et `…/recordings/{id}/content` répond 403).
-  const { user } = useAuth()
-  const canListen = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
+  // Journal + enregistrements d'un appel — consultation réservée
+  // ADMIN / SUPER_ADMIN (le lien « Voir l'appel » de la frise
+  // d'interactions n'est pas rendu pour un COMERCIAL, cf. NoteTimeline).
 
   const query = useQuery({
     queryKey: ['client-call-details', callLogId],
@@ -88,24 +84,17 @@ export default function ClientCallDetailsModal({ callLogId, onClose }) {
             <section aria-labelledby="call-recording-title">
               <h3 id="call-recording-title" className="mb-3 text-sm font-semibold">Enregistrement</h3>
               {recordings.length ? (
-                canListen ? (
-                  <div className="space-y-3">
-                    {recordings.map((recording) => (
-                      <RecordingPlayer
-                        key={recording.id}
-                        load={() => getClientCallRecordingApi(call.id, recording.id)}
-                        type={recording.type}
-                        recordingId={recording.id}
-                        duration={recording.duration}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
-                    <Lock className="h-4 w-4 shrink-0" />
-                    Écoute réservée aux commerciaux disposant du privilège.
-                  </p>
-                )
+                <div className="space-y-3">
+                  {recordings.map((recording) => (
+                    <RecordingPlayer
+                      key={recording.id}
+                      load={() => getClientCallRecordingApi(call.id, recording.id)}
+                      type={recording.type}
+                      recordingId={recording.id}
+                      duration={recording.duration}
+                    />
+                  ))}
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Aucun enregistrement disponible.</p>
               )}

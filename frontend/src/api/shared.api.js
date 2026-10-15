@@ -109,3 +109,21 @@ export function syncEmployeeCallLogsApi(id) {
 export function getCallRecordingContentApi(recordingId) {
   return api.get(`/call-logs/recordings/${encodeURIComponent(recordingId)}/content`, { responseType: 'blob' })
 }
+
+// Détails d'un appel de la fiche client — « Voir l'appel » de la frise
+// d'interactions (ADMIN + SUPER_ADMIN uniquement : un COMERCIAL ne consulte
+// plus le journal ni les enregistrements d'appel).
+// Réponse : `{success, data: {client, started_at, events, recordings, …}}`.
+export function getClientCallDetailsApi(callLogId) {
+  return api.get(`/call-logs/client-calls/${encodeURIComponent(callLogId)}`)
+}
+
+// Audio d'un enregistrement de la fiche client (même proxy que ci-dessus,
+// ADMIN + SUPER_ADMIN) : lu par `ClientCallDetailsModal`.
+// Réponse : un `Blob` (l'intercepteur renvoie `response.data`).
+export function getClientCallRecordingApi(callLogId, recordingId) {
+  return api.get(
+    `/call-logs/client-calls/${encodeURIComponent(callLogId)}/recordings/${encodeURIComponent(recordingId)}/content`,
+    { responseType: 'blob' },
+  )
+}

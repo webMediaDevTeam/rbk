@@ -6,6 +6,7 @@ import { useCommercialProspect, useAdminClientDetail } from '@/pages/comercial/P
 import { blacklistClientApi, adminBlacklistClientApi, adminUnblockClientApi } from '@/api/commercial.api.js'
 import { useClientNotes } from './useNotes.js'
 import { useAuth } from '@/context/AuthContext.jsx'
+import { copyText } from '@/lib/clipboard.js'
 
 /**
  * Bascule blocage / déblocage : le client change de seau (« Disponible » /
@@ -115,10 +116,14 @@ export function useClientDetail() {
     setBlacklistError(null)
   }
 
-  const handleCopyPhone = () => {
-    navigator.clipboard.writeText(client.phone)
-      .then(() => toast.success('Numéro copié.'))
-      .catch(() => toast.error('Impossible de copier le numéro.'))
+  const handleCopyPhone = async () => {
+    if (!client?.phone) {
+      toast.error('Aucun numéro à copier.')
+      return
+    }
+    const ok = await copyText(client.phone)
+    if (ok) toast.success('Numéro copié.')
+    else toast.error('Impossible de copier le numéro.')
   }
 
   return {

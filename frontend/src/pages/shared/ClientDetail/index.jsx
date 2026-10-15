@@ -5,7 +5,6 @@ import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/Re
 import ClientDetailsTab from './components/ClientDetailsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
-import PhoneEditModal from '@/pages/shared/components/PhoneEditModal/index.jsx'
 import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
 import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import { cn } from '@/lib/utils.js'
@@ -38,9 +37,6 @@ export default function ClientDetailPage() {
     unblockMutation,
     handleBack,
     handleCopyPhone,
-    phoneOpen,
-    openPhoneEdit,
-    closePhoneEdit,
     clientEditOpen,
     openClientEdit,
     closeClientEdit,
@@ -67,14 +63,16 @@ export default function ClientDetailPage() {
         </h1>
         <p className="text-sm text-muted-foreground flex items-center">
           {client.phone ?? '—'}
-          <button
-            className="ml-2 text-muted-foreground hover:text-foreground transition-colors"
-            onClick={handleCopyPhone} 
-            title="Copier le numéro"
-            type="button"
-          >
-            <Copy className="h-4 w-4" aria-hidden="true" />
-          </button>
+          {client.phone ? (
+            <button
+              className="ml-2 text-muted-foreground hover:text-foreground transition-colors"
+              onClick={handleCopyPhone}
+              title="Copier le numéro"
+              type="button"
+            >
+              <Copy className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
         </p>
 
         {/* Courriel — panneau d'informations principal (en-tête de la fiche). */}
@@ -105,6 +103,22 @@ export default function ClientDetailPage() {
               returnedAt={client.returned_at}
             />
           )}
+
+      {/* « Modifier » en-tête de fiche — accès édition (admin, ou commercial
+          titulaire d'une réservation non blacklistée). Couleur **avertissement**
+          (ambre) pour signaler une action qui écrit sur la donnée ; ouvre la
+          modale d'édition complète (`ClientEditModal`), téléphone inclus. */}
+      {(isAdmin || (hasReservation && !client.is_blacklisted)) && (
+        <Button
+          variant="warning"
+          size="sm"
+          onClick={openClientEdit}
+          className="ml-auto shrink-0"
+        >
+          <SquarePen className="mr-1.5 h-4 w-4" />
+          Modifier
+        </Button>
+      )}
     </div>
   </div>
 
@@ -183,19 +197,9 @@ export default function ClientDetailPage() {
           )}
 
           <div className="flex justify-end gap-2">
-            {!isAdmin && hasReservation && !client.is_blacklisted && (
-              <Button variant="outline" onClick={openClientEdit}>
-                <SquarePen className="mr-1.5 h-4 w-4" />
-                Modifier la fiche
-              </Button>
-            )}
-            {/* Saisie du numéro (Admin / Super Admin) — voir PhoneEditModal. */}
-            {isAdmin && (
-              <Button variant="outline" onClick={openPhoneEdit}>
-                <SquarePen className="h-4 w-4 mr-1.5" />
-                {client.phone ? 'Modifier le numéro' : 'Ajouter un numéro'}
-              </Button>
-            )}
+            {/* Le bouton « Modifier » (édition complète) est désormais dans
+                l'en-tête de la fiche ; cette rangée ne porte plus que les
+                actions de liste noire / déblocage. */}
             {isAdmin ? (
               client.is_blacklisted ? (
                 <Button
@@ -224,7 +228,6 @@ export default function ClientDetailPage() {
         </>
       )}
 
-      <PhoneEditModal open={phoneOpen} client={client ?? null} onClose={closePhoneEdit} />
       <ClientEditModal open={clientEditOpen} client={client ?? null} onClose={closeClientEdit} />
 
       <ActionModal

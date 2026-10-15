@@ -132,6 +132,13 @@ const STATUS_PILLS = [
 export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED', 'SANS_TELEPHONE']
 
 /**
+ * Toutes les valeurs filtrables de la barre (clés « statut affiché ») : sert
+ * à la Grande liste admin pour valider au montage le filtre pré-appliqué
+ * par les cartes KPI du tableau de bord (`/clients-historique?status=…`).
+ */
+export const STATUS_FILTER_KEYS = STATUS_PILLS.map((pill) => pill.key)
+
+/**
  * Barre « Tous + 9 statuts affichés » (10 badges au total, §9).
  *
  * @param {string[]} statusFilters        valeurs affichées sélectionnées —

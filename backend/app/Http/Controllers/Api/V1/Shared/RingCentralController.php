@@ -44,6 +44,11 @@ use Throwable;
  *          SUPER_ADMIN — récupère le journal RingCentral puis le stocke)
  *   GET    /call-logs/recordings/{recordingId}/content      (ADMIN,
  *          SUPER_ADMIN — proxy audio d'un enregistrement)
+ *   GET    /call-logs/client-calls/{callLog}               (ADMIN,
+ *          SUPER_ADMIN — « Voir l'appel » de la fiche client)
+ *   GET    /call-logs/client-calls/{callLog}/recordings/{recordingId}/content
+ *                                                          (ADMIN,
+ *          SUPER_ADMIN — proxy audio de la fiche client)
  *   POST   /call-logs/my-call                               (COMERCIAL —
  *          appel sortant de l'employé, `from` résolu côté API, journal
  *          ouvert immédiatement + enregistrement automatique)
@@ -83,8 +88,8 @@ class RingCentralController extends Controller
      * renvoient `phoneLines: []`, c'est donc `/account/~/phone-number` qui
      * fournit le libellé affiché dans la sélection (numéro, pas nom).
      *
-    * `enterprise_id` obligatoire : la liste vient exclusivement du compte
-    * RingCentral enregistré sur cette entreprise (`enterprises.ringcentral_*`).
+     * `enterprise_id` obligatoire : la liste vient exclusivement du compte
+     * RingCentral enregistré sur cette entreprise (`enterprises.ringcentral_*`).
      *
      * Best-effort : si l'API des numéros est injoignable, les appareils
      * sont renvoyés tels quels (la sélection retombe sur le nom).
@@ -469,12 +474,14 @@ class RingCentralController extends Controller
         });
     }
 
-    /** Détails synchronisés d'un appel appartenant à l'employé connecté. */
+    /**
+     * Détails synchronisés d'un appel — « Voir l'appel » de la fiche client
+     * (ADMIN / SUPER_ADMIN ; la route n'est plus ouverte aux COMERCIAL).
+     */
     public function clientCallDetails(Request $request, string $callLogId): JsonResponse
     {
         $call = CallLog::query()
             ->with(['client:id,name,phone', 'employee', 'recordings'])
-            ->whereHas('employee', fn ($query) => $query->where('user_id', $request->user()->id))
             ->findOrFail($callLogId);
 
         $remoteRecord = null;
@@ -618,11 +625,10 @@ class RingCentralController extends Controller
         return $remote;
     }
 
-    /** Audio proxy scoped to a call owned by the authenticated employee. */
+    /** Audio proxy d'un appel de la fiche client (ADMIN / SUPER_ADMIN). */
     public function clientCallRecordingContent(Request $request, string $callLogId, string $recordingId): Response|JsonResponse
     {
         $call = CallLog::query()
-            ->whereHas('employee', fn ($query) => $query->where('user_id', $request->user()->id))
             ->whereKey($callLogId)
             ->whereHas('recordings', fn ($query) => $query->where('ringcentral_recording_id', $recordingId))
             ->firstOrFail();

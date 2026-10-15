@@ -2,6 +2,7 @@ import { Headphones, Trash2 } from 'lucide-react'
 import Badge from '@/components/ui/badge.jsx'
 import ClientCallDetailsModal from './ClientCallDetailsModal.jsx'
 import { useNoteTimeline } from './useNoteTimeline.js'
+import { useAuth } from '@/context/AuthContext.jsx'
 import { useState } from 'react'
 
 /**
@@ -13,6 +14,10 @@ import { useState } from 'react'
  */
 export default function NoteTimeline({ notes = [], readOnly = false }) {
   const [selectedCallId, setSelectedCallId] = useState(null)
+  const { role } = useAuth()
+  // « Voir l'appel » (journal + enregistrements) : réservé ADMIN /
+  // SUPER_ADMIN — un COMERCIAL ne consulte plus les appels.
+  const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN'
   const {
     allItems,
     formatRelativeDate,
@@ -68,7 +73,7 @@ export default function NoteTimeline({ notes = [], readOnly = false }) {
                       <span className="text-xs text-muted-foreground">{sender}</span>
                     </>
                   )}
-                  {item.call_log_id && (
+                  {isAdmin && item.call_log_id && (
                     <button
                       type="button"
                       onClick={() => setSelectedCallId(item.call_log_id)}

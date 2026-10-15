@@ -71,6 +71,13 @@ export function adminUpdateClientPhoneApi(id, phone) {
   return api.patch(`/commercials/clients/${id}/phone`, { phone })
 }
 
+// Mise à jour **complète** d'une fiche client depuis l'accès Admin
+// (`PUT commercials/clients/{id}`) : identité, contact, adresse, licence,
+// source. Seuls les champs du formulaire sont envoyés.
+export function adminUpdateClientApi(id, payload) {
+  return api.put(`/commercials/clients/${id}`, payload)
+}
+
 // Appel sortant de l'employé (bouton « Appeler » : Mes listes, Rappels, BV).
 // La source (`from`) est résolue côté API dans `employees.ringcentral_from_number`,
 // le navigateur n'envoie que la destination. `record: true` → l'appel est
@@ -78,17 +85,6 @@ export function adminUpdateClientPhoneApi(id, phone) {
 // que la partie n'est pas connectée).
 export function callMyNumberApi(payload = {}) {
   return api.post('/call-logs/my-call', payload)
-}
-
-export function getClientCallDetailsApi(callLogId) {
-  return api.get(`/call-logs/client-calls/${encodeURIComponent(callLogId)}`)
-}
-
-export function getClientCallRecordingApi(callLogId, recordingId) {
-  return api.get(
-    `/call-logs/client-calls/${encodeURIComponent(callLogId)}/recordings/${encodeURIComponent(recordingId)}/content`,
-    { responseType: 'blob' },
-  )
 }
 
 // (Re)démarre l'enregistrement d'une partie de session — retenté par le

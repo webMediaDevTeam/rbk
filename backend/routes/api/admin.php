@@ -11,6 +11,10 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
     Route::get('commercials', [CommercialAdminController::class, 'index']);
     Route::get('commercials/clients', [CommercialAdminController::class, 'clients']);
     Route::get('commercials/clients/{id}', [CommercialAdminController::class, 'client']);
+    // Mise à jour **complète** d'une fiche client (Admin / Super Admin) :
+    // identité, contact, licence, source. `PUT` (remplacement des champs
+    // fournis) ; l'import scraper/n8n est coupé par `is_manually_updated`.
+    Route::put('commercials/clients/{id}', [CommercialAdminController::class, 'update']);
     // Ajout / modification du numéro d'un client (statut « Sans téléphone »).
     Route::patch('commercials/clients/{id}/phone', [CommercialAdminController::class, 'updatePhone']);
     Route::post('commercials/clients/{id}/blacklist', [CommercialAdminController::class, 'blacklist']);

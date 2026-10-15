@@ -90,6 +90,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // chargement des fichiers.
     Route::get('clients/sources', [ProspectFilterController::class, 'sources']);
 
+    // Options des filtres « Entreprise » / « Employé » de la Grande liste :
+    // entreprises et commerciaux ayant interagi ≥ 1 fois avec un client (via
+    // `notes.sender_id`). Déclarée avant `clients/{id}` (ordre de chargement).
+    Route::get('clients/interaction-filters', [ProspectFilterController::class, 'interactionFilters']);
+
     // Cartes KPI « Overview » des deux listes de prospects (chiffres
     // globaux). Déclarée avant `clients/{id}` (routes/api/commercial.php) :
     // les routes se lisent dans l'ordre de chargement des fichiers.
@@ -123,6 +128,18 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
     Route::post('call-logs/employees/{id}/logs/sync', [RingCentralController::class, 'syncEmployeeLogs']);
     Route::post('call-logs/sync/employees', [RingCentralController::class, 'syncEmployees']);
     Route::get('call-logs/recordings/{recordingId}/content', [RingCentralController::class, 'recordingContent']);
+});
+
+// ── Détail / écoute d'un appel depuis la fiche client ────────────────────
+// « Voir l'appel » de la frise d'interactions (modale ClientCallDetails) :
+// réservé ADMIN + SUPER_ADMIN — un COMERCIAL ne consulte plus le journal ni
+// les enregistrements d'appel (403), même propriétaire de l'appel, même avec
+// le privilège `users.has_permission` (§7.1). Il lance toujours l'appel
+// (`POST /call-logs/my-call`, enregistrement démarré / retenté via
+// `POST …/record`), seule la consultation lui est fermée.
+Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->group(function () {
+    Route::get('call-logs/client-calls/{callLog}', [RingCentralController::class, 'clientCallDetails']);
+    Route::get('call-logs/client-calls/{callLog}/recordings/{recordingId}/content', [RingCentralController::class, 'clientCallRecordingContent']);
 });
 
 // ── RingCentral — contrôle d'appel (PHASE DE TEST, Super Admin) ────────

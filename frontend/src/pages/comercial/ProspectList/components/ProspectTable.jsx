@@ -23,6 +23,8 @@ import { respondentsText } from './prospectFormat'
  * @param {(c: object) => void} [onEditPhone]  bouton « Modifier le numéro »
  *   (accès Admin / Super Admin) : saisie du téléphone d'un prospect
  *   « Sans téléphone » — modale de saisie ouverte par la page.
+ * @param {boolean} [showPhone=false]  affiche une **colonne Téléphone** (Grande
+ *   liste admin uniquement — le commercial ne voit pas le numéro en liste).
  * @param {number|null} [blacklistId]  id en cours de bascule (spinner).
  */
 export default function ProspectTable({
@@ -36,18 +38,20 @@ export default function ProspectTable({
   rowClickable = true,
   onToggleBlacklist,
   onEditPhone,
+  showPhone = false,
   blacklistId = null,
 }) {
   // La colonne « Statut » récupère la place du bouton « Voir » quand il est
   // masqué, pour que la somme des largeurs reste à 100 %.
   const hasActionCell = showViewButton || Boolean(onToggleBlacklist) || Boolean(onEditPhone)
-  const statusWidth = hasActionCell ? 'w-[17%]' : 'w-[22%]'
-  // La colonne d'action s'élargit avec chaque bouton supplémentaire
-  // (« Voir » + « liste noire / débloquer » + « Modifier le numéro ») : la
-  // colonne « Prospect » cède la place, le total reste à 100 %
-  // (5 + 24 + 25 + 18 + 17 + 11, ou 5 + 27 + 25 + 18 + 17 + 8 à deux boutons).
-  const actionWidth = onEditPhone ? 'w-[11%]' : onToggleBlacklist ? 'w-[8%]' : 'w-[5%]'
-  const nameWidth = onEditPhone ? 'w-[24%]' : onToggleBlacklist ? 'w-[27%]' : 'w-[30%]'
+  // Largeurs en % (`table-fixed`) ; **la somme reste 100 %** avec ou sans
+  // colonne Téléphone : quand elle apparaît, Répondants / Licence / Statut /
+  // action cèdent chacun un peu de place à Prospect.
+  const respondentsWidth = showPhone ? 'w-[15%]' : 'w-[25%]'
+  const licenceWidth = showPhone ? 'w-[15%]' : 'w-[18%]'
+  const statusWidth = showPhone ? 'w-[16%]' : hasActionCell ? 'w-[17%]' : 'w-[22%]'
+  const actionWidth = showPhone ? 'w-[12%]' : onEditPhone ? 'w-[11%]' : onToggleBlacklist ? 'w-[8%]' : 'w-[5%]'
+  const nameWidth = showPhone ? 'w-[22%]' : onEditPhone ? 'w-[24%]' : onToggleBlacklist ? 'w-[27%]' : 'w-[30%]'
   const clickable = rowClickable && typeof onViewDetail === 'function'
   // Un seul vocabulaire pour « ce client est en liste noire » (§2).
   const isBlocked = (c) => Boolean(c.is_blacklisted) || c.status === 'BLACKLISTED'
@@ -64,8 +68,9 @@ export default function ProspectTable({
                 Prospect
                 </SortHeader>
               </TableHead>
-              <TableHead className="w-[25%]">Répondants</TableHead>
-              <TableHead className="w-[18%]">N° de licence</TableHead>
+              {showPhone && <TableHead className="w-[15%]">Téléphone</TableHead>}
+              <TableHead className={respondentsWidth}>Répondants</TableHead>
+              <TableHead className={licenceWidth}>N° de licence</TableHead>
               <TableHead className={statusWidth}>Statut</TableHead>
               {hasActionCell && <TableHead className={actionWidth} />}
             </TableRow>
@@ -98,6 +103,13 @@ export default function ProspectTable({
                     </div>
                   </div>
                 </TableCell>
+                {showPhone && (
+                  <TableCell className="text-muted-foreground tabular-nums">
+                    <div className="truncate" title={c.phone ?? undefined}>
+                      {c.phone || '—'}
+                    </div>
+                  </TableCell>
+                )}
                 <TableCell className="text-muted-foreground">
                   <div className="truncate" title={respondentsText(c) ?? undefined}>
                     {respondentsText(c) ?? '—'}
@@ -138,8 +150,8 @@ export default function ProspectTable({
                       <button
                         onClick={(e) => { e.stopPropagation(); onEditPhone(c) }}
                         className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                        aria-label={c.phone ? 'Modifier le numéro de téléphone' : 'Ajouter un numéro de téléphone'}
-                        title={c.phone ? 'Modifier le numéro' : 'Ajouter un numéro'}
+                        aria-label="Modifier le client"
+                        title="Modifier le client"
                       >
                         <SquarePen className="h-4 w-4 text-muted-foreground" />
                       </button>

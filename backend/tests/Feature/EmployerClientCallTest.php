@@ -112,9 +112,14 @@ class EmployerClientCallTest extends TestCase
             ->assertJsonPath('data.client.notes', []);
     }
 
-    public function test_employee_can_read_details_for_only_their_own_call(): void
+    /**
+     * « Voir l'appel » de la fiche client : journal + enregistrements
+     * réservés ADMIN / SUPER_ADMIN — un COMERCIAL n'y a plus accès, même
+     * propriétaire de l'appel, même avec le privilège de libération (§7.1).
+     */
+    public function test_client_call_details_and_recordings_are_reserved_to_admins(): void
     {
-        [$user, $employee, $client] = $this->makeEmployeeWithClient();
+        [$owner, $employee, $client] = $this->makeEmployeeWithClient();
         $call = CallLog::create([
             'employee_id' => $employee->id,
             'client_id' => $client->id,
@@ -126,15 +131,15 @@ class EmployerClientCallTest extends TestCase
             'started_at' => now(),
             'result' => 'Disconnected',
         ]);
-        Sanctum::actingAs($user);
+        CallRecording::create([
+            'call_log_id' => $call->id,
+            'ringcentral_recording_id' => 'rc-recording-1',
+        ]);
 
         $mock = Mockery::mock(RingCentralService::class);
-        // Aucun enregistrement local → le backend va chercher la ligne
-        // RingCentral de cet appel (ici : rien à rapatrier).
-        $mock->shouldReceive('findCallLogByTarget')
-            ->once()
-            ->with('+15145550100', Mockery::type(CarbonInterface::class))
-            ->andReturn(null);
+        // Un enregistrement est déjà rangé : seuls l'historique détaillé et
+        // la session restent à rapatrier (aucune recherche par cible).
+        $mock->shouldReceive('findCallLogByTarget')->never();
         $mock->shouldReceive('getCallHistoryByUser')
             ->once()
             ->with('rc-user-1', ['view' => 'Detailed', 'perPage' => 100])
@@ -152,33 +157,45 @@ class EmployerClientCallTest extends TestCase
             ->once()
             ->with('rc-session-details')
             ->andReturn(['session' => ['id' => 'rc-session-details', 'status' => ['code' => 'Disconnected']]]);
+        $mock->shouldReceive('getRecordingContent')
+            ->once()
+            ->with('rc-recording-1')
+            ->andReturn(['content_type' => 'audio/mpeg', 'body' => 'audio-bytes']);
         $this->app->instance(RingCentralService::class, $mock);
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
 
         $this->getJson("/api/v1/call-logs/client-calls/{$call->id}")
             ->assertOk()
             ->assertJsonPath('data.client.name', 'Target Client')
             ->assertJsonPath('data.ringcentral_call_id', 'rc-call-1')
             ->assertJsonPath('data.duration', 38)
-            ->assertJsonPath('data.events.0.type', 'Call started');
+            ->assertJsonPath('data.events.0.type', 'Call started')
+            ->assertJsonPath('data.recordings.0.id', 'rc-recording-1');
 
-        CallRecording::create([
-            'call_log_id' => $call->id,
-            'ringcentral_recording_id' => 'rc-recording-1',
-        ]);
-        $mock->shouldReceive('getRecordingContent')
-            ->once()
-            ->with('rc-recording-1')
-            ->andReturn(['content_type' => 'audio/mpeg', 'body' => 'audio-bytes']);
         $this->get("/api/v1/call-logs/client-calls/{$call->id}/recordings/rc-recording-1/content")
             ->assertOk()
             ->assertHeader('Content-Type', 'audio/mpeg')
             ->assertContent('audio-bytes');
 
+        // Propriétaire de l'appel : 403 — plus d'exception « propriétaire ».
+        Sanctum::actingAs($owner);
+        $this->getJson("/api/v1/call-logs/client-calls/{$call->id}")->assertForbidden();
+        $this->getJson("/api/v1/call-logs/client-calls/{$call->id}/recordings/rc-recording-1/content")
+            ->assertForbidden();
+
+        // Même avec le privilège de libération : l'écoute reste fermée.
+        $owner->forceFill(['has_permission' => true])->save();
+        $this->getJson("/api/v1/call-logs/client-calls/{$call->id}")->assertForbidden();
+        $this->getJson("/api/v1/call-logs/client-calls/{$call->id}/recordings/rc-recording-1/content")
+            ->assertForbidden();
+
+        // Un autre commercial : 403 également.
         $other = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
         Sanctum::actingAs($other);
-        $this->getJson("/api/v1/call-logs/client-calls/{$call->id}")->assertNotFound();
+        $this->getJson("/api/v1/call-logs/client-calls/{$call->id}")->assertForbidden();
         $this->getJson("/api/v1/call-logs/client-calls/{$call->id}/recordings/rc-recording-1/content")
-            ->assertNotFound();
+            ->assertForbidden();
     }
 
     /**
@@ -190,7 +207,7 @@ class EmployerClientCallTest extends TestCase
      */
     public function test_call_details_fetch_the_automatic_recording_by_session_id(): void
     {
-        [$user, $employee, $client] = $this->makeEmployeeWithClient();
+        [, $employee, $client] = $this->makeEmployeeWithClient();
         $call = CallLog::create([
             'employee_id' => $employee->id,
             'client_id' => $client->id,
@@ -201,7 +218,8 @@ class EmployerClientCallTest extends TestCase
             'started_at' => now(),
             'result' => 'Setup',
         ]);
-        Sanctum::actingAs($user);
+        // La consultation est réservée aux gestionnaires (ADMIN).
+        Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
 
         $mock = Mockery::mock(RingCentralService::class);
         $mock->shouldReceive('findCallLogByTarget')

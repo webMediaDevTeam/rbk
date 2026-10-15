@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\CallWorkflowService;
 use App\Services\Client\ClientSearchService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -226,6 +227,12 @@ class CommercialAdminController extends Controller
         // décidé par un appelant `COMERCIAL`.
         $this->search->filterBySource($query, $request->input('source'));
 
+        // Filtres « Entreprise » / « Employé » : on ne garde que les clients
+        // qu'**au moins une note** rattache à l'employé sélectionné, ou à un
+        // employé de l'entreprise sélectionnée. Le lien passe par
+        // `notes.sender_id` (utilisateur commercial) → `employee.enterprise_id`.
+        $this->applyInteractionFilters($query, $request);
+
         $sortable = [
             'name' => 'name',
             'email' => 'email',
@@ -269,6 +276,12 @@ class CommercialAdminController extends Controller
                 'is_blacklisted' => $c->is_blacklisted,
                 'returned_at' => $c->returned_at,
                 'municipality' => $c->municipality,
+                // Champs éditables exposés pour le modale « Modifier le client »
+                // (préremplie depuis la ligne, sans requête supplémentaire).
+                'administrative_region' => $c->administrative_region,
+                'full_address' => $c->full_address,
+                'representative_name' => $c->representative_name,
+                'intervenant_name' => $c->intervenant_name,
                 'neq' => $c->neq,
                 'licence_number' => $c->licence_number,
                 'categories' => $c->categories,
@@ -322,6 +335,34 @@ class CommercialAdminController extends Controller
             $request->input('status'),
             $request->input('reservation_status'),
         );
+    }
+
+    /**
+     * Filtres « Entreprise » (`?enterprise_id=`) et « Employé »
+     * (`?employee_id=`) de la Grande liste.
+     *
+     * Un client est retenu s'il existe **au moins une note** dont :
+     *  - l'émetteur est l'employé choisi (`sender_id` = id utilisateur) ; ou
+     *  - l'émetteur est un commercial rattaché à l'entreprise choisie
+     *    (`notes.sender.employee.enterprise_id`).
+     *
+     * Les deux critères se cumulent en **ET** avec le reste de la liste, et
+     * un paramètre absent / vide n'ajoute aucune contrainte.
+     *
+     * @param  Builder<Client>  $query
+     * @return Builder<Client>
+     */
+    private function applyInteractionFilters(Builder $query, Request $request): Builder
+    {
+        if ($enterpriseId = $request->input('enterprise_id')) {
+            $query->whereHas('notes.sender.employee', fn ($q) => $q->where('enterprise_id', $enterpriseId));
+        }
+
+        if ($employeeId = $request->input('employee_id')) {
+            $query->whereHas('notes', fn ($q) => $q->where('sender_id', $employeeId));
+        }
+
+        return $query;
     }
 
     /**
@@ -452,6 +493,65 @@ class CommercialAdminController extends Controller
                     'returned_at' => $client->returned_at,
                     'municipality' => $client->municipality,
                 ],
+            ],
+        ]);
+    }
+
+    /**
+     * Mise à jour **complète** d'une fiche client — accès Admin / Super Admin
+     * (`PUT /commercials/clients/{id}`).
+     *
+     * Portée sur les champs saisissables à la main (identité, contact,
+     * adresse, licence, source) : le modale « Modifier le client » envoie le
+     * formulaire entier. Seules les clés **présentes** dans la requête sont
+     * écrites (`validate()` ne renvoie que celles reçues), ce qui laisse
+     * intacts les champs non exposés (statut, compteurs, etc.).
+     *
+     * Comme pour la saisie de téléphone, `is_manually_updated` passe à `true`
+     * : l'import scraper / n8n ne réécrira plus cette fiche. Le numéro est
+     * normalisé par `Client::cleanPhone()`.
+     */
+    public function update(Request $request, string $id): JsonResponse
+    {
+        $client = Client::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'nullable|string|max:255',
+            'enterprise_name' => 'nullable|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone' => 'nullable|string|max:40',
+            'municipality' => 'nullable|string|max:255',
+            'administrative_region' => 'nullable|string|max:255',
+            'full_address' => 'nullable|string|max:500',
+            'licence_number' => 'nullable|string|max:255',
+            'licence_end_date' => 'nullable|date',
+            'neq' => 'nullable|string|max:255',
+            'representative_name' => 'nullable|string|max:255',
+            'intervenant_name' => 'nullable|string|max:255',
+            'source' => 'nullable|string|max:255',
+        ]);
+
+        // Téléphone : même normalisation que la saisie dédiée (`updatePhone`).
+        if (array_key_exists('phone', $validated)) {
+            $validated['phone'] = Client::cleanPhone($validated['phone']);
+        }
+
+        // Fiche modifiée à la main → l'import ne la réécrit plus.
+        $validated['is_manually_updated'] = true;
+
+        $client->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Fiche client mise à jour.',
+            'data' => [
+                'client' => $client->only([
+                    'id', 'name', 'enterprise_name', 'email', 'phone',
+                    'municipality', 'administrative_region', 'full_address',
+                    'licence_number', 'licence_end_date', 'neq',
+                    'representative_name', 'intervenant_name', 'source',
+                    'is_blacklisted',
+                ]),
             ],
         ]);
     }

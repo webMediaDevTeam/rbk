@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { callMyNumberApi, getClientCallDetailsApi, startCallRecordingApi } from '@/api/commercial.api.js'
+import { callMyNumberApi, startCallRecordingApi } from '@/api/commercial.api.js'
 
 // L'appel est envoyé avec `record: true` : la réponse arrive souvent avant
 // que la partie soit connectée (statut « Setup » → RingCentral refuse avec
@@ -9,26 +9,13 @@ import { callMyNumberApi, getClientCallDetailsApi, startCallRecordingApi } from 
 const RECORD_RETRY_DELAY = 3000
 const RECORD_MAX_ATTEMPTS = 30 // ≈ 90 s
 
-/**
- * Le démarrage **manuel** n'a pas abouti : on vérifie si RingCentral a
- * produit un enregistrement **automatique** (console admin → Phone System
- * → Call Recording) — l'API des détails le rapporte une fois la
- * communication terminée, et le backend va le chercher par `sessionId`.
- *
- * @returns {Promise<boolean>} `true` si un enregistrement est disponible.
- */
-async function checkAutomaticRecording(callLogId) {
-  if (!callLogId) return false
+// L'enregistrement démarre pour le compte des gestionnaires : un COMERCIAL
+// ne consulte plus le journal ni les enregistrements d'appel (réservés
+// ADMIN / SUPER_ADMIN), il ne fait que déclencher la captation.
+const ADMIN_ONLY_RECORDING_HINT =
+  "l'enregistrement automatique RingCentral, s'il existe, sera consulté par un administrateur"
 
-  try {
-    const res = await getClientCallDetailsApi(callLogId)
-    return (res?.data?.recordings ?? []).length > 0
-  } catch {
-    return false
-  }
-}
-
-async function retryRecording(sessionId, partyId, callLogId, attempt = 1) {
+async function retryRecording(sessionId, partyId, attempt = 1) {
   try {
     await startCallRecordingApi(sessionId, partyId)
     toast.success('Enregistrement démarré.')
@@ -36,16 +23,10 @@ async function retryRecording(sessionId, partyId, callLogId, attempt = 1) {
   } catch (err) {
     const status = err?.response?.status
 
-    // 404 / 410 : la session n'existe plus (appel terminé) → on vérifie
-    // l'enregistrement automatique une dernière fois avant de conclure.
+    // 404 / 410 : la session n'existe plus (appel terminé) → rien d'autre
+    // à tenter côté employé.
     if (status === 404 || status === 410) {
-      if (await checkAutomaticRecording(callLogId)) {
-        toast.success('Enregistrement disponible : cliquez sur « Voir l’appel » pour l’écouter.')
-        return true
-      }
-      toast.error(
-        "Appel terminé sans enregistrement immédiat : consultez « Voir l’appel » (l'enregistrement automatique RingCentral y apparaît une fois la communication terminée)."
-      )
+      toast.error(`Appel terminé sans enregistrement démarré : ${ADMIN_ONLY_RECORDING_HINT}.`)
       return false
     }
 
@@ -55,17 +36,11 @@ async function retryRecording(sessionId, partyId, callLogId, attempt = 1) {
     }
 
     if (attempt >= RECORD_MAX_ATTEMPTS) {
-      if (await checkAutomaticRecording(callLogId)) {
-        toast.success('Enregistrement disponible : cliquez sur « Voir l’appel » pour l’écouter.')
-        return true
-      }
-      toast.error(
-        "Enregistrement non démarré : consultez « Voir l’appel » (l'enregistrement automatique RingCentral y apparaît une fois la communication terminée)."
-      )
+      toast.error(`Enregistrement non démarré : ${ADMIN_ONLY_RECORDING_HINT}.`)
       return false
     }
 
-    setTimeout(() => retryRecording(sessionId, partyId, callLogId, attempt + 1), RECORD_RETRY_DELAY)
+    setTimeout(() => retryRecording(sessionId, partyId, attempt + 1), RECORD_RETRY_DELAY)
     return false
   }
 }
@@ -100,9 +75,8 @@ export function useDirectCall() {
         toast.success('Enregistrement démarré.')
       } else if (data.session_id && data.party_id) {
         // La partie n'était pas encore connectée : on retente côté client
-        // (`…/record` est ouvert au COMERCIAL), puis on vérifie l'enregistre-
-        // ment automatique via le journal de l'appel (`call_log_id`).
-        retryRecording(data.session_id, data.party_id, data.call_log_id)
+        // (`…/record` est ouvert au COMERCIAL) jusqu'au décrochage.
+        retryRecording(data.session_id, data.party_id)
       }
     },
     onError: (err) => {

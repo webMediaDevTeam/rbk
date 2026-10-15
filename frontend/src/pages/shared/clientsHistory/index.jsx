@@ -5,7 +5,7 @@ import ClientsHistoryToolbar from './components/ClientsHistoryToolbar.jsx'
 import SourceTabs from './components/SourceTabs.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
-import PhoneEditModal from '@/pages/shared/components/PhoneEditModal/index.jsx'
+import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
 
 export default function ClientsHistoryPage() {
   const {
@@ -21,6 +21,10 @@ export default function ClientsHistoryPage() {
     handleCategoryChange,
     region,
     handleRegionChange,
+    enterprise,
+    handleEnterpriseChange,
+    employee,
+    handleEmployeeChange,
     source,
     handleSourceChange,
     currentPage,
@@ -67,6 +71,8 @@ export default function ClientsHistoryPage() {
         municipality={municipality} setMunicipality={handleMunicipalityChange}
         categories={categories} setCategories={handleCategoryChange}
         region={region} setRegion={handleRegionChange}
+        enterprise={enterprise} setEnterprise={handleEnterpriseChange}
+        employee={employee} setEmployee={handleEmployeeChange}
       />
 
       {isLoading ? (
@@ -82,6 +88,7 @@ export default function ClientsHistoryPage() {
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
           onViewDetail={handleViewDetail}
           rowClickable={false}
+          showPhone
           onToggleBlacklist={toggleBlacklist}
           onEditPhone={openPhoneEdit}
           blacklistId={blacklistId}
@@ -95,6 +102,7 @@ export default function ClientsHistoryPage() {
               client={c}
               onViewDetail={handleViewDetail}
               rowClickable={false}
+              showPhone
               onToggleBlacklist={toggleBlacklist}
               onEditPhone={openPhoneEdit}
               blacklistId={blacklistId}
@@ -111,7 +119,7 @@ export default function ClientsHistoryPage() {
         onRowsPerPageChange={handleRowsPerPageChange}
       />
 
-      <PhoneEditModal open={Boolean(phoneClient)} client={phoneClient} onClose={closePhoneEdit} />
+      <ClientEditModal open={Boolean(phoneClient)} client={phoneClient} onClose={closePhoneEdit} />
     </div>
   )
 }
