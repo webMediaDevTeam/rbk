@@ -206,6 +206,19 @@ class CommercialAdminController extends Controller
         // Badges de la colonne « Statut » → deux paramètres serveur (§9).
         $this->applyStatusFilters($query, $request);
 
+        // Le seau `AVAILABLE` ne liste que les prospects réellement joignables :
+        // on exclut ceux dont le `phone` est NULL (ils relèvent du badge
+        // dérivé « Sans téléphone »). La sélection des badges étant unique dans
+        // l'UI, ce raffinement ne porte que sur le cas `AVAILABLE`.
+        $statusInput = $request->input('status');
+        $statusValues = array_map(
+            fn ($value) => trim((string) $value),
+            is_array($statusInput) ? $statusInput : explode(',', (string) $statusInput),
+        );
+        if (in_array(Client::STATUS_AVAILABLE, $statusValues, true)) {
+            $query->whereNotNull('phone');
+        }
+
         // Filtres de listes (scopes Eloquent) : mêmes paramètres que la liste
         // commerciale — municipalité, catégorie et région administrative.
         if ($municipality = $request->input('municipality')) {
