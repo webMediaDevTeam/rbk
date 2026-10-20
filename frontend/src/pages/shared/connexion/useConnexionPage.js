@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import faviconLight from "@/assets/icons/light_logo.svg";
 import faviconDark from "@/assets/icons/dark_logo.svg";
 import { useConnexion } from "@/hooks/useConnexion";
+import { getPosition } from "@/lib/geolocation";
 import { getApiErrorMessage, getApiFieldErrors } from "@/lib/api-errors";
 
 /**
@@ -31,9 +32,20 @@ export function useConnexionPage() {
 
   const connexion = useConnexion({ onSuccess: completeLogin });
 
-  const submitLogin = (e) => {
+  const submitLogin = async (e) => {
     e.preventDefault();
-    connexion.mutate({ email, password, remember });
+    // Position facultative : null si refusée / indisponible / timeout. Le
+    // serveur n'utilise ces coordonnées que pour les rôles contraints
+    // sans dérogation (COMERCIAL / OPERATOR) ; l'admin se connecte pareil.
+    const coords = await getPosition();
+    connexion.mutate({
+      email,
+      password,
+      remember,
+      lat: coords?.lat,
+      lng: coords?.lng,
+      accuracy: coords?.accuracy,
+    });
   };
 
   const toggleShowPassword = () => setShowPassword((v) => !v);

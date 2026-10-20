@@ -13,6 +13,7 @@ import {
   statistiquesCommerciauxApi,
 } from '@/api/entreprise.api.js'
 import { syncRingCentralEmployeesApi } from '@/api/shared.api.js'
+import { toggleGpsBypassApi } from '@/api/gps.api.js'
 
 /**
  * Phase « Lier les employés à leurs numéros RingCentral » :
@@ -98,6 +99,19 @@ export function useToggleCommercialStatus() {
 }
 
 /**
+ * Dérogation « Connexion hors zones » (`users.gps_bypass`) — seul un rôle
+ * contraint (COMERCIAL / OPERATOR) peut la recevoir ; le serveur refuse les
+ * autres rôles (`UserController::updateGpsBypass`).
+ */
+export function useToggleGpsBypass() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, gpsBypass }) => toggleGpsBypassApi(id, gpsBypass),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commerciaux'] }),
+  })
+}
+
+/**
  * Clé de comparaison d'un numéro RingCentral : chiffres seuls
  * (`+1 (416) 572-4961` = `14165724961`), pour ignorer le format saisi.
  */
@@ -147,6 +161,7 @@ export function useComercialListPage() {
 
   const deleteMut = useDeleteCommercial()
   const toggleMut = useToggleCommercialStatus()
+  const gpsBypassMut = useToggleGpsBypass()
   const ringCentralSync = useSyncRingCentral()
 
   const commerciaux = data?.data?.utilisateurs ?? []
@@ -172,6 +187,17 @@ export function useComercialListPage() {
 
   const handleToggleStatus = (id, status) =>
     toggleMut.mutate({ id, status }, { onSuccess: () => toast.success('Statut mis à jour.') })
+
+  const handleToggleGpsBypass = (id, gpsBypass) =>
+    gpsBypassMut.mutate(
+      { id, gpsBypass },
+      {
+        onSuccess: () =>
+          toast.success(gpsBypass ? 'Connexion hors zones autorisée.' : 'Connexion hors zones refusée.'),
+        onError: (error) =>
+          toast.error(error?.response?.data?.message ?? 'Modification impossible.'),
+      },
+    )
 
   const handleDelete = (id) => deleteMut.mutate(id, { onSuccess: () => toast.success('Supprimé.') })
 
@@ -210,6 +236,7 @@ export function useComercialListPage() {
     sortOrder,
     handleSort,
     handleToggleStatus,
+    handleToggleGpsBypass,
     handleDelete,
     avatarTarget,
     setAvatarTarget,

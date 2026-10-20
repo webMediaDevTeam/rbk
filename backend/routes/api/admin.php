@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Admin\AdminController;
+use App\Http\Controllers\Api\V1\Admin\GpsZoneController;
 use App\Http\Controllers\Api\V1\Shared\CommercialAdminController;
 use App\Http\Middleware\CheckRole;
 use Illuminate\Support\Facades\Route;
@@ -31,4 +32,11 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
     Route::get('commercials', [CommercialAdminController::class, 'index']);
     Route::post('commercials/clients/{id}/blacklist', [CommercialAdminController::class, 'blacklist']);
     Route::get('commercials/{id}', [CommercialAdminController::class, 'show']);
+
+    // Zones de géorepérage (page admin « GPS ») — création / édition /
+    // suppression des cercles contrôlés à la connexion (GeofenceService).
+    Route::get('gps/zones', [GpsZoneController::class, 'index']);
+    Route::post('gps/zones', [GpsZoneController::class, 'store']);
+    Route::put('gps/zones/{zone}', [GpsZoneController::class, 'update']);
+    Route::delete('gps/zones/{zone}', [GpsZoneController::class, 'destroy']);
 });

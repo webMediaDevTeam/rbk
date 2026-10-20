@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { AlertTriangle, Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import Badge from '@/components/ui/badge'
+import Switch from '@/components/ui/switch.jsx'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
@@ -13,12 +14,14 @@ export default function ComercialCard(props) {
     enterpriseName,
     rcNumber,
     rcDuplicate,
+    gpsBypass,
     isOperator,
     toggleLabel,
     canDelete,
     handleAvatarClick,
     handleEdit,
     handleToggleStatus,
+    handleToggleGpsBypass,
     handleDelete,
   } = useComercialCard(props)
 
@@ -91,6 +94,15 @@ export default function ComercialCard(props) {
         <div>
           <span className="text-muted-foreground text-xs">Entreprise</span>
           <p className="truncate">{enterpriseName}</p>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground text-xs" title="Autoriser la connexion en dehors des zones GPS">Connexion hors zones</span>
+          <Switch
+            checked={gpsBypass}
+            disabled={!canDelete}
+            onCheckedChange={(value) => handleToggleGpsBypass(value)}
+            aria-label={`Connexion hors zones pour ${name}`}
+          />
         </div>
       </div>
 

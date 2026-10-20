@@ -143,6 +143,10 @@ class UserController extends Controller
             'status' => $user->status,
             // Privilège de libération (formater en bool : tinyint brut sinon).
             'has_permission' => (bool) $user->has_permission,
+            // Colonne « Connexion hors zones » (page Employés) — dérogation
+            // au géorepérage de connexion (`GeofenceService`, rôles contraints
+            // uniquement : COMERCIAL / OPERATOR).
+            'gps_bypass' => (bool) $user->gps_bypass,
             'avatar' => $user->avatar,
             'avatar_url' => $user->avatar
                 ? "{$base}/storage/avatars/{$user->avatar}"
@@ -611,6 +615,52 @@ class UserController extends Controller
         return $this->respondOk(
             ['utilisateur' => $this->formatUser($target->fresh(['employee.enterprise']))],
             'Statut mis à jour.',
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | updateGpsBypass
+    |--------------------------------------------------------------------------
+    |
+    | PATCH /users/{id}/gps-bypass
+    | Body: { "gps_bypass": true | false }
+    |
+    | Dérogation au géorepérage de connexion (colonne « Connexion hors zones »
+    | de la page Employés). Seuls les rôles effectivement contraints
+    | (`config/geofence.enforced_roles`) peuvent être réglés : un gestionnaire
+    | n'est jamais bloqué, sa valeur n'a donc aucun sens.
+    |
+    */
+
+    public function updateGpsBypass(Request $request, string $id): JsonResponse
+    {
+        $target = User::find($id);
+        if (! $target) {
+            return $this->notFound();
+        }
+
+        if (! $this->canAct($request->user(), $target, 'update')) {
+            return $this->forbidden();
+        }
+
+        $enforced = (array) config('geofence.enforced_roles', []);
+        if (! in_array($target->role, $enforced, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Ce rôle n\'est pas soumis au géorepérage.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'gps_bypass' => 'required|boolean',
+        ]);
+
+        $target->update(['gps_bypass' => (bool) $validated['gps_bypass']]);
+
+        return $this->respondOk(
+            ['utilisateur' => $this->formatUser($target->fresh(['employee.enterprise']))],
+            $target->gps_bypass ? 'Connexion hors zones autorisée.' : 'Connexion hors zones refusée.',
         );
     }
 

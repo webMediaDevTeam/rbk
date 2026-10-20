@@ -2401,3 +2401,27 @@ footer a {
 .dark .client-note-editor .w-md-editor-toolbar {
   background-color: rgb(245 158 11 / 0.14);
 }
+
+/* Page « GPS » : pointeau du cercle en édition (Leaflet `divIcon`, sans
+ * asset) — pastille bleue cerclée de blanc, centrée sur la position. */
+.gps-zone-pin {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gps-zone-pin span {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #2563eb;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
+/* Le conteneur Leaflet doit rester sous les bandeaux UI de la page. */
+.leaflet-container {
+  font: inherit;
+}

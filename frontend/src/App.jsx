@@ -16,6 +16,7 @@ import {
   Bell,
   Voicemail,
   UserSearch,
+  MapPin,
 } from 'lucide-react'
 
 const ROLE_NAV = {
@@ -33,6 +34,7 @@ const ROLE_NAV = {
         { title: 'Employés', path: '/commerciaux', icon: List },
         { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
         { title: 'Admins', path: '/admins', icon: ShieldCheck },
+        { title: 'GPS', path: '/gps', icon: MapPin },
       ],
     },
     {
@@ -55,6 +57,7 @@ const ROLE_NAV = {
         { title: 'Entreprises', path: '/entreprises', icon: Building2 },
         { title: 'Employés', path: '/commerciaux', icon: List },
         { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
+        { title: 'GPS', path: '/gps', icon: MapPin },
       ],
     },
     {

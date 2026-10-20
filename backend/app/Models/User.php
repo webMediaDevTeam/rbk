@@ -32,6 +32,11 @@ class User extends Authenticatable
         // drapeau ne peut pas libérer sa liste (la mise en liste noire
         // est ouverte à tous depuis la refonte de la fiche client).
         'has_permission',
+        // Dérogation GPS : `true` = ce compte peut se connecter en dehors de
+        // toute zone (posée par un gestionnaire, page Employés). Les rôles
+        // non contraints (ADMIN / SUPER_ADMIN) n'en ont pas besoin — ils ne
+        // sont jamais bloqués (`GeofenceService`).
+        'gps_bypass',
         'avatar',
         'email_verified_at',
         'verification_token',
@@ -47,6 +52,7 @@ class User extends Authenticatable
         return [
             'password_hash' => 'hashed',
             'has_permission' => 'boolean',
+            'gps_bypass' => 'boolean',
             'email_verified_at' => 'datetime',
             'verification_sent_at' => 'datetime',
         ];

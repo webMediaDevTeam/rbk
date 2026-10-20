@@ -1,0 +1,98 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\GpsZone;
+use App\Models\User;
+
+/**
+ * Contrôle de géorepérage à la connexion (voir `config/geofence.php`).
+ *
+ * La décision se prend **côté serveur** : le frontend ne fait que transmettre
+ * la position fournie par le navigateur. Un rôle contraint
+ * (`config('geofence.enforced_roles')`) dont `gps_bypass` est `false` doit
+ * fournir une position précise (`accuracy <= max_accuracy_m`) tombant dans au
+ * moins une zone active (`distance <= radius_m`, Haversine).
+ */
+class GeofenceService
+{
+    private const EARTH_RADIUS_M = 6371000.0;
+
+    /**
+     * @return array{allowed: bool, code?: string, message?: string}
+     */
+    public function check(User $user, ?float $lat, ?float $lng, ?float $accuracy): array
+    {
+        if (! config('geofence.enabled')) {
+            return ['allowed' => true];
+        }
+
+        $enforced = (array) config('geofence.enforced_roles', []);
+
+        // Rôle non contraint (ADMIN / SUPER_ADMIN / tout rôle absent) : jamais bloqué.
+        if (! in_array($user->role, $enforced, true)) {
+            return ['allowed' => true];
+        }
+
+        // Dérogation accordée par un gestionnaire : connexion de n'importe où.
+        if ($user->gps_bypass) {
+            return ['allowed' => true];
+        }
+
+        if ($lat === null || $lng === null) {
+            return [
+                'allowed' => false,
+                'code' => 'LOCATION_REQUIRED',
+                'message' => 'Votre position est requise pour vous connecter. Autorisez la géolocalisation.',
+            ];
+        }
+
+        $maxAccuracy = (int) config('geofence.max_accuracy_m', 100);
+
+        if ($accuracy !== null && $accuracy > $maxAccuracy) {
+            return [
+                'allowed' => false,
+                'code' => 'LOW_ACCURACY',
+                'message' => 'Votre position est trop imprécise. Réessayez en extérieur ou près d une fenêtre.',
+            ];
+        }
+
+        $withinZone = GpsZone::query()
+            ->where('is_active', true)
+            ->get()
+            ->contains(fn (GpsZone $zone): bool => $this->distanceMeters(
+                $lat,
+                $lng,
+                (float) $zone->latitude,
+                (float) $zone->longitude,
+            ) <= (float) $zone->radius_m);
+
+        if (! $withinZone) {
+            return [
+                'allowed' => false,
+                'code' => 'OUTSIDE_GEOFENCE',
+                'message' => 'Vous êtes en dehors des zones autorisées.',
+            ];
+        }
+
+        return ['allowed' => true];
+    }
+
+    /**
+     * Distance Haversine (mètres) entre deux points géographiques.
+     */
+    private function distanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $latFrom = deg2rad($lat1);
+        $latTo = deg2rad($lat2);
+        $deltaLat = $latTo - $latFrom;
+        $deltaLng = deg2rad($lng2 - $lng1);
+
+        $a = sin($deltaLat / 2) ** 2
+            + cos($latFrom) * cos($latTo) * sin($deltaLng / 2) ** 2;
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return self::EARTH_RADIUS_M * $c;
+    }
+}

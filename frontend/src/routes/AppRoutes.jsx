@@ -17,6 +17,7 @@ import RemindersPage from '@/pages/comercial/Reminders/index.jsx'
 import AutoRappelsPage from '@/pages/comercial/AutoRappels/index.jsx'
 import ComercialDetailPage from '@/pages/shared/comercialDetail/index.jsx'
 import ClientsHistoryPage from '@/pages/shared/clientsHistory/index.jsx'
+import GpsPage from '@/pages/shared/gps/index.jsx'
 
 // Association rôle ↔ route, calquée sur le middleware `CheckRole` du backend
 // (voir backend/routes/api/*.php) : le garde frontend reflète les droits API
@@ -41,6 +42,9 @@ export default function AppRoutes() {
       <Route path="/commerciaux" element={guard(ROLES.MANAGERS, <ComercialListPage />)} />
       <Route path="/comercialDetail/:id" element={guard(ROLES.MANAGERS, <ComercialDetailPage />)} />
       <Route path="/clients-historique" element={guard(ROLES.GRANDE_LISTE, <ClientsHistoryPage />)} />
+      {/* Zones de géorepérage (ADMIN / SUPER_ADMIN) — contrôle de connexion
+          GPS des rôles contraints (COMERCIAL / OPERATOR). */}
+      <Route path="/gps" element={guard(ROLES.MANAGERS, <GpsPage />)} />
 
       {/* Fiche client **partagée** (pages/shared) — `ROLES.CLIENT_DETAIL`
           (hors `OPERATOR`) : le composant est role-aware

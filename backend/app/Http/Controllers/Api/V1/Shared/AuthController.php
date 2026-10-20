@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Shared;
 use App\Http\Controllers\Controller;
 use App\Mail\OtpVerificationMail;
 use App\Models\User;
+use App\Services\GeofenceService;
 use App\Support\AccountVerificationLinks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,12 +40,16 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|string|max:255',
             'password' => 'required|string',
-        ]);
+        ] + $this->geofenceLocationRules());
 
         $user = $this->findUserByIdentifier($request->email);
 
         if (! $user || ! Hash::check($request->password, $user->password_hash)) {
             return response()->json(['message' => 'Identifiants incorrects.'], 401);
+        }
+
+        if ($denial = $this->geofenceDenial($request, $user)) {
+            return $denial;
         }
 
         $token = $user->createToken('auth-token')->plainTextToken;
@@ -193,7 +198,7 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|email|exists:users,email',
             'code' => 'required|string|size:6',
-        ]);
+        ] + $this->geofenceLocationRules());
 
         $user = User::where('email', $request->email)->firstOrFail();
         $otp = Cache::get($this->loginOtpCacheKey($user->email));
@@ -212,6 +217,10 @@ class AuthController extends Controller
         }
 
         Cache::forget($this->loginOtpCacheKey($user->email));
+
+        if ($denial = $this->geofenceDenial($request, $user)) {
+            return $denial;
+        }
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
@@ -408,6 +417,48 @@ class AuthController extends Controller
     {
         return $user->verification_sent_at
             && $user->verification_sent_at->lt(now()->subHours(self::VERIFICATION_LINK_TTL_HOURS));
+    }
+
+    /**
+     * Champs de position optionnels acceptés par les endpoints qui délivrent
+     * un jeton (`login`, `verifyLoginOtp`). Absents = le serveur refuse pour
+     * un rôle contraint sans dérogation (`LOCATION_REQUIRED`) ; les
+     * gestionnaires les ignorent simplement.
+     *
+     * @return array<string, string>
+     */
+    private function geofenceLocationRules(): array
+    {
+        return [
+            'lat' => 'nullable|numeric|between:-90,90',
+            'lng' => 'nullable|numeric|between:-180,180',
+            'accuracy' => 'nullable|numeric|min:0',
+        ];
+    }
+
+    /**
+     * Contrôle GPS serveur avant émission du jeton : `null` si la connexion
+     * est autorisée, sinon la réponse 403 à renvoyer (message + code).
+     */
+    private function geofenceDenial(Request $request, User $user): ?JsonResponse
+    {
+        $result = app(GeofenceService::class)->check(
+            $user,
+            $request->filled('lat') ? (float) $request->input('lat') : null,
+            $request->filled('lng') ? (float) $request->input('lng') : null,
+            $request->has('accuracy') && $request->input('accuracy') !== null
+                ? (float) $request->input('accuracy')
+                : null,
+        );
+
+        if ($result['allowed']) {
+            return null;
+        }
+
+        return response()->json([
+            'message' => $result['message'],
+            'code' => $result['code'],
+        ], 403);
     }
 
     private function verificationDisplayName(User $user): string

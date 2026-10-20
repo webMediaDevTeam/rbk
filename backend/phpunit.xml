@@ -26,6 +26,10 @@
         <env name="DB_CONNECTION" value="sqlite" force="true"/>
         <env name="DB_DATABASE" value=":memory:" force="true"/>
         <env name="DB_URL" value="" force="true"/>
+        <!-- Géorepérage de connexion désactivé par défaut : les tests de
+             login existants (rôle COMERCIAL sans coordonnées) ne doivent pas
+             être bloqués. `LoginGeofenceTest` réactive la config par test. -->
+        <env name="GEOFENCE_ENABLED" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

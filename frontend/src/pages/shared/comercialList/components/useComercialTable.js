@@ -1,6 +1,6 @@
 import { normalizeRcNumber } from '../useComercialList.js'
 
-export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onToggleStatus, onDelete, canDelete, onAvatarClick, onEdit, duplicateRingCentralNumbers = new Set() }) {
+export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onAvatarClick, onEdit, duplicateRingCentralNumbers = new Set() }) {
   const rows = commerciaux.map((c) => {
     const profil = c.profil
     const name = profil ? `${profil.prenom ?? ''} ${profil.nom ?? ''}`.trim() || c.email : (c.first_name ? `${c.first_name} ${c.last_name ?? ''}`.trim() : c.email)
@@ -14,6 +14,9 @@ export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onTo
     const toggleLabel = c.status === 'ACTIVE' ? 'Désactiver' : 'Activer'
     // Privilège de libération (`users.has_permission`) : 1 = « Oui », sinon « - ».
     const hasPermission = Number(c.has_permission) === 1
+    // Dérogation GPS (`users.gps_bypass`, déjà formaté en bool serveur) :
+    // activée = ce compte contraint peut se connecter **hors** de toute zone.
+    const gpsBypass = Boolean(c.gps_bypass)
     // Opérateur : pas de fiche employé — ni RingCentral, ni entreprise, ni
     // privilège (les cellules affichent leurs dashes par absence de données),
     // et pas de page de détail employé (`GET commercials/{id}` ne liste que
@@ -29,6 +32,7 @@ export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onTo
       onToggleStatus(c.id, c.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')
       closeMenu()
     }
+    const handleToggleGpsBypass = (value) => onToggleGpsBypass?.(c.id, value)
     const handleDelete = (closeMenu) => {
       onDelete(c.id)
       closeMenu()
@@ -44,11 +48,13 @@ export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onTo
       rcNumber,
       rcDuplicate,
       hasPermission,
+      gpsBypass,
       isOperator,
       toggleLabel,
       handleAvatarClick,
       handleEdit,
       handleToggleStatus,
+      handleToggleGpsBypass,
       handleDelete,
     }
   })

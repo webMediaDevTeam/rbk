@@ -1,6 +1,6 @@
 import { normalizeRcNumber } from '../useComercialList.js'
 
-export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onDelete, canDelete, onEdit, duplicateRingCentralNumbers = new Set() }) {
+export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onEdit, duplicateRingCentralNumbers = new Set() }) {
   const profil = comercial.profil
   const name = profil ? `${profil.prenom ?? ''} ${profil.nom ?? ''}`.trim() || comercial.email : (comercial.first_name ? `${comercial.first_name} ${comercial.last_name ?? ''}`.trim() : comercial.email)
   const enterpriseName = profil?.entreprise_name ?? '—'
@@ -10,6 +10,8 @@ export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onD
   const rcKey = normalizeRcNumber(rcNumber)
   const rcDuplicate = rcKey !== '' && duplicateRingCentralNumbers.has(rcKey)
   const toggleLabel = comercial.status === 'ACTIVE' ? 'Désactiver' : 'Activer'
+  // Dérogation GPS (`users.gps_bypass`, bool serveur) : connexion hors zones.
+  const gpsBypass = Boolean(comercial.gps_bypass)
   // Opérateur : pas de fiche employé ni de page de détail commerciale.
   const isOperator = comercial.role === 'OPERATOR'
 
@@ -22,6 +24,7 @@ export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onD
     onToggleStatus?.(comercial.id, comercial.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')
     closeMenu()
   }
+  const handleToggleGpsBypass = (value) => onToggleGpsBypass?.(comercial.id, value)
   const handleDelete = (closeMenu) => {
     onDelete?.(comercial.id)
     closeMenu()
@@ -34,12 +37,14 @@ export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onD
     phone,
     rcNumber,
     rcDuplicate,
+    gpsBypass,
     isOperator,
     toggleLabel,
     canDelete,
     handleAvatarClick,
     handleEdit,
     handleToggleStatus,
+    handleToggleGpsBypass,
     handleDelete,
   }
 }

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { AlertTriangle, Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import Badge from '@/components/ui/badge'
+import Switch from '@/components/ui/switch.jsx'
 import StatusBadge from './StatusBadge'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
@@ -22,6 +23,9 @@ export default function ComercialTable(props) {
             <TableHead>N° RingCentral</TableHead>
             <TableHead>Entreprise</TableHead>
             <TableHead>Privilège</TableHead>
+            <TableHead title="Autoriser la connexion en dehors des zones GPS">
+              <span className="inline-flex items-center gap-1">Hors zones</span>
+            </TableHead>
             <TableHead>
               <SortHeader column="status" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Statut</SortHeader>
             </TableHead>
@@ -80,6 +84,17 @@ export default function ComercialTable(props) {
                 ) : (
                   '-'
                 )}
+              </TableCell>
+              <TableCell>
+                {/* Dérogation GPS (roles contraints uniquement — un
+                    opérateur / commercial peut se connecter hors zone si
+                    activée). `canDelete` porte l'apparence de modification. */}
+                <Switch
+                  checked={row.gpsBypass}
+                  disabled={!canDelete}
+                  onCheckedChange={(value) => row.handleToggleGpsBypass(value)}
+                  aria-label={`Connexion hors zones pour ${row.name}`}
+                />
               </TableCell>
               <TableCell><StatusBadge status={row.c.status} /></TableCell>
               <TableCell className="text-right">
