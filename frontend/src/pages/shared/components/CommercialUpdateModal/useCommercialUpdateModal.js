@@ -21,6 +21,10 @@ export function useCommercialUpdateModal(props) {
   const enterprises = enterprisesData?.data?.entreprises ?? enterprisesData?.data?.utilisateurs ?? []
 
   const profil = user?.profil
+  // Opérateur édité : pas de fiche employé — entreprise / RingCentral /
+  // privilège sont absents du formulaire comme du payload (le backend ne
+  // met à jour `employees` que pour les COMERCIAL).
+  const isOperator = user?.role === 'OPERATOR'
   const [form, setForm] = useState({
     email: '', username: '', first_name: '', last_name: '', phone: '',
     mot_de_passe: '', mot_de_passe_confirmation: '',
@@ -176,7 +180,7 @@ export function useCommercialUpdateModal(props) {
       setError('Le prénom et le nom sont requis.')
       return
     }
-    if (!form.enterprise_id) {
+    if (!isOperator && !form.enterprise_id) {
       setError('Veuillez sélectionner une entreprise.')
       return
     }
@@ -208,20 +212,25 @@ export function useCommercialUpdateModal(props) {
       // Téléphone / informations supplémentaires : plus saisis dans la
       // modale, la valeur existante est renvoyée inchangée (aucune perte).
       phone: form.phone || null,
-      enterprise_id: form.enterprise_id,
-      additional_info: form.additional_info || null,
-      ringcentral_extension_id: form.ringcentral_extension_id || null,
-      ringcentral_device_id: form.ringcentral_device_id || null,
-      ringcentral_from_number: fromNumber,
-      // Switch « Privilège commercial » (docs/RULES.md §7.1, colonne
-      // `users.has_permission`).
-      has_permission: form.has_permission,
+      // Champs commerciaux uniquement — non envoyés pour un opérateur
+      // (`enterprise_id` serait refusé en `sometimes|required`).
+      ...(isOperator ? {} : {
+        enterprise_id: form.enterprise_id,
+        additional_info: form.additional_info || null,
+        ringcentral_extension_id: form.ringcentral_extension_id || null,
+        ringcentral_device_id: form.ringcentral_device_id || null,
+        ringcentral_from_number: fromNumber,
+        // Switch « Privilège commercial » (docs/RULES.md §7.1, colonne
+        // `users.has_permission`).
+        has_permission: form.has_permission,
+      }),
     }
     mutation.mutate(payload)
   }
 
   return {
     form, error, isPending: mutation.isPending, enterprises, set, handleSubmit,
+    isOperator,
     // Champ « Nom d'utilisateur » : auto-détection depuis l'e-mail +
     // disponibilité vérifiée en temps réel (hors employé édité).
     usernameCheck, onEmailChange, onUsernameChange,

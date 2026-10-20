@@ -1,15 +1,16 @@
 import { api } from './client.js'
 
-// Role-aware dashboard statistics (shared by all roles). `period` pilote la
-// série du graphique « Évolution journalière des appels » (`week` | `month`
-// | `year`, défaut `week` côté serveur) ; `year` / `month` sélectionnent un
-// mois calendaire précis (`period=month` → évolution par jour du mois) ou une
-// année précise (`period=year` → évolution par mois de l'année). Les cartes
-// d'appels comptent toujours la journée en cours.
-export function getDashboardStatsApi({ period, year, month } = {}) {
+// Statistiques du dashboard, filtrées par la période **globale** du tableau
+// de bord : `year` (défaut serveur : année courante), `month` (1-12, absent
+// = tous les mois de l'année) et `week` (semaine du mois : 1 = jours 1–7,
+// 2 = jours 8–14… ; ignorée sans `month`). Cartes, graphique, réservations
+// et « Meilleurs employés » partagent ces bornes ; seul
+// `stats.blacklisted_clients` reste un instantané (clients actuellement
+// blacklistés).
+export function getDashboardStatsApi({ year, month, week } = {}) {
   const params = {}
-  if (period) params.period = period
   if (year) params.year = year
   if (month) params.month = month
+  if (week) params.week = week
   return api.get('/dashboard/stats', { params })
 }

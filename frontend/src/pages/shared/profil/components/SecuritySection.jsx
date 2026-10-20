@@ -4,7 +4,10 @@ import Input from '@/components/ui/input.jsx'
 import { useSecuritySection } from './useSecuritySection.js'
 
 export default function SecuritySection({ user, role }) {
-  const isComercial = role === 'COMERCIAL'
+  // COMERCIAL et OPERATOR : pas d'auto-modification du mot de passe, le
+  // compte est créé par un admin qui seul peut le changer (reflet du 403
+  // `PASSWORD_CHANGE_ADMIN_ONLY` de l'API).
+  const restrictedRole = ['COMERCIAL', 'OPERATOR'].includes(role)
   const {
     currentPassword,
     onCurrentPasswordChange,
@@ -18,8 +21,7 @@ export default function SecuritySection({ user, role }) {
     updatePassword,
   } = useSecuritySection()
 
-  // COMERCIAL : pas d'auto-modification du mot de passe, passage par un admin.
-  if (isComercial) {
+  if (restrictedRole) {
     return (
       <div className="space-y-6 max-w-2xl">
         <div>
@@ -40,7 +42,7 @@ export default function SecuritySection({ user, role }) {
               <h3 className="text-sm font-semibold text-foreground">Modification du mot de passe</h3>
               <p className="text-sm text-muted-foreground">
                 Bonjour {user?.first_name || user?.email} 👋<br />
-                En tant que commercial, vous ne pouvez pas modifier vous-même votre
+                En tant que {role === 'OPERATOR' ? 'opérateur' : 'commercial'}, vous ne pouvez pas modifier vous-même votre
                 mot de passe. Merci de demander à votre administrateur de le changer
                 pour vous.
               </p>

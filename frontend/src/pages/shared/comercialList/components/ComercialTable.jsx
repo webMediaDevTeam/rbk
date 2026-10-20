@@ -35,7 +35,14 @@ export default function ComercialTable(props) {
                 <div className="flex items-center gap-2.5">
                   <UserAvatar user={row.c} size="sm" onEdit={row.handleAvatarClick} />
                   <div className="flex flex-col leading-tight">
-                    <span className="font-medium">{row.name}</span>
+                    <span className="font-medium flex items-center gap-1.5">
+                      {row.name}
+                      {/* Rôle — « Opérateur » badgeé pour le distinguer d'un
+                          coup d'œil (le commercial reste l'implicite). */}
+                      {row.isOperator && (
+                        <Badge variant="info" className="uppercase">Opérateur</Badge>
+                      )}
+                    </span>
                     <span className="text-xs text-muted-foreground">{row.c.email}</span>
                   </div>
                 </div>
@@ -77,14 +84,18 @@ export default function ComercialTable(props) {
               <TableCell><StatusBadge status={row.c.status} /></TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
-                  <Link
-                    to={`/comercialDetail/${row.c.id}`}
-                    className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-muted-foreground transition-colors"
-                    title="Voir"
-                    aria-label="Voir"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Link>
+                  {/* « Voir » = fiche employé (`commercials/{id}`, réservé aux
+                      commerciaux) : masquée pour les opérateurs. */}
+                  {!row.isOperator && (
+                    <Link
+                      to={`/comercialDetail/${row.c.id}`}
+                      className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-muted-foreground transition-colors"
+                      title="Voir"
+                      aria-label="Voir"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Link>
+                  )}
                   <RowMenu>
                     {(closeMenu) => (
                       <>

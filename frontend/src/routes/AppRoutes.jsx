@@ -40,16 +40,17 @@ export default function AppRoutes() {
       <Route path="/entreprises/:id" element={guard(ROLES.MANAGERS, <EntrepriseDetailPage />)} />
       <Route path="/commerciaux" element={guard(ROLES.MANAGERS, <ComercialListPage />)} />
       <Route path="/comercialDetail/:id" element={guard(ROLES.MANAGERS, <ComercialDetailPage />)} />
-      <Route path="/clients-historique" element={guard(ROLES.MANAGERS, <ClientsHistoryPage />)} />
+      <Route path="/clients-historique" element={guard(ROLES.GRANDE_LISTE, <ClientsHistoryPage />)} />
 
-      {/* Fiche client **partagée** (pages/shared) — `ROLES.ALL` : le
-          composant est role-aware (`useClientDetail` bascule l'API selon le
+      {/* Fiche client **partagée** (pages/shared) — `ROLES.CLIENT_DETAIL`
+          (hors `OPERATOR`) : le composant est role-aware
+          (`useClientDetail` bascule l'API selon le
           rôle : `useCommercialProspect` pour COMERCIAL, `useAdminClientDetail`
           pour ADMIN/SUPER_ADMIN), et les pages gestionnaires (clients-
           historique, fiche entreprise, fiche commerciale) y mènent par un
           lien « Voir ». Le garde reste en écho aux middleware `CheckRole` du
           backend, qui restent la source de vérité côté API. */}
-      <Route path="/prospects/:id" element={guard(ROLES.ALL, <ClientDetailPage />)} />
+      <Route path="/prospects/:id" element={guard(ROLES.CLIENT_DETAIL, <ClientDetailPage />)} />
 
       {/* COMERCIAL uniquement — routes/api/commercial.php (CheckRole:COMERCIAL) */}
       <Route path="/prospects" element={guard(ROLES.COMERCIAL, <ProspectListPage />)} />

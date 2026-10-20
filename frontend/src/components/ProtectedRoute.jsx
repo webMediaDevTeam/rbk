@@ -10,13 +10,22 @@ import { LOGIN_PATH, UNAUTHORIZED_PATH, resolveGuardAccess } from '@/lib/guard.j
 // un import externe (webhook n8n → routes publiques de `shared.php`).
 export const ROLES = {
   // Toute personne connectée (dashboard, profil).
-  ALL: ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
+  ALL: ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL', 'OPERATOR'],
   // Hiérarchie de gestion : entreprises, employés, grande liste, blacklist.
   MANAGERS: ['SUPER_ADMIN', 'ADMIN'],
+  // Grande liste partagée avec l'opérateur : la page « Historique »
+  // (`/clients-historique`) est visible par les gestionnaires **et** par
+  // l'`OPERATOR` — dont le périmètre (« Disponibles sans téléphone ») est
+  // forcé côté API, pas ici.
+  GRANDE_LISTE: ['SUPER_ADMIN', 'ADMIN', 'OPERATOR'],
   // Administration des admins (route backend `POST admins`).
   SUPER_ADMIN: ['SUPER_ADMIN'],
   // Espace prospect : réservations, rappels, issues d'appel.
   COMERCIAL: ['COMERCIAL'],
+  // Fiche client détaillée (`/prospects/:id`) : l'opérateur n'y accède pas —
+  // les API de détail commerciales sont `CheckRole:COMERCIAL` et il ne voit
+  // la Grande liste que dans sa liste restreinte éditable.
+  CLIENT_DETAIL: ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
 }
 
 /**

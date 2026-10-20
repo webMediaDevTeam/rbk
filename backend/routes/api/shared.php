@@ -175,9 +175,11 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])
     ->get('users/username-available', [UserController::class, 'usernameAvailable']);
 
 // ── User Management ─────────────────────────────────────────
-// ADMIN       → manages COMERCIAL
+// ADMIN       → manages COMERCIAL / OPERATOR
 // SUPER_ADMIN → manages everyone
-Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
+// COMERCIAL / OPERATOR → lecture de soi + avatar (page Profil ; le périmètre
+// est verrouillé par `UserController::scopedQuery` / `canAct`).
+Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL,OPERATOR,ADMIN,SUPER_ADMIN'])->group(function () {
     Route::get('users', [UserController::class, 'index']);
     Route::get('users/{id}', [UserController::class, 'show']);
     // A user may update their own avatar (self-only enforced in UserController::canAct).

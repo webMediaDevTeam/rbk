@@ -10,6 +10,8 @@ export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onD
   const rcKey = normalizeRcNumber(rcNumber)
   const rcDuplicate = rcKey !== '' && duplicateRingCentralNumbers.has(rcKey)
   const toggleLabel = comercial.status === 'ACTIVE' ? 'Désactiver' : 'Activer'
+  // Opérateur : pas de fiche employé ni de page de détail commerciale.
+  const isOperator = comercial.role === 'OPERATOR'
 
   const handleAvatarClick = () => onAvatarClick?.(comercial)
   const handleEdit = (closeMenu) => {
@@ -32,6 +34,7 @@ export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onD
     phone,
     rcNumber,
     rcDuplicate,
+    isOperator,
     toggleLabel,
     canDelete,
     handleAvatarClick,

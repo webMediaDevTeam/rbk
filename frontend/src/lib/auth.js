@@ -9,6 +9,7 @@ export const ROLE_HOME = {
   SUPER_ADMIN: '/dashboard',
   ADMIN: '/dashboard',
   COMERCIAL: '/dashboard',
+  OPERATOR: '/dashboard',
 }
 
 export function homeForRole(role) {
@@ -20,6 +21,7 @@ const ROLE_RANK = {
   SUPER_ADMIN: 0,
   ADMIN: 1,
   COMERCIAL: 2,
+  OPERATOR: 3,
 }
 
 // Permission map: which roles can access which resources
@@ -54,15 +56,17 @@ export const PERMISSIONS = {
 
   // Grande liste admin (`/clients-historique`) : onglets « source » et le
   // filtre `?source=` qu'ils envoient — un appelant sans ce privilège ne
-  // voit pas la barre d'onglets (l'API reste la source de vérité : la route
-  // `GET commercials/clients` est sous `CheckRole:ADMIN,SUPER_ADMIN`).
+  // voit pas la barre d'onglets. L'API reste la source de vérité : la route
+  // `GET commercials/clients` est ouverte à `ADMIN,SUPER_ADMIN,OPERATOR`,
+  // mais le périmètre de l'opérateur (« Disponibles sans téléphone ») est
+  // forcé côté contrôleur, filtres ignorés.
   'clients:filter-source': ['SUPER_ADMIN', 'ADMIN'],
 
   // Dashboard
-  'dashboard': ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
+  'dashboard': ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL', 'OPERATOR'],
 
   // Profil
-  'profil': ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL'],
+  'profil': ['SUPER_ADMIN', 'ADMIN', 'COMERCIAL', 'OPERATOR'],
 }
 
 export function hasPermission(role, permission) {

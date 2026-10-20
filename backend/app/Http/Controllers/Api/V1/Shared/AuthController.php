@@ -301,10 +301,11 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        // Un COMERCIAL ne peut pas modifier son propre mot de passe : il doit
-        // passer par un administrateur (le front affiche ce message et ne
-        // propose pas le formulaire). On le renforce ici côté serveur.
-        if ($user->role === 'COMERCIAL') {
+        // Un COMERCIAL / OPERATOR ne peut pas modifier son propre mot de
+        // passe : il doit passer par un administrateur (le front affiche ce
+        // message et ne propose pas le formulaire). On le renforce ici côté
+        // serveur.
+        if (in_array($user->role, ['COMERCIAL', 'OPERATOR'], true)) {
             return response()->json([
                 'message' => 'Merci de demander à un administrateur de modifier votre mot de passe.',
                 'code' => 'PASSWORD_CHANGE_ADMIN_ONLY',

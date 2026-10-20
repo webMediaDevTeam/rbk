@@ -1,4 +1,5 @@
 import { useClientsHistoryPage } from './useClientsHistory.js'
+import { useAuth } from '@/context/AuthContext.jsx'
 import ProspectTable from '@/pages/comercial/ProspectList/components/ProspectTable.jsx'
 import ProspectCard from '@/pages/comercial/ProspectList/components/ProspectCard.jsx'
 import ClientsHistoryToolbar from './components/ClientsHistoryToolbar.jsx'
@@ -8,6 +9,14 @@ import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
 
 export default function ClientsHistoryPage() {
+  // L'`OPERATOR` partage cette page, mais **sans aucun filtre** : l'API lui
+  // rend d'office les « Disponibles sans téléphone » (`phone IS NULL`), et
+  // ignore tout paramètre. L'UI retire donc badges KPI, facettes et actions
+  // de gestion (liste noire, accès au détail) — il ne reste que recherche,
+  // lignes et modale « Modifier le client ».
+  const { role } = useAuth()
+  const isOperator = role === 'OPERATOR'
+
   const {
     isDesktop,
     isLoading,
@@ -50,7 +59,11 @@ export default function ClientsHistoryPage() {
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Grande liste</h1>
-          <p className="text-sm text-muted-foreground mt-1">Tous les prospects de la base, sans restriction.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isOperator
+              ? 'Prospects disponibles sans téléphone : complétez leurs fiches.'
+              : 'Tous les prospects de la base, sans restriction.'}
+          </p>
         </div>
       </div>
 
@@ -59,14 +72,18 @@ export default function ClientsHistoryPage() {
           ligne, deux dimensions disjointes (statut client / réservation).
           `filters` (recherche, facettes, onglet « source », employé) borne les
           compteurs au **même** périmètre que les lignes rendues — changer un
-          filtre ré-render donc les valeurs des badges. */}
-      <ProspectKpis statusFilters={statusFilters} onStatusFilterChange={handleStatusToggle} filters={kpFilters} />
+          filtre ré-render donc les valeurs des badges. Masqué pour
+          l'`OPERATOR` : son périmètre est fixe, les badges n'auraient aucun
+          effet. */}
+      {!isOperator && (
+        <ProspectKpis statusFilters={statusFilters} onStatusFilterChange={handleStatusToggle} filters={kpFilters} />
+      )}
 
       {/* Onglets « Tous / Affaire / … » = filtre `?source=` (origine du
           prospect) — **réservés ADMIN / SUPER_ADMIN** : la barre n'est pas
           rendue sans le privilège `clients:filter-source`, et le commercial
           n'ouvre pas cette page. */}
-      <SourceTabs source={source} onChange={handleSourceChange} />
+      {!isOperator && <SourceTabs source={source} onChange={handleSourceChange} />}
 
       <ClientsHistoryToolbar
         search={search} setSearch={handleSearchChange}
@@ -75,6 +92,7 @@ export default function ClientsHistoryPage() {
         region={region} setRegion={handleRegionChange}
         enterprise={enterprise} setEnterprise={handleEnterpriseChange}
         employee={employee} setEmployee={handleEmployeeChange}
+        showFacets={!isOperator}
       />
 
       {isLoading ? (
@@ -83,15 +101,17 @@ export default function ClientsHistoryPage() {
         /* Ligne non cliquable (panel admin/super admin) : on ne navigue plus
            vers la fiche depuis la ligne ; la dernière colonne porte « Voir »
            et la bascule **liste noire / débloquer** (action directe, sans
-           modale de confirmation). */
+           modale de confirmation). Pour l'`OPERATOR` : ni « Voir » ni liste
+           noire — seule la modale « Modifier le client » reste. */
         <ProspectTable
           clients={clients}
           startIndex={(currentPage - 1) * rowsPerPage}
           sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort}
           onViewDetail={handleViewDetail}
+          showViewButton={!isOperator}
           rowClickable={false}
           showPhone
-          onToggleBlacklist={toggleBlacklist}
+          onToggleBlacklist={isOperator ? undefined : toggleBlacklist}
           onEditPhone={openPhoneEdit}
           blacklistId={blacklistId}
         />
@@ -103,9 +123,10 @@ export default function ClientsHistoryPage() {
               num={(currentPage - 1) * rowsPerPage + i + 1}
               client={c}
               onViewDetail={handleViewDetail}
+              showViewButton={!isOperator}
               rowClickable={false}
               showPhone
-              onToggleBlacklist={toggleBlacklist}
+              onToggleBlacklist={isOperator ? undefined : toggleBlacklist}
               onEditPhone={openPhoneEdit}
               blacklistId={blacklistId}
             />

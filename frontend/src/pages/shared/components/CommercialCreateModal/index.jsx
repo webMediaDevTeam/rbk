@@ -15,17 +15,61 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
 
   if (!open) return null
 
+  // Bascule « Commercial / Opérateur » : l'opérateur n'a ni entreprise, ni
+  // appareil RingCentral, ni privilège de libération — les champs métier
+  // sont masqués et le payload du hook l'omet aussi.
+  const isOperator = form.role === 'OPERATOR'
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-foreground">Créer un employé</h2>
+          <h2 className="text-lg font-semibold text-foreground">{isOperator ? 'Créer un opérateur' : 'Créer un employé'}</h2>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Rôle : choix Commercial (prospection / appels) ou Opérateur
+              (Grande liste restreinte aux « Disponibles sans téléphone »). */}
+          <div>
+            <label className="block text-sm font-bold mb-1">Rôle *</label>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Rôle">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!isOperator}
+                onClick={() => set('role', 'COMERCIAL')}
+                className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                  !isOperator
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                Commercial
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={isOperator}
+                onClick={() => set('role', 'OPERATOR')}
+                className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+                  isOperator
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                Opérateur
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isOperator
+                ? 'Voit uniquement la Grande liste des prospects disponibles sans téléphone et complète leurs fiches.'
+                : 'Prospecte et appelle les clients assignés, avec fiche employé et source d’appel RingCentral.'}
+            </p>
+          </div>
+
           <div>
             <label className="block text-sm font-bold mb-1">Adresse e-mail *</label>
             <Input type="email" required value={form.email} onChange={(e) => onEmailChange(e.target.value)} placeholder="email@employe.com" />
@@ -47,6 +91,8 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
             </div>
           </div>
 
+          {!isOperator && (
+            <>
           <div>
             <label className="block text-sm font-bold mb-1">Entreprise *</label>
             <Select required value={form.enterprise_id} onChange={(e) => onEnterpriseChange(e.target.value)}>
@@ -103,6 +149,8 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
               aria-label="Privilège commercial"
             />
           </div>
+            </>
+          )}
 
           {/* Mot de passe + confirmation : les deux derniers champs du
               formulaire, affichés en clair (l'admin doit voir le mot de

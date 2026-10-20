@@ -8,13 +8,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { CHART_PERIODS } from '../useDashboard.js'
-import Select from '@/components/ui/select'
-
-const MONTH_LABELS = [
-  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
-]
 
 // Date complète au survol : 'YYYY-MM-DD' → 'JJ/MM/AAAA', 'YYYY-MM' → 'MM/AAAA'.
 const formatTooltipDate = (date) => (date ? date.split('-').reverse().join('/') : '')
@@ -48,24 +41,13 @@ function ChartTooltip({ active, payload }) {
 }
 
 /**
- * « Évolution journalière des appels ». Un point par jour (semaine / mois
- * calendaire choisi) ou par mois (année choisie). Axe gauche : taux d'appels
- * validés en % (courbe) ; axe droit : volume d'appels (barres). Le sélecteur
- * de période (`onPeriodChange`) pilote `?period=`, et les sélecteurs
- * année / mois (`onYearChange` / `onMonthChange`) pilotent `?year=`/`?month=`
- * pour afficher l'évolution **par jour du mois** sélectionné (ou par mois de
- * l'année sélectionnée).
+ * « Évolution des appels ». Composant purement présentationnel : le filtre
+ * de période global (`DashboardFilterBar`) pilote les données — un point par
+ * jour (mois ou semaine choisis) ou par mois (année seule), transmis déjà
+ * calculés. Axe gauche : taux d'appels validés en % (courbe) ; axe droit :
+ * volume d'appels (barres). `caption` décrit la période rendue.
  */
-export default function CallsChart({
-  data = [],
-  period = 'week',
-  onPeriodChange,
-  year,
-  month,
-  availableYears = [],
-  onYearChange,
-  onMonthChange,
-}) {
+export default function CallsChart({ data = [], caption = '' }) {
   const points = withRate(data)
 
   // Taux moyen de la période, pondéré par le volume d'appels.
@@ -73,21 +55,11 @@ export default function CallsChart({
   const totalOui = data.reduce((sum, point) => sum + (point.oui ?? 0), 0)
   const averageRate = totalCalls > 0 ? ((totalOui / totalCalls) * 100).toFixed(1) : null
 
-  // Sous-titre et sélecteurs dépendent de la période choisie.
-  const showYearSelect = period === 'month' || period === 'year'
-  const showMonthSelect = period === 'month'
-  const caption =
-    period === 'year'
-      ? `Année ${year ?? ''} — évolution par mois`
-      : period === 'month'
-        ? `${MONTH_LABELS[(month ?? 1) - 1]} ${year ?? ''} — évolution par jour`
-        : '7 derniers jours — évolution par jour'
-
   return (
     <div className="rounded-2xl bg-card p-6 text-card-foreground shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold">Évolution journalière des appels</h3>
+          <h3 className="text-base font-semibold">Évolution des appels</h3>
           <p className="text-sm text-muted-foreground">
             {caption}
             {averageRate !== null ? ` — taux moyen ${averageRate} %` : ''}
@@ -105,57 +77,6 @@ export default function CallsChart({
               <span className="h-0.5 w-4 rounded-full bg-amber-500" /> Taux OUI (%)
             </span>
           </div>
-          {onPeriodChange ? (
-            <div
-              className="flex items-center rounded-lg bg-muted p-0.5"
-              role="group"
-              aria-label="Période du graphique"
-            >
-              {CHART_PERIODS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => onPeriodChange(p.value)}
-                  aria-pressed={p.value === period}
-                  className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                    p.value === period
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {onYearChange && showYearSelect ? (
-            <Select
-              value={year ?? ''}
-              onChange={(e) => onYearChange(Number(e.target.value))}
-              className="w-24 shrink-0"
-              aria-label="Année du graphique"
-            >
-              {availableYears.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </Select>
-          ) : null}
-          {onMonthChange && showMonthSelect ? (
-            <Select
-              value={month ?? ''}
-              onChange={(e) => onMonthChange(Number(e.target.value))}
-              className="w-36 shrink-0"
-              aria-label="Mois du graphique"
-            >
-              {MONTH_LABELS.map((label, i) => (
-                <option key={label} value={i + 1}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          ) : null}
         </div>
       </div>
       <div className="mt-6 h-[300px] w-full">

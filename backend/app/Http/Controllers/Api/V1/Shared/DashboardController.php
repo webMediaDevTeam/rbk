@@ -9,58 +9,58 @@ use App\Models\Note;
 use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class DashboardController extends Controller
 {
-    /** Périodes du graphique « Évolution journalière des appels » (`?period=`). */
-    private const PERIODS = ['week', 'month', 'year'];
-
     /**
-     * Issues d'appel comptées au tableau de bord : les `CALL_TYPES` du modèle
-     * **plus** `BLACKLISTED` — un appel terminé par une mise en liste noire
-     * reste un appel effectué : le total du jour inclut donc appels validés,
-     * refusés et black-listés.
-     */
-    private const DASHBOARD_CALL_TYPES = [...Note::CALL_TYPES, Note::TYPE_BLACKLISTED];
-
-    /**
-     * GET /dashboard/stats?period=week|month|year&year=YYYY&month=M
+     * GET /dashboard/stats?year=YYYY&month=M&week=W
      *
-     * Tableau de bord role-aware : les gestionnaires voient les chiffres
-     * globaux, les commerciaux les leurs. `period` pilote la série
-     * `calls_by_day` du graphique :
-     *  - `week`  : 7 derniers jours (un point par jour) ;
-     *  - `month` : 30 derniers jours, ou — si `year`+`month` fournis — **un
-     *    point par jour du mois calendaire choisi** ;
-     *  - `year`  : 12 derniers mois, ou — si `year` fourni — **un point par
-     *    mois de l'année calendaire choisie**.
-     * Les cartes d'appels (`stats.today.*`) comptent toujours la journée en
-     * cours.
+     * Tableau de bord role-aware (les gestionnaires voient les chiffres
+     * globaux, les commerciaux/opérateurs les leurs) filtré par une période
+     * **globale** — les mêmes sélecteurs Année / Mois / Semaine pilotent les
+     * cartes, le graphique, les réservations et « Meilleurs employés » :
+     *  - `year` seul (défaut : année courante) : année calendaire, le
+     *    graphique rend **un point par mois** ;
+     *  - `month` : mois calendaire de l'année choisie, un point par jour ;
+     *  - `week` : semaine du mois choisi (1 = jours 1–7, 2 = jours 8–14…,
+     *    la dernière est partielle), un point par jour de la semaine ;
+     *    ignorée sans `month` (une semaine hors plage vaut « toutes »).
+     * Exception : `stats.blacklisted_clients` reste un instantané des
+     * clients **actuellement** blacklistés.
      */
     public function stats(Request $request): JsonResponse
     {
         $user = $request->user();
 
-        $period = (string) $request->query('period', 'week');
-        $period = in_array($period, self::PERIODS, true) ? $period : 'week';
-
         $year = (int) $request->query('year', 0);
-        $year = $year > 0 ? $year : null;
+        $year = $year > 0 ? $year : (int) Carbon::today()->format('Y');
 
         $month = (int) $request->query('month', 0);
         $month = ($month >= 1 && $month <= 12) ? $month : null;
 
-        if (in_array($user->role, ['ADMIN', 'SUPER_ADMIN'], true)) {
-            return $this->adminStats($user, $period, $year, $month);
+        $week = (int) $request->query('week', 0);
+        $week = $week > 0 ? $week : null;
+        if ($month !== null && $week !== null) {
+            $daysInMonth = (int) Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('j');
+            if ($week > (int) ceil($daysInMonth / 7)) {
+                $week = null;
+            }
         }
 
-        return $this->commercialStats($user, $period, $year, $month);
+        [$start, $end, $granularity] = $this->resolvePeriod($year, $month, $week);
+
+        if (in_array($user->role, ['ADMIN', 'SUPER_ADMIN'], true)) {
+            return $this->adminStats($user, $start, $end, $granularity, $year, $month, $week);
+        }
+
+        return $this->commercialStats($user, $start, $end, $granularity, $year, $month, $week);
     }
 
-    private function adminStats(User $user, string $period, ?int $year, ?int $month): JsonResponse
+    private function adminStats(User $user, Carbon $start, Carbon $end, string $granularity, int $year, ?int $month, ?int $week): JsonResponse
     {
         return response()->json([
             'success' => true,
@@ -70,18 +70,19 @@ class DashboardController extends Controller
                     'enterprises' => Enterprise::count(),
                     'commercials' => User::where('role', 'COMERCIAL')->count(),
                     'prospects' => Client::count(),
-                    'groups' => ReservationGroup::count(),
-                    'reservations' => Reservation::count(),
-                    'today' => $this->todayCallStats(),
+                    'groups' => $this->countIn(ReservationGroup::query(), $start, $end),
+                    'reservations' => $this->countIn(Reservation::query(), $start, $end),
+                    'period' => $this->periodCallStats($start, $end),
+                    'blacklisted_clients' => $this->blacklistedClientsCount(),
                 ],
-                'calls_by_day' => $this->callsByDay($period, null, $year, $month),
-                'chart' => $this->chartMeta($period, $year, $month),
-                'top_commercials' => $this->topCommercials(),
+                'calls_by_day' => $this->callsByDay($start, $end, $granularity),
+                'chart' => $this->chartMeta($year, $month, $week),
+                'top_commercials' => $this->topCommercials($start, $end),
             ],
         ]);
     }
 
-    private function commercialStats(User $user, string $period, ?int $year, ?int $month): JsonResponse
+    private function commercialStats(User $user, Carbon $start, Carbon $end, string $granularity, int $year, ?int $month, ?int $week): JsonResponse
     {
         $id = $user->id;
 
@@ -90,183 +91,214 @@ class DashboardController extends Controller
             'data' => [
                 'role' => $user->role,
                 'stats' => [
-                    'groups' => ReservationGroup::where('comercial_id', $id)->count(),
-                    'reservations' => Reservation::where('comercial_id', $id)->count(),
-                    'today' => $this->todayCallStats($id),
+                    'groups' => $this->countIn(
+                        ReservationGroup::where('comercial_id', $id), $start, $end
+                    ),
+                    'reservations' => $this->countIn(
+                        Reservation::where('comercial_id', $id), $start, $end
+                    ),
+                    'period' => $this->periodCallStats($start, $end, $id),
+                    'blacklisted_clients' => $this->blacklistedClientsCount(),
                 ],
-                'calls_by_day' => $this->callsByDay($period, $id, $year, $month),
-                'chart' => $this->chartMeta($period, $year, $month, $id),
+                'calls_by_day' => $this->callsByDay($start, $end, $granularity, $id),
+                'chart' => $this->chartMeta($year, $month, $week, $id),
                 'top_commercials' => [],
             ],
         ]);
     }
 
     /**
-     * Appels de la journée en cours, ventilés par issue — cartes KPI
-     * « Appels aujourd'hui / validés (OUI) / refusés / black-listés ». Une
-     * seule requête groupée par `type` ; un COMERCIAL ne voit que ses
-     * propres appels (`sender_id`), un gestionnaire ceux de toute l'équipe.
+     * Bornes de la période filtrante + granularité du graphique :
+     * année seule = `[1er janvier, 1er janvier N+1)` mensuel ; mois =
+     * `[1er, 1er du mois suivant)` journalier ; semaine N du mois =
+     * `[jour (N−1)×7+1, min(N×7, dernier jour)]` journalier.
      *
-     * @return array{calls: int, yes: int, no: int, blacklisted: int}
+     * @return array{0: Carbon, 1: Carbon, 2: string} `[début, fin exclusive, granularité]`
      */
-    private function todayCallStats(?string $comercialId = null): array
+    private function resolvePeriod(int $year, ?int $month, ?int $week): array
     {
-        $query = Note::query()
-            ->where('created_at', '>=', Carbon::today()->startOfDay())
-            ->whereIn('type', self::DASHBOARD_CALL_TYPES)
-            ->selectRaw('type, COUNT(*) as total')
-            ->groupBy('type');
+        if ($month === null) {
+            $start = Carbon::createFromDate($year, 1, 1)->startOfDay();
 
-        if ($comercialId) {
-            $query->where('sender_id', $comercialId);
+            return [$start, $start->copy()->addYear(), 'month'];
         }
 
-        $rows = $query->pluck('total', 'type');
+        $monthStart = Carbon::createFromDate($year, $month, 1)->startOfDay();
+
+        if ($week === null) {
+            return [$monthStart, $monthStart->copy()->addMonth(), 'day'];
+        }
+
+        $daysInMonth = (int) $monthStart->copy()->endOfMonth()->format('j');
+        $from = min(($week - 1) * 7 + 1, $daysInMonth);
+        $to = min($week * 7, $daysInMonth);
 
         return [
-            'calls' => (int) $rows->sum(),
-            'yes' => (int) ($rows->get(Note::TYPE_YES) ?? 0),
-            'no' => (int) ($rows->get(Note::TYPE_NO) ?? 0),
-            'blacklisted' => (int) ($rows->get(Note::TYPE_BLACKLISTED) ?? 0),
+            $monthStart->copy()->addDays($from - 1),
+            $monthStart->copy()->addDays($to),
+            'day',
+        ];
+    }
+
+    private function countIn(Builder $query, Carbon $start, Carbon $end): int
+    {
+        return $query->where('created_at', '>=', $start)->where('created_at', '<', $end)->count();
+    }
+
+    /**
+     * Cartes KPI de la période filtrée —
+     *  - « Appels » : les **notes d'appel** créées par le bouton « Appel »
+     *    (lançage RingCentral) : une note porteuse avec `call_log_id` ; un
+     *    COMERCIAL ne voit que les siennes (via l'employé rattaché au
+     *    journal d'appel — l'émetteur de la note est `SYSTEM`) ;
+     *  - « OUI » : les notes d'issue `YES` de la période (un COMERCIAL ne
+     *    voit que les siennes, `sender_id`) ;
+     *  - « Échec » : appels − OUI (jamais négatif).
+     *
+     * @return array{calls: int, yes: int, failed: int}
+     */
+    private function periodCallStats(Carbon $start, Carbon $end, ?string $comercialId = null): array
+    {
+        $calls = $this->callNotesQuery($start, $end, $comercialId)->count();
+
+        $yes = Note::query()
+            ->where('type', Note::TYPE_YES)
+            ->where('created_at', '>=', $start)
+            ->where('created_at', '<', $end)
+            ->when($comercialId, fn ($q) => $q->where('sender_id', $comercialId))
+            ->count();
+
+        return [
+            'calls' => $calls,
+            'yes' => $yes,
+            'failed' => max($calls - $yes, 0),
         ];
     }
 
     /**
-     * Série du graphique « Évolution journalière des appels ». Les bornes, la
-     * granularité et les points viennent de `resolveSeries()` : semaine / mois
-     * glissant / mois calendaire choisi = un point par jour ; année = un point
-     * par mois.
-     *
-     * Chaque point : `{date, label, total, oui}` — le taux (`oui / total`,
-     * axe gauche en %) est calculé côté client. Le repli mensuel se fait en
-     * PHP (clé `Y-m` des jours) : `DATE_FORMAT` n'est pas portable entre MySQL
-     * et SQLite.
+     * Requête des **notes d'appel** (créées par le bouton « Appel »
+     * RingCentral : note porteuse d'un `call_log_id`) bornée par la période.
+     * Le périmètre « mes appels » d'un commercial passe par l'employé
+     * rattaché au journal d'appel, pas par `sender_id` (`SYSTEM`).
      */
-    private function callsByDay(string $period = 'week', ?string $comercialId = null, ?int $year = null, ?int $month = null): array
+    private function callNotesQuery(Carbon $start, Carbon $end, ?string $comercialId = null): Builder
     {
-        [$start, $end, $series, $granularity] = $this->resolveSeries($period, $year, $month);
-
-        $query = Note::query()
+        return Note::query()
+            ->whereNotNull('call_log_id')
             ->where('created_at', '>=', $start)
             ->where('created_at', '<', $end)
-            ->whereIn('type', self::DASHBOARD_CALL_TYPES)
-            ->selectRaw('DATE(created_at) as day')
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN type = '".Note::TYPE_YES."' THEN 1 ELSE 0 END) as oui")
-            ->groupBy('day')
-            ->orderBy('day');
+            ->when(
+                $comercialId,
+                fn ($q) => $q->whereHas(
+                    'callLog.employee',
+                    fn ($e) => $e->where('user_id', $comercialId)
+                )
+            );
+    }
 
-        if ($comercialId) {
-            $query->where('sender_id', $comercialId);
-        }
+    /** Carte « Blacklist » : clients **actuellement** blacklistés (instantané, tous rôles). */
+    private function blacklistedClientsCount(): int
+    {
+        return Client::where('is_blacklisted', true)->count();
+    }
 
-        // `toBase()` remonte des lignes brutes (`stdClass`) plutôt que des
-        // modèles `Note` : les colonnes agrégées sont ainsi accessibles en
-        // tant que vraies clés, aplatis en buckets (`day` → compteurs) pour la
-        // boucle des points.
-        $buckets = [];
-        foreach ($query->toBase()->get() as $raw) {
-            $row = (array) $raw;
-            $day = (string) $row['day'];
-            $buckets[$day]['total'] = ($buckets[$day]['total'] ?? 0) + (int) $row['total'];
-            $buckets[$day]['oui'] = ($buckets[$day]['oui'] ?? 0) + (int) $row['oui'];
-        }
+    /**
+     * Série du graphique « Évolution des appels », alignée sur les cartes :
+     * `total` = notes d'appel de la période (bouton « Appel » RingCentral),
+     * `oui` = notes d'issue `YES`. Un point par jour (mois / semaine
+     * filtrés) ou par mois (année seule), avec des zéros de remplissage.
+     *
+     * Le repli mensuel se fait en PHP (clé `Y-m` des jours) : `DATE_FORMAT`
+     * n'est pas portable entre MySQL et SQLite.
+     */
+    private function callsByDay(Carbon $start, Carbon $end, string $granularity, ?string $comercialId = null): array
+    {
+        $totals = $this->countNotesByBucket(
+            $this->callNotesQuery($start, $end, $comercialId),
+            $granularity
+        );
 
-        // Granularité mensuelle : repli des jours par mois calendaire (`Y-m`).
-        if ($granularity === 'month') {
-            $byMonth = [];
-            foreach ($buckets as $day => $counts) {
-                $monthKey = substr($day, 0, 7);
-                $byMonth[$monthKey]['total'] = ($byMonth[$monthKey]['total'] ?? 0) + $counts['total'];
-                $byMonth[$monthKey]['oui'] = ($byMonth[$monthKey]['oui'] ?? 0) + $counts['oui'];
-            }
-            $buckets = $byMonth;
-        }
+        $ouis = $this->countNotesByBucket(
+            Note::query()
+                ->where('type', Note::TYPE_YES)
+                ->where('created_at', '>=', $start)
+                ->where('created_at', '<', $end)
+                ->when($comercialId, fn ($q) => $q->where('sender_id', $comercialId)),
+            $granularity
+        );
 
-        // Points rendus dans l'ordre, avec des zéros de remplissage pour les
-        // jours / mois sans appel.
         return array_map(
             fn (array $point): array => [
                 'date' => $point['key'],
                 'label' => $point['label'],
-                'total' => $buckets[$point['key']]['total'] ?? 0,
-                'oui' => $buckets[$point['key']]['oui'] ?? 0,
+                'total' => $totals[$point['key']] ?? 0,
+                'oui' => $ouis[$point['key']] ?? 0,
             ],
-            $series
+            $this->buildPoints($start, $end, $granularity)
         );
     }
 
     /**
-     * Détermine la série de points du graphique pour la période demandée.
-     *
-     * @return array{0: Carbon, 1: Carbon, 2: list<array{key: string, label: string}>, 3: string}
-     *                                                                                            `[début, fin exclusive, points, granularité]`
+     * Compteurs regroupés par jour (`Y-m-d`), ou par mois (`Y-m`) quand la
+     * granularité est mensuelle. `toBase()` remonte des lignes brutes plutôt
+     * que des modèles `Note`.
      */
-    private function resolveSeries(string $period, ?int $year, ?int $month): array
+    private function countNotesByBucket(Builder $query, string $granularity): array
     {
-        // Année : un point par mois. Année calendaire choisie, sinon 12
-        // derniers mois calendaires.
-        if ($period === 'year') {
-            $start = $year
-                ? Carbon::createFromDate($year, 1, 1)->startOfDay()
-                : Carbon::today()->subMonthsNoOverflow(11)->startOfMonth();
-            $end = $year
-                ? $start->copy()->addYear()
-                : Carbon::today()->addDay()->startOfDay();
+        $rows = $query
+            ->selectRaw('DATE(created_at) as day, COUNT(*) as total')
+            ->groupBy('day')
+            ->toBase()
+            ->get();
 
-            $series = [];
-            foreach (range(11, 0) as $i) {
-                $d = $year
-                    ? $start->copy()->addMonthsNoOverflow(11 - $i)
-                    : Carbon::today()->subMonthsNoOverflow($i)->startOfMonth();
-                $series[] = ['key' => $d->format('Y-m'), 'label' => $d->format('n/Y')];
+        $buckets = [];
+        foreach ($rows as $raw) {
+            $key = (string) $raw->day;
+            if ($granularity === 'month') {
+                $key = substr($key, 0, 7);
+            }
+            $buckets[$key] = ($buckets[$key] ?? 0) + (int) $raw->total;
+        }
+
+        return $buckets;
+    }
+
+    /** Points de la série : un par jour, ou un par mois calendaire. */
+    private function buildPoints(Carbon $start, Carbon $end, string $granularity): array
+    {
+        $points = [];
+
+        if ($granularity === 'month') {
+            for ($d = $start->copy(); $d->lessThan($end); $d->addMonthNoOverflow()) {
+                $points[] = ['key' => $d->format('Y-m'), 'label' => $d->format('n/Y')];
             }
 
-            return [$start, $end, $series, 'month'];
+            return $points;
         }
 
-        // Mois calendaire choisi : un point par jour (1 → dernier jour).
-        if ($period === 'month' && $year && $month) {
-            $start = Carbon::createFromDate($year, $month, 1)->startOfDay();
-            $end = $start->copy()->addMonth();
-            $days = (int) $start->copy()->endOfMonth()->format('j');
-
-            $series = [];
-            foreach (range(0, $days - 1) as $i) {
-                $d = $start->copy()->addDays($i);
-                $series[] = ['key' => $d->toDateString(), 'label' => $d->format('d/m')];
-            }
-
-            return [$start, $end, $series, 'day'];
+        for ($d = $start->copy(); $d->lessThan($end); $d->addDay()) {
+            $points[] = ['key' => $d->toDateString(), 'label' => $d->format('d/m')];
         }
 
-        // Semaine (7 j) ou mois glissant (30 j) : un point par jour.
-        $points = $period === 'month' ? 30 : 7;
-        $start = Carbon::today()->subDays($points - 1)->startOfDay();
-        $end = Carbon::today()->addDay()->startOfDay();
-
-        $series = [];
-        foreach (range($points - 1, 0) as $i) {
-            $d = Carbon::today()->subDays($i);
-            $series[] = ['key' => $d->toDateString(), 'label' => $d->format('d/m')];
-        }
-
-        return [$start, $end, $series, 'day'];
+        return $points;
     }
 
     /**
-     * Métadonnées du graphique pour alimenter les sélecteurs : les années
-     * réellement disponibles (étendue `MIN`/`MAX` des `notes` d'appel —
-     * portable MySQL/SQLite — étendue à l'année courante) et la sélection
-     * courante echoée depuis la requête.
+     * Métadonnées du filtre pour l'UI : la sélection echoée et les années
+     * réellement disponibles (étendue `MIN`/`MAX` des notes d'appel —
+     * portable MySQL/SQLite — étendue à l'année courante et à l'année
+     * choisie, pour que le sélecteur rende toujours sa valeur).
      *
-     * @return array{period: string, year: ?int, month: ?int, years: list<int>}
+     * @return array{year: int, month: ?int, week: ?int, years: list<int>}
      */
-    private function chartMeta(string $period, ?int $year, ?int $month, ?string $comercialId = null): array
+    private function chartMeta(int $year, ?int $month, ?int $week, ?string $comercialId = null): array
     {
-        $query = Note::query()->whereIn('type', self::DASHBOARD_CALL_TYPES);
+        $query = Note::query()->whereNotNull('call_log_id');
         if ($comercialId) {
-            $query->where('sender_id', $comercialId);
+            $query->whereHas(
+                'callLog.employee',
+                fn ($e) => $e->where('user_id', $comercialId)
+            );
         }
 
         $range = (array) $query->toBase()
@@ -274,38 +306,54 @@ class DashboardController extends Controller
             ->first();
 
         $current = (int) Carbon::today()->format('Y');
-        $from = ! empty($range['mn']) ? (int) Carbon::parse($range['mn'])->format('Y') : $current;
-        $to = max($current, ! empty($range['mx']) ? (int) Carbon::parse($range['mx'])->format('Y') : $current);
+        $from = min(
+            ! empty($range['mn']) ? (int) Carbon::parse($range['mn'])->format('Y') : $current,
+            $current,
+            $year
+        );
+        $to = max(
+            ! empty($range['mx']) ? (int) Carbon::parse($range['mx'])->format('Y') : $current,
+            $current,
+            $year
+        );
 
         return [
-            'period' => $period,
             'year' => $year,
             'month' => $month,
+            'week' => $week,
             'years' => range($to, $from),
         ];
     }
 
     /**
      * Tous les commerciaux pour la carte « Meilleurs employés » du tableau de
-     * bord gestionnaire : nombre d'appels passés (notes d'issue, `calls`),
-     * nombre d'OUI (`oui`, notes de type YES) et clients convertis distincts.
-     * Tri par OUI décroissant, puis par volume d'appels — plus de limite : la
-     * carte affiche **tous** les employés (défilement côté client).
+     * bord gestionnaire, **sur la période filtrée** : nombre d'appels passés
+     * (notes d'appel porteuses d'un `call_log_id` via l'employé, `calls`),
+     * nombre d'OUI (`oui`, notes de type YES émises par l'utilisateur) et
+     * clients distincts appelés / convertis. Tri par OUI décroissant, puis
+     * par volume d'appels — plus de limite : la carte affiche **tous** les
+     * employés (défilement côté client).
      */
-    private function topCommercials(): array
+    private function topCommercials(Carbon $start, Carbon $end): array
     {
         return User::where('role', 'COMERCIAL')->with('employee')->get()
-            ->map(function (User $u) {
-                $clientsCalled = Note::where('sender_id', $u->id)->calls()->distinct()->count('client_id');
-                $clientsOui = Note::where('sender_id', $u->id)->where('type', Note::TYPE_YES)->distinct()->count('client_id');
+            ->map(function (User $u) use ($start, $end) {
+                $calls = $this->callNotesQuery($start, $end, $u->id);
+                $oui = Note::where('sender_id', $u->id)
+                    ->where('type', Note::TYPE_YES)
+                    ->where('created_at', '>=', $start)
+                    ->where('created_at', '<', $end);
+
+                $clientsCalled = (clone $calls)->distinct()->count('client_id');
+                $clientsOui = (clone $oui)->distinct()->count('client_id');
 
                 return [
                     'id' => $u->id,
                     'name' => trim(($u->employee?->first_name ?? $u->first_name ?? '').' '.($u->employee?->last_name ?? $u->last_name ?? '')) ?: $u->email,
                     'email' => $u->email,
-                    'calls' => Note::where('sender_id', $u->id)->calls()->count(),
-                    'oui' => Note::where('sender_id', $u->id)->where('type', Note::TYPE_YES)->count(),
-                    'reservations' => Reservation::where('comercial_id', $u->id)->count(),
+                    'calls' => $calls->count(),
+                    'oui' => $oui->count(),
+                    'reservations' => $this->countIn(Reservation::where('comercial_id', $u->id), $start, $end),
                     'clients_called' => $clientsCalled,
                     'clients_oui' => $clientsOui,
                 ];

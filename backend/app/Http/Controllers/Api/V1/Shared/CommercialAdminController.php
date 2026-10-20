@@ -187,6 +187,12 @@ class CommercialAdminController extends Controller
         // ni de filtrage lié à une réservation). Le périmètre est donc
         // exactement celui de `prospects.system` (badge *Tous* de
         // `GET clients/overview`) : compteur du badge = lignes rendues.
+        //
+        // Exception : l'`OPERATOR` ne voit **que** les prospects « Disponibles
+        // sans téléphone » (`applyOperatorScope()`) ; tous les filtres envoyés
+        // sont ignorés pour lui — le périmètre n'est jamais négociable.
+        $isOperator = $this->isOperator($request);
+
         $query = Client::query()
             ->with([
                 'notes' => fn ($q) => $q->with('sender:id,first_name,last_name')->orderByDesc('created_at'),
@@ -195,56 +201,62 @@ class CommercialAdminController extends Controller
                 'currentReservation:id,status',
             ]);
 
+        if ($isOperator) {
+            $this->applyOperatorScope($query);
+        }
+
         if ($search = $request->input('search')) {
             // Recherche « toutes colonnes » (§8) — voir ClientSearchService::search() :
             // téléphone indifféremment formaté, licence propre incluse.
             $this->search->search($query, $search);
         }
 
-        // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
+        if (! $isOperator) {
+            // Aucun filtre de date : les champs « Du / Au » ont été supprimés.
 
-        // Badges de la colonne « Statut » → deux paramètres serveur (§9).
-        $this->applyStatusFilters($query, $request);
+            // Badges de la colonne « Statut » → deux paramètres serveur (§9).
+            $this->applyStatusFilters($query, $request);
 
-        // Le seau `AVAILABLE` ne liste que les prospects réellement joignables :
-        // on exclut ceux dont le `phone` est NULL (ils relèvent du badge
-        // dérivé « Sans téléphone »). La sélection des badges étant unique dans
-        // l'UI, ce raffinement ne porte que sur le cas `AVAILABLE`.
-        $statusInput = $request->input('status');
-        $statusValues = array_map(
-            fn ($value) => trim((string) $value),
-            is_array($statusInput) ? $statusInput : explode(',', (string) $statusInput),
-        );
-        if (in_array(Client::STATUS_AVAILABLE, $statusValues, true)) {
-            $query->whereNotNull('phone');
+            // Le seau `AVAILABLE` ne liste que les prospects réellement joignables :
+            // on exclut ceux dont le `phone` est NULL (ils relèvent du badge
+            // dérivé « Sans téléphone »). La sélection des badges étant unique dans
+            // l'UI, ce raffinement ne porte que sur le cas `AVAILABLE`.
+            $statusInput = $request->input('status');
+            $statusValues = array_map(
+                fn ($value) => trim((string) $value),
+                is_array($statusInput) ? $statusInput : explode(',', (string) $statusInput),
+            );
+            if (in_array(Client::STATUS_AVAILABLE, $statusValues, true)) {
+                $query->whereNotNull('phone');
+            }
+
+            // Filtres de listes (scopes Eloquent) : mêmes paramètres que la liste
+            // commerciale — municipalité, catégorie et région administrative.
+            if ($municipality = $request->input('municipality')) {
+                $this->search->filterByMunicipalities($query, $municipality);
+            }
+
+            if ($category = $request->input('category')) {
+                $this->search->filterByCategories($query, $category);
+            }
+
+            if ($region = $request->input('administrative_region')) {
+                $this->search->filterByAdministrativeRegions($query, $region);
+            }
+
+            // Onglets « Tous / Affaire / … » de la Grande liste : filtre sur
+            // l'origine (`clients.source`), libellé exact — paramètre vide ou
+            // absent = « Tous ». Le contrôle d'accès (`CheckRole:ADMIN,
+            // SUPER_ADMIN`) est porté par la route : ce périmètre n'est jamais
+            // décidé par un appelant `COMERCIAL`.
+            $this->search->filterBySource($query, $request->input('source'));
+
+            // Filtres « Entreprise » / « Employé » : on ne garde que les clients
+            // qu'**au moins une note** rattache à l'employé sélectionné, ou à un
+            // employé de l'entreprise sélectionnée. Le lien passe par
+            // `notes.sender_id` (utilisateur commercial) → `employee.enterprise_id`.
+            $this->applyInteractionFilters($query, $request);
         }
-
-        // Filtres de listes (scopes Eloquent) : mêmes paramètres que la liste
-        // commerciale — municipalité, catégorie et région administrative.
-        if ($municipality = $request->input('municipality')) {
-            $this->search->filterByMunicipalities($query, $municipality);
-        }
-
-        if ($category = $request->input('category')) {
-            $this->search->filterByCategories($query, $category);
-        }
-
-        if ($region = $request->input('administrative_region')) {
-            $this->search->filterByAdministrativeRegions($query, $region);
-        }
-
-        // Onglets « Tous / Affaire / … » de la Grande liste : filtre sur
-        // l'origine (`clients.source`), libellé exact — paramètre vide ou
-        // absent = « Tous ». Le contrôle d'accès (`CheckRole:ADMIN,
-        // SUPER_ADMIN`) est porté par la route : ce périmètre n'est jamais
-        // décidé par un appelant `COMERCIAL`.
-        $this->search->filterBySource($query, $request->input('source'));
-
-        // Filtres « Entreprise » / « Employé » : on ne garde que les clients
-        // qu'**au moins une note** rattache à l'employé sélectionné, ou à un
-        // employé de l'entreprise sélectionnée. Le lien passe par
-        // `notes.sender_id` (utilisateur commercial) → `employee.enterprise_id`.
-        $this->applyInteractionFilters($query, $request);
 
         $sortable = [
             'name' => 'name',
@@ -387,15 +399,59 @@ class CommercialAdminController extends Controller
     }
 
     /**
+     * L'appelant est-il un `OPERATOR` ? Ce rôle ne voit que la Grande liste
+     * restreinte aux « Disponibles sans téléphone » — voir
+     * `applyOperatorScope()`.
+     */
+    private function isOperator(Request $request): bool
+    {
+        return $request->user()?->role === 'OPERATOR';
+    }
+
+    /**
+     * Périmètre forcé de l'`OPERATOR` : clients `AVAILABLE`, non blacklistés,
+     * sans numéro — `Client::scopeWithoutPhone()` (`phone` NULL **ou** vide,
+     * les deux formes existent en base). Le renseignement d'un téléphone fait
+     * sortir la fiche de ce périmètre — comme pour le seau dérivé « Sans
+     * téléphone » des badges.
+     *
+     * @param  Builder<Client>  $query
+     * @return Builder<Client>
+     */
+    private function applyOperatorScope(Builder $query): Builder
+    {
+        return $query
+            ->where('status', Client::STATUS_AVAILABLE)
+            ->where('is_blacklisted', false)
+            ->withoutPhone();
+    }
+
+    /**
+     * Recherche d'une fiche par id, bornée au périmètre OPERATOR pour ce rôle
+     * (404 hors périmètre) — les gestionnaires gardent l'accès entier.
+     *
+     * @return Client
+     */
+    private function findClientForRequest(Request $request, string $id): Client
+    {
+        if ($this->isOperator($request)) {
+            /** @var Client $client */
+            $client = $this->applyOperatorScope(Client::query())->findOrFail($id);
+
+            return $client;
+        }
+
+        return Client::findOrFail($id);
+    }
+
+    /**
      * Admin view of a single client (read-only data + interactions).
      * GET /commercials/clients/{id}
      */
     public function client(Request $request, $id)
     {
-        $client = Client::with(['reservations.comercial', 'notes.sender'])->find($id);
-        if (! $client) {
-            return response()->json(['message' => 'Client introuvable.'], 404);
-        }
+        $client = $this->findClientForRequest($request, $id)
+            ->load(['reservations.comercial', 'notes.sender']);
 
         $activeReservation = $client->reservations->sortByDesc('created_at')->first();
         $assigned = $activeReservation?->comercial;
@@ -484,7 +540,8 @@ class CommercialAdminController extends Controller
             'phone' => 'nullable|string|max:40',
         ]);
 
-        $client = Client::findOrFail($id);
+        // OPERATOR : uniquement les fiches « Disponible sans téléphone ».
+        $client = $this->findClientForRequest($request, (string) $id);
         $phone = Client::cleanPhone($validated['phone'] ?? null);
 
         // Saisie manuelle : la fiche devient « modifiée à la main » — l'import
@@ -527,7 +584,9 @@ class CommercialAdminController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
-        $client = Client::findOrFail($id);
+        // OPERATOR : uniquement les fiches « Disponible sans téléphone » ;
+        // hors périmètre → 404 (la fiche est introuvable pour ce rôle).
+        $client = $this->findClientForRequest($request, $id);
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',

@@ -34,6 +34,10 @@ export default function ClientsHistoryToolbar(props) {
   // badges de statut de l'overview, au-dessus, qui filtrent — en sélection
   // unique. La barre pilote la recherche + les filtres géographiques /
   // catégorie + les filtres d'interaction « Entreprise » / « Employé ».
+  // `showFacets={false}` (page partagée avec l'`OPERATOR`, dont le périmètre
+  // est forcé par l'API) : seule la recherche reste utile, la grille de
+  // filtres est masquée — et n'est donc jamais envoyée.
+  const { showFacets = true } = props
   const { searchInputProps } = useClientsHistoryToolbar(props)
   const { municipalitiesList, categoriesList, regionsList } = useFilterOptions()
   const { enterprises, employees } = useInteractionFilters()
@@ -58,7 +62,8 @@ export default function ClientsHistoryToolbar(props) {
 
       {/* Grille responsive : chaque filtre (icône + libellé explicite dans
           l'option « Toutes / Tous ») garde la même largeur ; le nombre de
-          colonnes s'adapte au breakpoint. */}
+          colonnes s'adapte au breakpoint. Masquée hors gestionnaires. */}
+      {showFacets && (
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <FilterSelect icon={Building2} value={enterprise} onChange={(e) => setEnterprise?.(e.target.value)}>
           <option value="">Entreprise: Toutes</option>
@@ -95,6 +100,7 @@ export default function ClientsHistoryToolbar(props) {
           ))}
         </FilterSelect>
       </div>
+      )}
     </div>
   )
 }

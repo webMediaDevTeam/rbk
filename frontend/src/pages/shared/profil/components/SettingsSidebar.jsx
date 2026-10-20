@@ -4,6 +4,7 @@ export const ROLE_LABELS = {
   SUPER_ADMIN: 'Super Admin',
   ADMIN: 'Admin',
   COMERCIAL: 'Employé',
+  OPERATOR: 'Opérateur',
 }
 
 export { getProfileTabs } from './useSettingsSidebar.js'

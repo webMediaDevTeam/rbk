@@ -20,6 +20,10 @@ export function useCommercialCreateModal(props) {
   const enterprises = enterprisesData?.data?.entreprises ?? enterprisesData?.data?.utilisateurs ?? []
 
   const [form, setForm] = useState({
+    // Rôle créé — « Commercial » (COMERCIAL, par défaut) ou « Opérateur »
+    // (OPERATOR, Grand liste restreinte) : bascule `set('role', …)` dans la
+    // modale. L'opérateur n'a ni entreprise, ni RingCentral, ni privilège.
+    role: 'COMERCIAL',
     email: '', username: '', first_name: '', last_name: '', phone: '',
     mot_de_passe: '', mot_de_passe_confirmation: '',
     enterprise_id: '', additional_info: '',
@@ -54,6 +58,7 @@ export function useCommercialCreateModal(props) {
   useEffect(() => {
     if (open) {
       setForm({
+        role: 'COMERCIAL',
         email: '', username: '', first_name: '', last_name: '', phone: '',
         mot_de_passe: '', mot_de_passe_confirmation: '',
         enterprise_id: '',
@@ -160,7 +165,10 @@ export function useCommercialCreateModal(props) {
       setError('Le prénom et le nom sont requis.')
       return
     }
-    if (!form.enterprise_id) {
+    // L'entreprise est exigée pour le commercial seulement : l'opérateur
+    // n'a pas de fiche employé (aucun `employees`, aucun RingCentral).
+    const isOperator = form.role === 'OPERATOR'
+    if (!isOperator && !form.enterprise_id) {
       setError('Veuillez sélectionner une entreprise.')
       return
     }
@@ -175,7 +183,7 @@ export function useCommercialCreateModal(props) {
     const fromNumber = form.ringcentral_from_number || undefined
 
     const payload = {
-      role: 'COMERCIAL',
+      role: isOperator ? 'OPERATOR' : 'COMERCIAL',
       email: form.email,
       // Nom d'utilisateur (unique) : absent du payload si laissé vide.
       username: form.username.trim() || undefined,
@@ -186,14 +194,18 @@ export function useCommercialCreateModal(props) {
       // Téléphone / informations supplémentaires : plus saisis dans la
       // modale, la valeur reste transmise telle quelle (vide en création).
       phone: form.phone || undefined,
-      enterprise_id: form.enterprise_id,
-      additional_info: form.additional_info || undefined,
-      ringcentral_extension_id: form.ringcentral_extension_id || undefined,
-      ringcentral_device_id: form.ringcentral_device_id || undefined,
-      ringcentral_from_number: form.ringcentral_device_id ? fromNumber : undefined,
-      // Switch « Privilège commercial » (docs/RULES.md §7.1, colonne
-      // `users.has_permission`).
-      has_permission: form.has_permission,
+      // Champs commerciaux uniquement — non envoyés pour un opérateur
+      // (le backend refuserait `enterprise_id` requis).
+      ...(isOperator ? {} : {
+        enterprise_id: form.enterprise_id,
+        additional_info: form.additional_info || undefined,
+        ringcentral_extension_id: form.ringcentral_extension_id || undefined,
+        ringcentral_device_id: form.ringcentral_device_id || undefined,
+        ringcentral_from_number: form.ringcentral_device_id ? fromNumber : undefined,
+        // Switch « Privilège commercial » (docs/RULES.md §7.1, colonne
+        // `users.has_permission`).
+        has_permission: form.has_permission,
+      }),
     }
     mutation.mutate(payload)
   }

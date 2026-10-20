@@ -87,6 +87,29 @@ const ROLE_NAV = {
       ],
     },
   ],
+  // Opérateur : accès unique à la Grande liste, dont le périmètre
+  // (« Disponibles sans téléphone ») est forcé par l'API — pas d'entreprises,
+  // pas d'employés, pas de liste noire.
+  OPERATOR: [
+    {
+      title: 'Principal',
+      items: [
+        { title: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      ],
+    },
+    {
+      title: 'Gestion',
+      items: [
+        { title: 'Grande liste', path: '/clients-historique', icon: UserSearch },
+      ],
+    },
+    {
+      title: 'Mon compte',
+      items: [
+        { title: 'Profil', path: '/profil', icon: UserRound },
+      ],
+    },
+  ],
 }
 
 function ProtectedLayout() {

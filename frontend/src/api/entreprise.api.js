@@ -1,8 +1,10 @@
 import { api } from './client.js'
 
 // Commercial management (ADMIN, SUPER_ADMIN)
+// Page « Employés » : commerciaux **et** opérateurs — `UserController::index`
+// accepte la liste `role=COMERCIAL,OPERATOR` (séparée par virgules).
 export function listCommerciauxApi(params = {}) {
-  return api.get('/users', { params: { ...params, role: 'COMERCIAL' } })
+  return api.get('/users', { params: { ...params, role: 'COMERCIAL,OPERATOR' } })
 }
 
 export function createCommercialApi(payload) {

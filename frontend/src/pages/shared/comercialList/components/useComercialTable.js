@@ -14,6 +14,11 @@ export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onTo
     const toggleLabel = c.status === 'ACTIVE' ? 'Désactiver' : 'Activer'
     // Privilège de libération (`users.has_permission`) : 1 = « Oui », sinon « - ».
     const hasPermission = Number(c.has_permission) === 1
+    // Opérateur : pas de fiche employé — ni RingCentral, ni entreprise, ni
+    // privilège (les cellules affichent leurs dashes par absence de données),
+    // et pas de page de détail employé (`GET commercials/{id}` ne liste que
+    // les COMERCIAL).
+    const isOperator = c.role === 'OPERATOR'
 
     const handleAvatarClick = () => onAvatarClick?.(c)
     const handleEdit = (closeMenu) => {
@@ -39,6 +44,7 @@ export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onTo
       rcNumber,
       rcDuplicate,
       hasPermission,
+      isOperator,
       toggleLabel,
       handleAvatarClick,
       handleEdit,

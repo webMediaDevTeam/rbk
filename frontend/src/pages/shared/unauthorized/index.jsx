@@ -14,6 +14,7 @@ const ROLE_LABELS = {
   SUPER_ADMIN: 'Super admin',
   ADMIN: 'Admin',
   COMERCIAL: 'Employé',
+  OPERATOR: 'Opérateur',
   GUEST: 'Invité',
 }
 

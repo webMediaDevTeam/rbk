@@ -60,11 +60,13 @@ class UserController extends Controller
     | Role Hierarchy & Scope Helpers
     |--------------------------------------------------------------------------
     |
-    | SUPER_ADMIN → manages ADMIN, COMERCIAL
-    | ADMIN        → manages COMERCIAL (and other ADMINs for viewing)
+    | SUPER_ADMIN → manages ADMIN, COMERCIAL, OPERATOR
+    | ADMIN        → manages COMERCIAL, OPERATOR (and other ADMINs for viewing)
     | COMERCIAL    → no user management (sees only self)
+    | OPERATOR     → no user management (sees only self)
     |
-    | Lower index = higher privilege: SUPER_ADMIN(0) > ADMIN(1) > COMERCIAL(2).
+    | Lower index = higher privilege: SUPER_ADMIN(0) > ADMIN(1) > COMERCIAL(2)
+    | > OPERATOR(3).
     |
     */
 
@@ -72,6 +74,7 @@ class UserController extends Controller
         'SUPER_ADMIN' => 0,
         'ADMIN' => 1,
         'COMERCIAL' => 2,
+        'OPERATOR' => 3,
     ];
 
     private const VALID_STATUSES = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
@@ -94,7 +97,9 @@ class UserController extends Controller
 
         return match ($user->role) {
             'SUPER_ADMIN' => $query,
-            'ADMIN' => $query->whereIn('role', ['ADMIN', 'COMERCIAL']),
+            // Les gestionnaires voient leur périmètre : ADMINs, commerciaux
+            // et opérateurs (la page « Employés » liste `COMERCIAL,OPERATOR`).
+            'ADMIN' => $query->whereIn('role', ['ADMIN', 'COMERCIAL', 'OPERATOR']),
             default => $query->where('id', $user->id),
         };
     }
@@ -214,8 +219,19 @@ class UserController extends Controller
             });
         }
 
+        // Filtre de rôle : valeur unique (`?role=OPERATOR`) ou liste séparée
+        // par virgules (`?role=COMERCIAL,OPERATOR` — page Employés).
+        $roleValues = [];
         if ($role = $request->input('role')) {
-            $query->where('role', $role);
+            $roleValues = array_values(array_filter(array_map(
+                fn ($value) => trim((string) $value),
+                explode(',', (string) $role),
+            )));
+            if (count($roleValues) > 1) {
+                $query->whereIn('role', $roleValues);
+            } elseif ($roleValues !== []) {
+                $query->where('role', $roleValues[0]);
+            }
         }
 
         if ($status = $request->input('status')) {
@@ -233,8 +249,7 @@ class UserController extends Controller
         $sortOrder = strtolower($request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
 
         if ($sortBy === 'name') {
-            $role = $request->input('role');
-            if ($role === 'COMERCIAL') {
+            if (in_array('COMERCIAL', $roleValues, true)) {
                 $query->orderBy(
                     Employee::selectRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))")->whereColumn('employees.user_id', 'users.id'),
                     $sortOrder
@@ -333,8 +348,10 @@ class UserController extends Controller
 
         $base = $request->validate([
             'email' => 'required|email|unique:users,email',
-            'mot_de_passe' => 'required_if:role,COMERCIAL|nullable|string|min:8|confirmed',
-            'role' => 'required|in:ADMIN,COMERCIAL',
+            // Commerciaux et opérateurs reçoivent un mot de passe posé par
+            // l'admin (pas de flux de vérification par courriel).
+            'mot_de_passe' => 'required_if:role,COMERCIAL,OPERATOR|nullable|string|min:8|confirmed',
+            'role' => 'required|in:ADMIN,COMERCIAL,OPERATOR',
             // Nom d'utilisateur (identifiant court) — unique en base, la
             // modale vérifie la dispo en amont via `usernameAvailable`.
             'username' => self::USERNAME_RULES.'|unique:users,username',
@@ -360,6 +377,14 @@ class UserController extends Controller
                 'ringcentral_device_id' => 'nullable|string|max:64',
                 'ringcentral_extension_id' => 'nullable|string|max:64',
                 'ringcentral_from_number' => 'nullable|string|max:32',
+            ]),
+            // Opérateur : simple identité + mot de passe — pas d'entreprise,
+            // pas d'appareil RingCentral, pas de privilège de libération
+            // (aucun enregistrement `employees` n'est créé).
+            'OPERATOR' => $request->validate([
+                'first_name' => 'required|string|max:255',
+                'last_name' => 'required|string|max:255',
+                'phone' => 'nullable|string|max:255',
             ]),
             'ADMIN' => $request->validate([
                 'first_name' => 'nullable|string|max:255',
@@ -473,7 +498,7 @@ class UserController extends Controller
         $data = $request->validate([
             'email' => 'sometimes|email|unique:users,email,'.$id,
             'mot_de_passe' => 'nullable|string|min:8|confirmed',
-            'role' => 'sometimes|in:ADMIN,COMERCIAL',
+            'role' => 'sometimes|in:ADMIN,COMERCIAL,OPERATOR',
             'status' => 'sometimes|in:'.implode(',', self::VALID_STATUSES),
             // Nom d'utilisateur (identifiant court) : unique, hors
             // l'utilisateur en cours d'édition.

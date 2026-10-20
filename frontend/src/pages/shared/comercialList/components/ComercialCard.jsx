@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { AlertTriangle, Eye, Pencil, Power, Trash2 } from 'lucide-react'
+import Badge from '@/components/ui/badge'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
@@ -12,6 +13,7 @@ export default function ComercialCard(props) {
     enterpriseName,
     rcNumber,
     rcDuplicate,
+    isOperator,
     toggleLabel,
     canDelete,
     handleAvatarClick,
@@ -54,7 +56,13 @@ export default function ComercialCard(props) {
       <div className="flex items-center gap-3 mb-4">
         <UserAvatar user={comercial} size="md" onEdit={handleAvatarClick} />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold truncate">{name}</p>
+          <p className="text-sm font-semibold truncate flex items-center gap-1.5">
+            {name}
+            {/* Rôle — « Opérateur » badgeé pour le distinguer d'un commercial. */}
+            {isOperator && (
+              <Badge variant="info" className="uppercase">Opérateur</Badge>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground truncate">{comercial.email}</p>
         </div>
       </div>
@@ -88,12 +96,16 @@ export default function ComercialCard(props) {
 
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
         <StatusBadge status={comercial.status} />
-        <Link
-          to={`/comercialDetail/${comercial.id}`}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Eye className="h-4 w-4" /> Voir
-        </Link>
+        {/* « Voir » = fiche employé (réservée aux commerciaux) : masquée
+            pour les opérateurs. */}
+        {!isOperator && (
+          <Link
+            to={`/comercialDetail/${comercial.id}`}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Eye className="h-4 w-4" /> Voir
+          </Link>
+        )}
       </div>
     </div>
   )

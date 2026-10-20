@@ -9,6 +9,7 @@ import { useCommercialUpdateModal } from './useCommercialUpdateModal.js'
 export default function CommercialUpdateModal({ open, onClose, user, queryKey }) {
   const {
     form, error, isPending, enterprises, set, handleSubmit,
+    isOperator,
     usernameCheck, onEmailChange, onUsernameChange,
     devices, selectedDeviceValue, devicesLoading, devicesUnavailable, onDeviceChange, onEnterpriseChange,
   } = useCommercialUpdateModal({ open, onClose, user, queryKey })
@@ -19,7 +20,7 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
     <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-foreground">Modifier l'employé</h2>
+          <h2 className="text-lg font-semibold text-foreground">{isOperator ? "Modifier l'opérateur" : "Modifier l'employé"}</h2>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-muted" aria-label="Fermer">
             <X className="h-4 w-4" />
           </button>
@@ -47,6 +48,10 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
             </div>
           </div>
 
+          {/* Champs métier réservés au commercial : l'opérateur n'a ni
+              entreprise, ni RingCentral, ni privilège de libération. */}
+          {!isOperator && (
+            <>
           <div>
             <label className="block text-sm font-bold mb-1">Entreprise *</label>
             <Select required value={form.enterprise_id} onChange={(e) => onEnterpriseChange(e.target.value)}>
@@ -103,6 +108,8 @@ export default function CommercialUpdateModal({ open, onClose, user, queryKey })
               aria-label="Privilège commercial"
             />
           </div>
+            </>
+          )}
 
           {/* Mot de passe + confirmation : les deux derniers champs du
               formulaire, affichés en clair. Laisser le mot de passe vide →
