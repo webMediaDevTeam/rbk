@@ -10,6 +10,7 @@ use App\Models\ReservationGroup;
 use App\Models\User;
 use App\Services\CallWorkflowService;
 use App\Services\Client\ClientSearchService;
+use App\Services\ClientUpdateNote;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -77,7 +78,7 @@ class CommercialAdminController extends Controller
         };
 
         $historyQuery = $historyBase()->with([
-            'notes' => fn ($q) => $q->where('sender_id', $id)->with('sender:id,first_name,last_name')->orderByDesc('created_at'),
+            'notes' => fn ($q) => $q->where('sender_id', $id)->with('sender:id,first_name,last_name,email')->orderByDesc('created_at'),
             'currentReservation:id,status',
         ]);
 
@@ -195,7 +196,7 @@ class CommercialAdminController extends Controller
 
         $query = Client::query()
             ->with([
-                'notes' => fn ($q) => $q->with('sender:id,first_name,last_name')->orderByDesc('created_at'),
+                'notes' => fn ($q) => $q->with('sender:id,first_name,last_name,email')->orderByDesc('created_at'),
                 // Pointeur de réservation courante : la colonne « Statut » en
                 // déduit la valeur affichée (Oui / Non / BV / À rappeler / -).
                 'currentReservation:id,status',
@@ -517,6 +518,10 @@ class CommercialAdminController extends Controller
                             'id' => $n->sender->id,
                             'first_name' => $n->sender->first_name,
                             'last_name' => $n->sender->last_name,
+                            // Repli d'affichage de la frise (`senderName`) :
+                            // un utilisateur sans prénom / nom (créés par
+                            // l'UI d'admin) doit rester identifiable.
+                            'email' => $n->sender->email,
                         ] : null,
                     ]),
                 ],
@@ -547,10 +552,14 @@ class CommercialAdminController extends Controller
         // Saisie manuelle : la fiche devient « modifiée à la main » — l'import
         // scraper / n8n ne la réécrit plus jamais (is_manually_updated = true,
         // lu par ClientImportService::upsertFromScraperPayload).
+        $before = $client->getOriginal();
         $client->update([
             'phone' => $phone,
             'is_manually_updated' => true,
         ]);
+
+        // Note « Mise à jour » : diff champ par champ, émetteur = l'éditeur.
+        ClientUpdateNote::log($client, $request->user(), $before);
 
         return response()->json([
             'success' => true,
@@ -612,7 +621,11 @@ class CommercialAdminController extends Controller
         // Fiche modifiée à la main → l'import ne la réécrit plus.
         $validated['is_manually_updated'] = true;
 
+        $before = $client->getOriginal();
         $client->update($validated);
+
+        // Note « Mise à jour » : diff champ par champ, émetteur = l'éditeur.
+        ClientUpdateNote::log($client, $request->user(), $before);
 
         return response()->json([
             'success' => true,

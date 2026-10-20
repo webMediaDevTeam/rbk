@@ -25,6 +25,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *   BLACKLISTED            mise en liste noire
  *   RETURNED_TO_AVAILABLE  déblocage admin ou réactivation automatique (cron)
  *   NOTE                   commentaire libre de l'employé (8 mots max)
+ *   MISE_A_JOUR            diff automatique d'édition de fiche (toute la
+ *                          description est générée, champ par champ — voir
+ *                          `ClientUpdateNote`)
  *
  * `sender_id` peut valoir `SYSTEM` : les événements produits par les crons
  * n'ont pas d'utilisateur. Contrairement à l'ancienne clé étrangère
@@ -66,6 +69,9 @@ class Note extends Model
 
     public const TYPE_NOTE = 'NOTE';
 
+    /** Diff d'édition de fiche généré à chaque mise à jour humaine. */
+    public const TYPE_MISE_A_JOUR = 'MISE_A_JOUR';
+
     /** Énumération du modèle. */
     public const TYPES = [
         self::TYPE_RESERVED,
@@ -78,6 +84,7 @@ class Note extends Model
         self::TYPE_BLACKLISTED,
         self::TYPE_RETURNED_TO_AVAILABLE,
         self::TYPE_NOTE,
+        self::TYPE_MISE_A_JOUR,
     ];
 
     /**
@@ -163,10 +170,13 @@ class Note extends Model
     /**
      * La limite de 8 mots porte sur la **saisie humaine** : les descriptions
      * générées (`sender_id = SYSTEM`, ex. « Réservé par … le … »)
-     * ne sont pas de la saisie et ne sont donc pas comptées.
+     * ne sont pas de la saisie et ne sont donc pas comptées. La note
+     * `MISE_A_JOUR` l'est aussi : sa description est le diff champ par champ
+     * produit par `ClientUpdateNote`, même si l'émetteur est l'éditeur.
      */
     protected function noteWordsAreLimited(): bool
     {
-        return $this->sender_id !== self::SENDER_SYSTEM;
+        return $this->sender_id !== self::SENDER_SYSTEM
+            && $this->type !== self::TYPE_MISE_A_JOUR;
     }
 }

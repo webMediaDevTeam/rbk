@@ -1,4 +1,4 @@
-import { Bookmark, FileText, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, RotateCcw, ShieldAlert, Voicemail } from 'lucide-react'
+import { Bookmark, FileText, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, RefreshCw, RotateCcw, ShieldAlert, Voicemail } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDeleteNote } from '../useNotes.js'
 
@@ -68,6 +68,15 @@ const NOTE_TYPE_CONFIG = {
     variant: 'secondary',
     nodeClass: 'bg-gray-400 dark:bg-gray-500',
   },
+  // Diff d'édition de fiche généré par le serveur (`ClientUpdateNote`) à
+  // chaque mise à jour via la Grande liste ou la fiche commercial : la
+  // description égrène les champs modifiés, ancien → nouveau valeur.
+  MISE_A_JOUR: {
+    icon: RefreshCw,
+    label: 'Mise à jour',
+    variant: 'secondary',
+    nodeClass: 'bg-violet-500',
+  },
   // Note « appel passé » : `type = NOTE` MAIS porte un `call_log_id` (posée
   // par le workflow RingCentral). Elle se distingue d'un simple commentaire
   // par une icône d'appel, la couleur **verte** et le libellé « Appelé ».
@@ -120,6 +129,32 @@ export function useNoteTimeline({ notes = [] }) {
     return item.type === 'NOTE' ? null : 'Système'
   }
 
+  /**
+   * Description d'une note « Mise à jour » (`ClientUpdateNote`) découpée en
+   * changements structurés pour un rendu en liste : la chaîne est produite
+   * par le serveur sur le modèle `champ : « ancien » → « nouveau »`, segments
+   * séparés par « · ». Les segments mal formés (description tronquée par
+   * `Str::limit`) ou sans changement réel (ancien = nouveau, anciennes notes
+   * d'avant correctif) sont ignorés ; un retour vide = repli texte brut.
+   */
+  const parseUpdateChanges = (description) => {
+    if (!description) return []
+
+    const body = description
+      .replace(/^Fiche mise à jour\s*—\s*/, '')
+      .replace(/\s*\.$/, '')
+      .trim()
+
+    return body
+      .split(' · ')
+      .map((part) => {
+        const match = part.match(/^(.+?)\s*:\s*«\s*(.*?)\s*»\s*→\s*«\s*(.*?)\s*»$/)
+        if (!match || match[2] === match[3]) return null
+        return { label: match[1], from: match[2], to: match[3] }
+      })
+      .filter(Boolean)
+  }
+
   const handleDeleteNote = (itemId) => {
     if (confirm('Supprimer cette note ?')) {
       deleteMut.mutate(itemId, {
@@ -135,6 +170,7 @@ export function useNoteTimeline({ notes = [] }) {
     formatRelativeDate,
     getItemConfig,
     senderName,
+    parseUpdateChanges,
     handleDeleteNote,
   }
 }

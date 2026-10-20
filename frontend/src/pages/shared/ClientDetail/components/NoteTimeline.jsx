@@ -1,4 +1,4 @@
-import { Headphones, Trash2 } from 'lucide-react'
+import { ArrowRight, Headphones, Trash2 } from 'lucide-react'
 import Badge from '@/components/ui/badge.jsx'
 import ClientCallDetailsModal from './ClientCallDetailsModal.jsx'
 import { useNoteTimeline } from './useNoteTimeline.js'
@@ -23,6 +23,7 @@ export default function NoteTimeline({ notes = [], readOnly = false }) {
     formatRelativeDate,
     getItemConfig,
     senderName,
+    parseUpdateChanges,
     handleDeleteNote,
   } = useNoteTimeline({ notes })
 
@@ -47,6 +48,13 @@ export default function NoteTimeline({ notes = [], readOnly = false }) {
           const { icon: Icon, ...config } = getItemConfig(item)
           const sender = senderName(item)
           const deletable = item.type === 'NOTE' && !item.call_log_id && !readOnly
+          // Note « Mise à jour » : le diff serveur devient une liste
+          // champ par champ (ancien barré → nouveau). Repli texte brut si
+          // la description ne se parse pas.
+          const updateChanges =
+            item.type === 'MISE_A_JOUR' && !item.call_log_id
+              ? parseUpdateChanges(item.description)
+              : null
 
           return (
             <div key={item.id} className="relative flex gap-4 py-4">
@@ -59,7 +67,23 @@ export default function NoteTimeline({ notes = [], readOnly = false }) {
                   <Badge variant={config.variant}>{config.label}</Badge>
                 </div>
 
-                {item.description && (
+                {updateChanges && updateChanges.length > 0 ? (
+                  <div className="mt-1 overflow-hidden rounded-lg border border-violet-200/80 bg-violet-50/60 dark:border-violet-900/60 dark:bg-violet-950/30">
+                    <p className="border-b border-violet-200/80 px-3 py-1.5 text-xs font-medium text-violet-700 dark:border-violet-900/60 dark:text-violet-300">
+                      Modifications de la fiche
+                    </p>
+                    <ul className="divide-y divide-violet-200/60 dark:divide-violet-900/40">
+                      {updateChanges.map(({ label, from, to }) => (
+                        <li key={`${label}-${from}-${to}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2 text-sm">
+                          <span className="min-w-17 shrink-0 font-medium text-foreground">{label}</span>
+                          <span className="text-muted-foreground line-through decoration-red-400/70">{from}</span>
+                          <ArrowRight className="h-3.5 w-3.5 shrink-0 self-center text-muted-foreground" />
+                          <span className="font-medium text-emerald-700 dark:text-emerald-400">{to}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : item.description && (
                   <p className="text-sm text-foreground whitespace-pre-wrap">{item.description}</p>
                 )}
 
@@ -70,7 +94,9 @@ export default function NoteTimeline({ notes = [], readOnly = false }) {
                   {sender && (
                     <>
                       <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-muted-foreground">{sender}</span>
+                      {/* Émetteur de la note, préfixé « Par : » (espace
+ insécable typographique française). */}
+                      <span className="text-xs text-muted-foreground">Par&nbsp;: {sender}</span>
                     </>
                   )}
                   {isAdmin && item.call_log_id && (

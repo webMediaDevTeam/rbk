@@ -9,6 +9,7 @@ use App\Models\Reservation;
 use App\Models\User;
 use App\Services\CallWorkflowService;
 use App\Services\Client\ClientSearchService;
+use App\Services\ClientUpdateNote;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -190,9 +191,14 @@ class ClientController extends Controller
             $validated['categories'] = $validated['authorized_categories'];
         }
 
+        $before = $client->getOriginal();
         $client->fill($validated);
         $client->is_manually_updated = true;
         $client->save();
+
+        // Note « Mise à jour » : diff champ par champ, émetteur = l'éditeur.
+        ClientUpdateNote::log($client, $user, $before);
+
         $client->load(['reservations.comercial', 'reservations.rappel', 'notes.sender']);
 
         return response()->json([
@@ -368,6 +374,9 @@ class ClientController extends Controller
                         'id' => $n->sender->id,
                         'first_name' => $n->sender->first_name,
                         'last_name' => $n->sender->last_name,
+                        // Repli d'affichage de la frise (`senderName`) pour
+                        // les utilisateurs sans prénom / nom.
+                        'email' => $n->sender->email,
                     ] : null,
                 ]) : [],
                 'my_reservation' => $myReservation ? [

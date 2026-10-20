@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Enterprise;
+use App\Models\Note;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -98,7 +99,8 @@ class OperatorRoleTest extends TestCase
     public function test_operator_can_update_client_within_scope(): void
     {
         $client = $this->makeClient();
-        Sanctum::actingAs($this->makeOperator());
+        $operator = $this->makeOperator();
+        Sanctum::actingAs($operator);
 
         $this->putJson("/api/v1/commercials/clients/{$client->id}", [
             'name' => 'Nom complété',
@@ -108,6 +110,13 @@ class OperatorRoleTest extends TestCase
         $client->refresh();
         $this->assertSame('Nom complété', $client->name);
         $this->assertTrue($client->is_manually_updated);
+
+        // L'éditeur est journalisé : note « Mise à jour » avec l'opérateur
+        // comme émetteur et le diff champ par champ en français.
+        $note = Note::where('client_id', $client->id)->where('type', Note::TYPE_MISE_A_JOUR)->sole();
+        $this->assertSame($operator->id, $note->sender_id);
+        $this->assertStringContainsString('Nom : « Prospect » → « Nom complété »', $note->description);
+        $this->assertStringContainsString('Téléphone : « (vide) » → « 514-353-5820 »', $note->description);
     }
 
     public function test_operator_cannot_read_or_update_client_outside_scope(): void

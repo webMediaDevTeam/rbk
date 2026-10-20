@@ -747,7 +747,7 @@ class EnterpriseController extends Controller
 
         $historyQuery = $historyBase()->with([
             'notes' => fn ($q) => $q->whereIn('sender_id', $userIds)
-                ->with('sender:id,first_name,last_name')
+                ->with('sender:id,first_name,last_name,email')
                 ->orderByDesc('created_at'),
             'currentReservation:id,status',
         ]);

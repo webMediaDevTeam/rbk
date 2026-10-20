@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Client;
+use App\Models\Note;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -135,5 +136,54 @@ class GrandeListeClientUpdateTest extends TestCase
         $this->assertSame('9 avenue des Champs', $row['full_address']);
         $this->assertSame('Marie', $row['representative_name']);
         $this->assertSame('Luc', $row['intervenant_name']);
+    }
+
+    public function test_update_logs_a_mise_a_jour_note_detailing_the_french_diff(): void
+    {
+        $client = $this->makeClient();
+        $admin = $this->makeAdmin();
+        Sanctum::actingAs($admin);
+
+        $this->putJson("/api/v1/commercials/clients/{$client->id}", [
+            'name' => 'Nouveau nom',
+            'phone' => '',
+            'municipality' => 'Laval',
+        ])->assertOk();
+
+        // Une seule note « Mise à jour », émetteur = l'éditeur, description
+        // champ par champ : ancien → nouveau valeur, `(vide)` pour le vide.
+        $note = Note::where('client_id', $client->id)->where('type', Note::TYPE_MISE_A_JOUR)->sole();
+        $this->assertSame($admin->id, $note->sender_id);
+        $this->assertStringContainsString('Nom : « Ancien nom » → « Nouveau nom »', $note->description);
+        $this->assertStringContainsString('Téléphone : « 514-555-0100 » → « (vide) »', $note->description);
+        $this->assertStringContainsString('Municipalité : « (vide) » → « Laval »', $note->description);
+        // Champs non envoyés → pas dans le diff.
+        $this->assertStringNotContainsString('Source', $note->description);
+    }
+
+    public function test_no_mise_a_jour_note_when_the_request_changes_nothing(): void
+    {
+        $client = $this->makeClient(['is_manually_updated' => true]);
+        Sanctum::actingAs($this->makeAdmin());
+
+        $this->putJson("/api/v1/commercials/clients/{$client->id}", ['name' => 'Ancien nom'])
+            ->assertOk();
+
+        $this->assertSame(0, Note::where('client_id', $client->id)
+            ->where('type', Note::TYPE_MISE_A_JOUR)->count());
+    }
+
+    public function test_phone_saisie_logs_its_own_mise_a_jour_note(): void
+    {
+        $client = $this->makeClient(['phone' => null]);
+        $admin = $this->makeAdmin();
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/v1/commercials/clients/{$client->id}/phone", ['phone' => '5143535820'])
+            ->assertOk();
+
+        $note = Note::where('client_id', $client->id)->where('type', Note::TYPE_MISE_A_JOUR)->sole();
+        $this->assertSame($admin->id, $note->sender_id);
+        $this->assertStringContainsString('Téléphone : « (vide) » → « 514-353-5820 »', $note->description);
     }
 }
