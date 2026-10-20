@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
+import MDEditor from '@uiw/react-md-editor'
+import '@uiw/react-md-editor/markdown-editor.css'
 import Button from '@/components/ui/button.jsx'
 import Select from '@/components/ui/select'
 import { cn } from '@/lib/utils.js'
@@ -35,6 +37,9 @@ const EMPTY = {
   administrative_region: '',
   licence_number: '',
   licence_end_date: '',
+  // Note libre multi-lignes (`clients.note_personnalise`) : chaque retour à
+  // la ligne forme un élément de liste à l'affichage.
+  note_personnalise: '',
 }
 
 // `YYYY-MM-DD` attendu par `<input type="date">` (la base renvoie parfois un
@@ -92,6 +97,7 @@ export default function ClientEditModal({ open, client, onClose }) {
         administrative_region: client.administrative_region ?? '',
         licence_number: client.licence_number ?? '',
         licence_end_date: toDateInput(client.licence_end_date),
+        note_personnalise: client.note_personnalise ?? '',
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,7 +141,7 @@ export default function ClientEditModal({ open, client, onClose }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl bg-card p-6 shadow-xl"
+        className="relative flex max-h-[92vh] w-full max-w-6xl flex-col rounded-2xl bg-card p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
@@ -145,40 +151,67 @@ export default function ClientEditModal({ open, client, onClose }) {
           </button>
         </div>
 
-        <form id="client-edit-form" onSubmit={(e) => { e.preventDefault(); setError(null); mutation.mutate() }} className="flex-1 space-y-5 overflow-y-auto pr-1">
-          {/* Identité */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Nom" htmlFor="client-name" value={form.name} onChange={set('name')} placeholder="Nom du prospect" autoFocus />
-            <Field label="Entreprise" htmlFor="client-enterprise" value={form.enterprise_name} onChange={set('enterprise_name')} placeholder="Raison sociale" />
-            <div>
-              <label htmlFor="client-source" className="block text-sm font-bold mb-1">Source</label>
-              <Select id="client-source" value={form.source} onChange={set('source')} className="cursor-pointer">
-                <option value="">— Aucune —</option>
-                {sourceOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
-              </Select>
+        <form id="client-edit-form" onSubmit={(e) => { e.preventDefault(); setError(null); mutation.mutate() }} className="flex-1 overflow-y-auto pr-1">
+          {/* Modèle « ancienne version » pour les champs (sections en 2
+              colonnes), mais la modale est une **grille de 3 colonnes** :
+              les champs occupent les 2 premières, la note personnalisée
+              occupe la 3e sur **toute la hauteur** — vrai éditeur de texte
+              (`@uiw/react-md-editor`), valeur en texte brut : les retours à
+              la ligne restent le séparateur des éléments de liste. */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="space-y-5 lg:col-span-2">
+              {/* Identité */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Nom" htmlFor="client-name" value={form.name} onChange={set('name')} placeholder="Nom du prospect" autoFocus />
+                <Field label="Entreprise" htmlFor="client-enterprise" value={form.enterprise_name} onChange={set('enterprise_name')} placeholder="Raison sociale" />
+                <div>
+                  <label htmlFor="client-source" className="block text-sm font-bold mb-1">Source</label>
+                  <Select id="client-source" value={form.source} onChange={set('source')} className="cursor-pointer">
+                    <option value="">— Aucune —</option>
+                    {sourceOptions.map((s) => (<option key={s} value={s}>{s}</option>))}
+                  </Select>
+                </div>
+                <Field label="Représentant" htmlFor="client-representative" value={form.representative_name} onChange={set('representative_name')} placeholder="Personne de contact" />
+                <Field label="Intervenant" htmlFor="client-intervenant" value={form.intervenant_name} onChange={set('intervenant_name')} placeholder="Intervenant" />
+                <Field label="NEQ" htmlFor="client-neq" value={form.neq} onChange={set('neq')} placeholder="Numéro d'entreprise (QB)" />
+              </div>
+
+              {/* Contact */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Téléphone" htmlFor="client-phone" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} placeholder="514 555-0100" />
+                <Field label="Courriel" htmlFor="client-email" type="email" value={form.email} onChange={set('email')} placeholder="info@exemple.com" />
+                <Field label="Adresse" htmlFor="client-address" className="sm:col-span-2" value={form.full_address} onChange={set('full_address')} placeholder="Adresse complète" />
+                <Field label="Municipalité" htmlFor="client-municipality" value={form.municipality} onChange={set('municipality')} placeholder="Québec" />
+                <Field label="Région administrative" htmlFor="client-region" value={form.administrative_region} onChange={set('administrative_region')} placeholder="—" />
+              </div>
+
+              {/* Licence */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="Numéro de licence" htmlFor="client-licence" value={form.licence_number} onChange={set('licence_number')} placeholder="—" />
+                <Field label="Fin de licence" htmlFor="client-licence-end" type="date" value={form.licence_end_date} onChange={set('licence_end_date')} />
+              </div>
             </div>
-            <Field label="Représentant" htmlFor="client-representative" value={form.representative_name} onChange={set('representative_name')} placeholder="Personne de contact" />
-            <Field label="Intervenant" htmlFor="client-intervenant" value={form.intervenant_name} onChange={set('intervenant_name')} placeholder="Intervenant" />
-            <Field label="NEQ" htmlFor="client-neq" value={form.neq} onChange={set('neq')} placeholder="Numéro d'entreprise (QB)" />
-          </div>
 
-          {/* Contact */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Téléphone" htmlFor="client-phone" type="tel" inputMode="tel" value={form.phone} onChange={set('phone')} placeholder="514 555-0100" />
-            <Field label="Courriel" htmlFor="client-email" type="email" value={form.email} onChange={set('email')} placeholder="info@exemple.com" />
-            <Field label="Adresse" htmlFor="client-address" className="sm:col-span-2" value={form.full_address} onChange={set('full_address')} placeholder="Adresse complète" />
-            <Field label="Municipalité" htmlFor="client-municipality" value={form.municipality} onChange={set('municipality')} placeholder="Québec" />
-            <Field label="Région administrative" htmlFor="client-region" value={form.administrative_region} onChange={set('administrative_region')} placeholder="—" />
-          </div>
-
-          {/* Licence */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Numéro de licence" htmlFor="client-licence" value={form.licence_number} onChange={set('licence_number')} placeholder="—" />
-            <Field label="Fin de licence" htmlFor="client-licence-end" type="date" value={form.licence_end_date} onChange={set('licence_end_date')} />
+            {/* Note personnalisée — 3e colonne, pleine hauteur. */}
+            <div className="client-note-editor flex flex-col" data-color-mode="light">
+              <label htmlFor="client-note-personnalise" className="block text-sm font-bold mb-1">
+                Note personnalisée
+              </label>
+              <MDEditor
+                textareaProps={{ id: 'client-note-personnalise', placeholder: 'Une information par ligne…' }}
+                value={form.note_personnalise}
+                onChange={(value) => setForm((prev) => ({ ...prev, note_personnalise: value ?? '' }))}
+                preview="edit"
+                height={640}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Chaque retour à la ligne forme un élément de la liste.
+              </p>
+            </div>
           </div>
 
           {error && (
-            <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="mt-4 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>

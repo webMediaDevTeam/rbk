@@ -2371,3 +2371,33 @@ footer a {
     height: 384px;
   }
 }
+
+/* Éditeur « Note personnalisée » (modale « Modifier le client »,
+ * @uiw/react-md-editor) : fond **jaune très pâle** sur la zone de saisie et
+ * la barre d'outils, pour signaler l'éditeur de texte libre. */
+.client-note-editor .w-md-editor {
+  background-color: #fffbeb;
+  border-color: #fde68a;
+}
+
+.client-note-editor .w-md-editor-toolbar {
+  background-color: #fef3c7;
+  border-bottom-color: #fde68a;
+}
+
+.client-note-editor .w-md-editor-text,
+.client-note-editor .w-md-editor-text-input {
+  background-color: #fffbeb;
+  color: #3f3f46;
+}
+
+.dark .client-note-editor .w-md-editor,
+.dark .client-note-editor .w-md-editor-text,
+.dark .client-note-editor .w-md-editor-text-input {
+  background-color: rgb(245 158 11 / 0.08);
+  color: inherit;
+}
+
+.dark .client-note-editor .w-md-editor-toolbar {
+  background-color: rgb(245 158 11 / 0.14);
+}

@@ -316,6 +316,9 @@ class CommercialAdminController extends Controller
                 'authorized_categories' => $c->authorized_categories,
                 'enterprise_name' => $c->enterprise_name ?? '—',
                 'source' => $c->source,
+                // Note personnalisée : exposée pour le préremplissage de la
+                // modale « Modifier le client » (comme les autres champs).
+                'note_personnalise' => $c->note_personnalise,
                 'licence_end_date' => $c->licence_end_date,
                 'created_at' => $c->created_at,
                 'updated_at' => $c->updated_at,
@@ -481,6 +484,8 @@ class CommercialAdminController extends Controller
                     'enterprise_name' => $client->enterprise_name ?? '—',
                     // Origine du prospect (répertoire `sources`).
                     'source' => $client->source,
+                    // Note libre multi-lignes (modale « Modifier le client »).
+                    'note_personnalise' => $client->note_personnalise,
                     'created_at' => $client->created_at,
                     'updated_at' => $client->updated_at,
                     'neq' => $client->neq,
@@ -611,6 +616,10 @@ class CommercialAdminController extends Controller
             'representative_name' => 'nullable|string|max:255',
             'intervenant_name' => 'nullable|string|max:255',
             'source' => 'nullable|string|max:255',
+            // Note libre multi-lignes de la modale « Modifier le client » :
+            // les retours à la ligne sont **conservés** (pas de cleanText),
+            // chaque ligne formant un élément de liste à l'affichage.
+            'note_personnalise' => 'nullable|string|max:5000',
         ]);
 
         // Téléphone : même normalisation que la saisie dédiée (`updatePhone`).
@@ -636,6 +645,7 @@ class CommercialAdminController extends Controller
                     'municipality', 'administrative_region', 'full_address',
                     'licence_number', 'licence_end_date', 'neq',
                     'representative_name', 'intervenant_name', 'source',
+                    'note_personnalise',
                     'is_blacklisted',
                 ]),
             ],

@@ -160,6 +160,9 @@ class ClientController extends Controller
             'surety_company' => 'sometimes|nullable|string|max:255',
             'cautionnement_compagnie' => 'sometimes|nullable|array',
             'surety_amount' => 'sometimes|nullable|numeric|min:0',
+            // Note libre multi-lignes de la modale « Modifier le client » —
+            // retours à la ligne **conservés** (hors liste `cleanText`).
+            'note_personnalise' => 'sometimes|nullable|string|max:5000',
         ]);
 
         $client = Client::findOrFail($id);
@@ -306,6 +309,9 @@ class ClientController extends Controller
             // Origine du prospect (répertoire `sources`, défaut « Affaire ») :
             // renseignée par le payload n8n, jamais éditable en UI.
             'source' => $client->source,
+            // Note libre multi-lignes (modale « Modifier le client ») : une
+            // ligne = un élément de liste à l'affichage.
+            'note_personnalise' => $client->note_personnalise,
             'created_at' => $client->created_at,
             'updated_at' => $client->updated_at,
         ];

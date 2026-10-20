@@ -49,6 +49,7 @@ class ClientUpdateNote
         'representative_name' => 'Représentant',
         'intervenant_name' => 'Intervenant',
         'source' => 'Source',
+        'note_personnalise' => 'Note personnalisée',
         'respondent_count' => 'Nombre de répondants',
         'respondents' => 'Répondants',
         'sub_category_count' => 'Nombre de sous-catégories',

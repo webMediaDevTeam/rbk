@@ -159,6 +159,9 @@ class Client extends Model
         // Origine du prospect (répertoire `sources`) — valeur texte, pas de
         // clé étrangère : `Client::DEFAULT_SOURCE` s'applique à la création.
         'source',
+        // Note personnalisée libre (modale « Modifier le client ») — texte
+        // multi-lignes ; chaque retour à la ligne forme un élément de liste.
+        'note_personnalise',
     ];
 
     protected function casts(): array

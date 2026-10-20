@@ -108,6 +108,21 @@ export default function ClientDetailsTab({ client }) {
         </>)}
       </div>
 
+      {/* Note personnalisée — texte libre saisi dans la modale « Modifier le
+          client » : chaque retour à la ligne forme un élément de liste. */}
+      {Boolean(client.note_personnalise?.trim()) && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2">Note personnalisée</h3>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-foreground">
+            {client.note_personnalise
+              .split(/\r?\n/)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line, i) => (<li key={i}>{line}</li>))}
+          </ul>
+        </div>
+      )}
+
       <DetailSection title="Identification">
         {/* E-mail et téléphone remontés aussi en badges « Contact » en tête
             de fiche : la ligne « Courriel » les rappelle dans le panneau

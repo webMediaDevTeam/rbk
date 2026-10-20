@@ -84,6 +84,38 @@ class GrandeListeClientUpdateTest extends TestCase
         $this->assertSame(Client::STATUS_AVAILABLE, $client->status);
     }
 
+    /**
+     * Note personnalisée (`clients.note_personnalise`) : texte libre
+     * multi-lignes — les retours à la ligne sont conservés tels quels
+     * (chaque ligne forme un élément de liste à l'affichage).
+     */
+    public function test_note_personnalise_accepts_multiline_text_and_is_exposed(): void
+    {
+        $client = $this->makeClient();
+        Sanctum::actingAs($this->makeAdmin());
+
+        $note = "Appeler après 17h\nEnvoyer le devis par courriel\nNe pas rappeler le vendredi";
+
+        $this->putJson("/api/v1/commercials/clients/{$client->id}", [
+            'note_personnalise' => $note,
+        ])->assertOk()->assertJsonPath('data.client.note_personnalise', $note);
+
+        $this->assertSame($note, $client->refresh()->note_personnalise);
+
+        // Le détail expose le champ pour le préremplissage de la modale.
+        $this->getJson("/api/v1/commercials/clients/{$client->id}")
+            ->assertOk()
+            ->assertJsonPath('data.client.note_personnalise', $note);
+
+        // Note d'audit « Mise à jour » : le diff mentionne le libellé.
+        $audit = Note::where('client_id', $client->id)
+            ->where('type', Note::TYPE_MISE_A_JOUR)
+            ->latest('created_at')
+            ->first();
+        $this->assertNotNull($audit);
+        $this->assertStringContainsString('Note personnalisée', $audit->description);
+    }
+
     public function test_empty_phone_removes_the_number(): void
     {
         $client = $this->makeClient(['phone' => '514-555-0100']);

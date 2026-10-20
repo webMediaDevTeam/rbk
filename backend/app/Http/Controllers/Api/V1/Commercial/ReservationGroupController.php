@@ -116,6 +116,8 @@ class ReservationGroupController extends Controller
                 'display_status' => $r->client->displayStatus(),
                 'is_blacklisted' => $r->client->is_blacklisted,
                 'returned_at' => $r->client->returned_at,
+                // Champs préremplis par la modale « Modifier le client ».
+                'note_personnalise' => $r->client->note_personnalise,
             ] : null,
         ]);
 
