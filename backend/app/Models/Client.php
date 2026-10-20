@@ -617,6 +617,39 @@ class Client extends Model
     }
 
     /**
+     * Libellés **atomiques** d'un tableau `categories` : certains payloads
+     * RBQ/n8n fusionnent plusieurs catégories en un seul élément séparé par
+     * « , » *précédé d'espace* — « Bâtiments Complexes , CVC-Maisons ,
+     * Détection, éclairage et installations électriques ». Des libellés
+     * légitimes contenant « , » (virgule sans espace avant, ex. « Détection,
+     * éclairage… ») ne doivent **pas** être cassés : le séparateur est donc
+     * précisément la virgule précédée d'au moins un blanc (`/\s+,/`). Les
+     * valeurs vides sont écartées ; la déduplication incombe à l'appelant.
+     *
+     * @param  iterable<mixed>  $values
+     * @return list<string>
+     */
+    public static function splitCategories(iterable $values): array
+    {
+        $labels = [];
+
+        foreach ($values as $value) {
+            if (! is_string($value)) {
+                continue;
+            }
+
+            foreach (preg_split('/\s+,/', $value) ?: [] as $part) {
+                $part = trim($part);
+                if ($part !== '') {
+                    $labels[] = $part;
+                }
+            }
+        }
+
+        return $labels;
+    }
+
+    /**
      * Requête réelle derrière `distinctValues()` (à ne pas appeler seule) :
      * `categories` est un tableau JSON éclaté en libellés, les autres colonnes
      * sont des chaînes (`SELECT DISTINCT`). Dans les deux cas, valeurs vides
@@ -634,11 +667,14 @@ class Client extends Model
         return $values
             ->flatMap(function ($raw) use ($column) {
                 // `categories` : le pluck Eloquent renvoie déjà des tableaux
-                // décodés (cast `array`), on les éclate en libellés.
+                // décodés (cast `array`) ; on les éclate en libellés **et**
+                // on sépare les éléments fusionnés « A , B , C » pour que le
+                // sélecteur « Catégorie » n'affiche que des catégories
+                // atomiques, sans doublons (déduplication juste après).
                 if ($column === 'categories') {
                     $decoded = is_array($raw) ? $raw : json_decode((string) $raw, true);
 
-                    return is_array($decoded) ? $decoded : [$raw];
+                    return self::splitCategories(is_array($decoded) ? $decoded : [$raw]);
                 }
 
                 return [$raw];

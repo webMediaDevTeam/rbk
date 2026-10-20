@@ -134,4 +134,63 @@ class ProspectFiltersApiTest extends TestCase
         $this->assertTrue($byCategory->contains($otherMunicipality->id));
         $this->assertFalse($byCategory->contains($otherCategory->id));
     }
+
+    /**
+     * Éléments `categories` **fusionnés** (« A , B , C » — séparateur « , »
+     * avec espace avant la virgule) : le sélecteur `/filters` n'expose que
+     * des libellés atomiques sans doublons — les noms légitimes contenant
+     * « , » (« Détection, éclairage… ») restent entiers — et le filtre
+     * `?category=` retrouve quand même les clients dont le tableau ne porte
+     * que l'élément fusionné.
+     */
+    public function test_merged_category_elements_are_split_for_options_and_still_filterable(): void
+    {
+        $compound = 'Bâtiments Complexes , CVC-Maisons , Détection, éclairage et installations électriques';
+
+        // Un client avec seulement l'élément fusionné, un autre qui porte
+        // aussi le libellé atomique (déduplication des options).
+        $this->makeClient(['name' => 'Complexe A', 'categories' => [$compound]]);
+        $this->makeClient(['name' => 'Complexe B', 'categories' => [$compound, 'CVC-Maisons']]);
+
+        Sanctum::actingAs($this->makeCommercial());
+
+        $categories = $this->getJson('/api/v1/filters')->assertOk()->json('data.categories');
+
+        $this->assertContains('Bâtiments Complexes', $categories);
+        $this->assertContains('CVC-Maisons', $categories);
+        $this->assertContains('Détection, éclairage et installations électriques', $categories);
+        $this->assertNotContains($compound, $categories);
+        // Aucune répétition : chaque libellé n'apparaît qu'une fois.
+        $this->assertSame(array_values(array_unique($categories)), $categories);
+
+        // Filtre sur un libellé en **tête** de l'élément fusionné.
+        $byHead = collect(
+            $this->getJson('/api/v1/clients?category='.urlencode('Bâtiments Complexes'))
+                ->assertOk()->json('data.clients')
+        )->pluck('name');
+        $this->assertEqualsCanonicalizing(['Complexe A', 'Complexe B'], $byHead->all());
+
+        // Filtre sur un libellé au **milieu** (atomique chez B, fusionné chez A).
+        $byMiddle = collect(
+            $this->getJson('/api/v1/clients?category='.urlencode('CVC-Maisons'))
+                ->assertOk()->json('data.clients')
+        )->pluck('name');
+        $this->assertEqualsCanonicalizing(['Complexe A', 'Complexe B'], $byMiddle->all());
+
+        // Filtre sur un libellé en **fin**, lui-même porteur d'une « , »
+        // interne : la correspondance reste un élément entier.
+        $byTail = collect(
+            $this->getJson('/api/v1/clients?category='.urlencode('Détection, éclairage et installations électriques'))
+                ->assertOk()->json('data.clients')
+        )->pluck('name');
+        $this->assertEqualsCanonicalizing(['Complexe A', 'Complexe B'], $byTail->all());
+
+        // Un sous-chaîne d'un libellé ne matche pas (« CVC-Maison » ≠
+        // « CVC-Maisons »).
+        $this->assertCount(
+            0,
+            $this->getJson('/api/v1/clients?category='.urlencode('CVC-Maison'))
+                ->assertOk()->json('data.clients') ?? []
+        );
+    }
 }
