@@ -19,10 +19,12 @@ use Tests\TestCase;
  *
  *  - l'admin crée / édite un COMERCIAL avec le switch « Privilège de
  *    libération » (`POST/PUT users` → `sometimes|boolean`) ;
- *  - un COMERCIAL **sans** drapeau reçoit 403 sur les deux actions
- *    protégées : mise en liste noire (`clients/{id}/blacklist`) et
- *    libération de la liste (`reservations/release-pending`) ;
- *  - avec le drapeau →200, les actions s'exécutent ;
+ *  - le drapeau protège **la libération de la liste**
+ *    (`reservations/release-pending`) : un COMERCIAL **sans** drapeau
+ *    reçoit 403, avec le drapeau →200 ;
+ *  - la mise en liste noire (`clients/{id}/blacklist`) est ouverte à
+ *    **tous** les commerciaux depuis la refonte de la fiche client —
+ *    plus de portail `CheckPermission` sur cette route ;
  *  - ADMIN / SUPER_ADMIN passent toujours (branche « Admin OU
  *    has_permission », middleware `CheckPermission`).
  */
@@ -142,20 +144,24 @@ class ReleasePermissionTest extends TestCase
 
     // --------------------------------------------------- portes d'accès
 
-    public function test_commercial_without_the_privilege_cannot_blacklist_a_client(): void
+    /**
+     * La mise en liste noire n'est plus protégée par le privilège :
+     * un COMERCIAL **sans** drapeau y a accès (route sans
+     * `CheckPermission`).
+     */
+    public function test_commercial_without_the_privilege_can_still_blacklist_a_client(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
         Sanctum::actingAs($commercial);
 
         $this->postJson("/api/v1/clients/{$client->id}/blacklist", ['note' => 'Test privilège'])
-            ->assertForbidden()
-            ->assertJsonPath('message', 'Accès refusé : privilège de libération requis.');
+            ->assertOk()
+            ->assertJsonPath('success', true);
 
-        // Aucune mutation : la fiche reste intacte.
         $fresh = $client->fresh();
-        $this->assertSame('AVAILABLE', $fresh->status);
-        $this->assertFalse($fresh->is_blacklisted);
+        $this->assertTrue($fresh->is_blacklisted);
+        $this->assertSame('BLACKLISTED', $fresh->status);
     }
 
     public function test_commercial_without_the_privilege_cannot_release_his_list(): void
@@ -206,15 +212,16 @@ class ReleasePermissionTest extends TestCase
     // ------------------------------------- règle « Admin OU has_permission »
 
     /**
-     * Les routes protégées ne laissent passer que des COMERCIAL
+     * Les routes encore protégées ne laissent passer que des COMERCIAL
      * (`CheckRole` tourne avant) : la branche Admin du middleware est
      * donc vérifiée directement, comme la règle complète « Admin OU
-     * drapeau ».
+     * drapeau ». Cible : la libération de liste (dernière route
+     * `CheckPermission` depuis l'ouverture du blacklist).
      */
     public function test_check_permission_allows_admins_and_flagged_commercials_only(): void
     {
         $call = function (User $user): Response {
-            $request = Request::create('/api/v1/clients/x/blacklist', 'POST');
+            $request = Request::create('/api/v1/reservations/release-pending', 'POST');
             $request->setUserResolver(fn () => $user);
 
             return (new CheckPermission)->handle(

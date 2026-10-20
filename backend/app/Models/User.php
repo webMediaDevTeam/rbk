@@ -29,7 +29,8 @@ class User extends Authenticatable
         'status',
         // « Privilège de libération » : posé par l'admin (modale Commercial),
         // lu par le middleware `CheckPermission` — un COMERCIAL sans le
-        // drapeau ne peut ni mettre en liste noire ni libérer sa liste.
+        // drapeau ne peut pas libérer sa liste (la mise en liste noire
+        // est ouverte à tous depuis la refonte de la fiche client).
         'has_permission',
         'avatar',
         'email_verified_at',

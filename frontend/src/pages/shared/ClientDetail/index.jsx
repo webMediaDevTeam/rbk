@@ -167,7 +167,7 @@ export default function ClientDetailPage() {
             name={client.name}
             clientId={id}
             label="Appeler"
-            className="bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary/90"
+            className="bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
           />
           <Button
             onClick={openAction}
@@ -255,7 +255,7 @@ export default function ClientDetailPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-bold mb-1">Note (optionnel — 8 mots max)</label>
+                <label className="block text-sm font-bold mb-1">Note (optionnel)</label>
                 <textarea
                   value={blacklistNote}
                   onChange={handleBlacklistNoteChange}

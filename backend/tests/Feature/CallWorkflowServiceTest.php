@@ -10,8 +10,8 @@ use App\Models\User;
 use App\Services\CallWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 /**
@@ -351,106 +351,38 @@ class CallWorkflowServiceTest extends TestCase
         $this->assertSame(1, Rappel::where('reservation_id', $reservation->id)->count(), 'Un rappel reste planifié.');
     }
 
-    // ------------------------------------------------------- Rappel expiré (cron)
+    // ------------------------------------------- Rappel échu : aucune expiration
 
-    public function test_expired_recall_below_limit_increments_counter_and_keeps_reservation(): void
+    /**
+     * Le cron `clients:process-timeouts` a été supprimé : un rappel échu
+     * reste **en attente** et visible « en retard » dans les pages BV /
+     * « À rappeler » jusqu'à « Terminer » ou une nouvelle issue. Rien ne
+     * consomme de tentative à l'échéance : les compteurs suivent seules les
+     * saisies explicites de l'employé.
+     */
+    public function test_overdue_recall_stays_pending_and_does_not_consume_attempt(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
-        $reservation = $this->makeReservation($client, $commercial, [
-            'status' => Reservation::STATUS_BV_VOICEMAIL,
-            'bv_count' => 0,
-        ]);
-        $rappel = $this->makeRappel($reservation, now()->subMinute());
-
-        $blocked = $this->workflow->handleRecallExpired($rappel);
-
-        $client->refresh();
-        $reservation->refresh();
-
-        $this->assertFalse($blocked);
-        $this->assertSame(1, $reservation->bv_count);
-        $this->assertTrue($this->rappelCancelled($reservation), 'Rappel retiré => le client réapparaît dans les listes.');
-        $this->assertSame('RESERVED', $client->status, 'Sous le seuil, le client reste RESERVED.');
-        $this->assertNull($client->returned_at);
-        $this->assertSame(1, Reservation::count(), 'La réservation ne doit jamais être supprimée.');
-    }
-
-    public function test_expired_recall_at_limit_blocks_client_but_keeps_reservation(): void
-    {
-        $commercial = $this->makeCommercial();
-        $client = $this->makeClient(['status' => 'RESERVED']);
-        $reservation = $this->makeReservation($client, $commercial, [
-            'status' => Reservation::STATUS_BV_VOICEMAIL,
-            'bv_count' => 2,
-        ]);
-        $rappel = $this->makeRappel($reservation, now()->subMinute());
-
-        $blocked = $this->workflow->handleRecallExpired($rappel);
-
-        $client->refresh();
-        $reservation->refresh();
-
-        $this->assertTrue($blocked);
-        $this->assertSame(3, $reservation->bv_count);
-        $this->assertSame('UNAVAILABLE', $client->status);
-        $this->assertEqualsWithDelta(
-            now()->addDays(21)->timestamp,
-            $client->returned_at->timestamp,
-            5
-        );
-        $this->assertTrue($this->rappelCancelled($reservation));
-        $this->assertSame(1, Reservation::count(), 'La réservation ne doit jamais être supprimée.');
-
-        // Même note automatique que lors d'un 3e appel (émetteur = l'employé
-        // qui a posé la BV, pas SYSTEM).
-        $auto = Note::where('client_id', $client->id)
-            ->where('description', CallWorkflowService::AUTO_BLOCK_DESCRIPTION)
-            ->firstOrFail();
-        $this->assertSame(Note::TYPE_BV, $auto->type);
-        $this->assertSame($commercial->id, $auto->sender_id);
-    }
-
-    public function test_expired_recall_for_call_back_uses_injoinable_counter(): void
-    {
-        $commercial = $this->makeCommercial();
-        $client = $this->makeClient(['status' => 'RESERVED']);
-        $reservation = $this->makeReservation($client, $commercial, [
-            'status' => Reservation::STATUS_CALL_BACK,
-            // « À rappeler » n'a pas de seuil : 6 rappels ne bloquent rien.
-            'injoinable_count' => 5,
-            'bv_count' => 1, // ne doit pas être touché
-        ]);
-        $rappel = $this->makeRappel($reservation, now()->subMinute());
-
-        $blocked = $this->workflow->handleRecallExpired($rappel);
-
-        $reservation->refresh();
-
-        $this->assertFalse($blocked, 'Un rappel « à rappeler » expiré ne bloque jamais le client.');
-        $this->assertSame(6, $reservation->injoinable_count);
-        $this->assertSame(1, $reservation->bv_count, 'Le compteur BV ne doit pas bouger.');
-        $this->assertSame('CALL_BACK', $reservation->status);
-        $this->assertSame('RESERVED', $client->fresh()->status);
-        $this->assertNull($client->fresh()->returned_at);
-    }
-
-    public function test_expired_recall_on_blacklisted_client_only_clears_rappel(): void
-    {
-        $commercial = $this->makeCommercial();
-        $client = $this->makeClient(['status' => 'BLACKLISTED', 'is_blacklisted' => true]);
         $reservation = $this->makeReservation($client, $commercial, [
             'status' => Reservation::STATUS_BV_VOICEMAIL,
             'bv_count' => 1,
         ]);
-        $rappel = $this->makeRappel($reservation, now()->subMinute());
+        $rappel = $this->makeRappel($reservation, now()->subDays(3));
 
-        $blocked = $this->workflow->handleRecallExpired($rappel);
+        // Aucune action automatique : le rappel est toujours en attente.
+        $this->assertTrue(Rappel::whereKey($rappel->id)->pending()->exists());
+        $this->assertFalse($this->rappelCancelled($reservation), 'Le rappel reste affiché « en retard ».');
+        $this->assertSame(1, $reservation->fresh()->bv_count, 'L\'échéance ne consomme aucune tentative.');
+        $this->assertSame('RESERVED', $client->fresh()->status);
+        $this->assertNull($client->fresh()->returned_at);
+    }
 
-        $this->assertFalse($blocked);
-        $this->assertTrue($this->rappelCancelled($reservation));
-        $this->assertSame(1, $reservation->fresh()->bv_count, 'Aucun compteur incrémenté pour un blacklisté.');
-        $this->assertSame('BLACKLISTED', $client->fresh()->status);
+    /** Garde-fou : la commande d'expiration ne doit plus exister. */
+    public function test_process_timeouts_command_is_removed(): void
+    {
+        $this->assertArrayNotHasKey('clients:process-timeouts', Artisan::all());
+        $this->assertFalse(method_exists($this->workflow, 'handleRecallExpired'));
     }
 
     // -------------------------------------------------------------- BLACKLIST
@@ -491,49 +423,45 @@ class CallWorkflowServiceTest extends TestCase
         $this->workflow->apply($client, null, 'WHATEVER', [], $commercial);
     }
 
-    // --------------------------------------------------------- Limite 8 mots
+    // ------------------------------------------------------------ Notes libres
 
-    public function test_outcome_note_is_limited_to_eight_words(): void
+    /**
+     * Plus **aucune** limite de mots sur les notes (le trait
+     * `LimitsNoteWords` a été supprimé) : issues d'appel comme commentaires
+     * se saisissent librement.
+     */
+    public function test_outcome_note_words_are_not_limited(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
 
-        $nineWords = 'un deux trois quatre cinq six sept huit neuf';
+        $longNote = 'un deux trois quatre cinq six sept huit neuf dix onze douze treize';
 
-        try {
-            Note::create([
-                'client_id' => $client->id,
-                'sender_id' => $commercial->id,
-                'type' => Note::TYPE_BV,
-                'description' => $nineWords,
-            ]);
-            $this->fail('Une note de 9 mots doit être refusée.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('description', $e->errors());
-            $this->assertSame('La note ne peut pas dépasser 8 mots.', $e->errors()['description'][0]);
-        }
+        $note = Note::create([
+            'client_id' => $client->id,
+            'sender_id' => $commercial->id,
+            'type' => Note::TYPE_BV,
+            'description' => $longNote,
+        ]);
 
-        $this->assertSame(0, Note::count());
+        $this->assertSame($longNote, $note->description);
+        $this->assertSame(1, Note::count());
     }
 
-    public function test_comment_note_is_limited_to_eight_words(): void
+    public function test_comment_note_words_are_not_limited(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
 
-        try {
-            Note::create([
-                'client_id' => $client->id,
-                'sender_id' => $commercial->id,
-                'type' => Note::TYPE_NOTE,
-                'description' => 'un deux trois quatre cinq six sept huit neuf',
-            ]);
-            $this->fail('Une note de 9 mots doit être refusée.');
-        } catch (ValidationException $e) {
-            $this->assertArrayHasKey('description', $e->errors());
-        }
+        $note = Note::create([
+            'client_id' => $client->id,
+            'sender_id' => $commercial->id,
+            'type' => Note::TYPE_NOTE,
+            'description' => 'un deux trois quatre cinq six sept huit neuf dix onze douze',
+        ]);
 
-        $this->assertSame(0, Note::count());
+        $this->assertSame('un deux trois quatre cinq six sept huit neuf dix onze douze', $note->description);
+        $this->assertSame(1, Note::count());
     }
 
     public function test_eight_words_exactly_is_allowed(): void
@@ -635,32 +563,6 @@ class CallWorkflowServiceTest extends TestCase
             'client_id' => $stillBlocked->id,
             'type' => Note::TYPE_RETURNED_TO_AVAILABLE,
         ]);
-    }
-
-    public function test_process_timeouts_command_handles_expired_recall_without_deleting_reservation(): void
-    {
-        $commercial = $this->makeCommercial();
-        $client = $this->makeClient(['status' => 'RESERVED']);
-        $reservation = $this->makeReservation($client, $commercial, [
-            'status' => Reservation::STATUS_BV_VOICEMAIL,
-            'bv_count' => 0,
-        ]);
-        $expired = $this->makeRappel($reservation, now()->subMinutes(5));
-
-        $futureClient = $this->makeClient(['status' => 'RESERVED']);
-        $futureReservation = $this->makeReservation($futureClient, $commercial, [
-            'status' => Reservation::STATUS_BV_VOICEMAIL,
-        ]);
-        $futureRappel = $this->makeRappel($futureReservation, now()->addDay());
-
-        $this->artisan('clients:process-timeouts')->assertExitCode(0);
-
-        $this->assertSame(1, $reservation->fresh()->bv_count);
-        $this->assertTrue($this->rappelCancelled($reservation));
-        $this->assertSame('RESERVED', $client->fresh()->status);
-        $this->assertNotNull($futureRappel->fresh(), 'Un rappel futur ne doit pas être traité.');
-        $this->assertFalse($this->rappelCancelled($futureReservation));
-        $this->assertSame(2, Reservation::count());
     }
 
     // ------------------------------------------------- Aucune expiration de résa

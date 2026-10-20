@@ -15,9 +15,10 @@ use Symfony\Component\HttpFoundation\Response;
  *  - **COMERCIAL** : autorisé **uniquement** si `has_permission = true`,
  *    sinon **403**.
  *
- * Appliqué à `POST clients/{id}/blacklist` (mise en liste noire depuis la
- * fiche client) et `POST reservations/release-pending` (« Libérer la liste »)
- * — voir `routes/api/commercial.php` et docs/RULES.md §7.1. Le middleware
+ * Appliqué à `POST reservations/release-pending` (« Libérer la liste ») —
+ * voir `routes/api/commercial.php` et docs/RULES.md §7.1. La mise en liste
+ * noire (`POST clients/{id}/blacklist`) est désormais ouverte à tous les
+ * commerciaux et ne passe plus par ce portail. Le middleware
  * `CheckRole:COMERCIAL` (groupe des routes) tourne avant : seul un
  * connecté du bon rôle peut atteindre cette vérification.
  */

@@ -2,6 +2,7 @@ import { CheckCircle2, Loader2, X, AlertCircle, ListChecks } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import Badge from '@/components/ui/badge.jsx'
 import { cn } from '@/lib/utils.js'
+import { useAuth } from '@/context/AuthContext.jsx'
 import { useReservationModal, COUNT_OPTIONS } from './useReservationModal.js'
 
 export default function ReservationModal(props) {
@@ -9,6 +10,12 @@ export default function ReservationModal(props) {
   // refuse le nouveau lot (409) → la modale propose de **libérer**. Ces deux
   // valeurs viennent de la **page** (props), pas du hook.
   const { canReserve = true, pendingReservations } = props
+
+  // Privilège commercial (`users.has_permission`) : sans lui, la libération
+  // de liste est refusée par le serveur (`CheckPermission`, 403) — le bouton
+  // « Libérer la liste » est donc **masqué** et le message ne le propose plus.
+  const { user } = useAuth()
+  const canRelease = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
 
   const {
     open,
@@ -65,22 +72,24 @@ export default function ReservationModal(props) {
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
                 <span>
                   {typeof pendingReservations === 'number' && pendingReservations > 0
-                    ? `${pendingReservations} prospect(s) de vos listes sont encore en attente. Terminez-les, ou libérez votre liste pour réserver un nouveau lot.`
+                    ? `${pendingReservations} prospect(s) de vos listes sont encore en attente. Terminez-les${canRelease ? ', ou libérez votre liste' : ''} pour réserver un nouveau lot.`
                     : 'Vos listes contiennent encore des prospects en attente.'}
                 </span>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                disabled={releaseMutation.isPending}
-                onClick={() => releaseMutation.mutate()}
-              >
-                {releaseMutation.isPending
-                  ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  : <ListChecks className="h-4 w-4 mr-2" />}
-                Libérer la liste
-              </Button>
+              {canRelease && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  disabled={releaseMutation.isPending}
+                  onClick={() => releaseMutation.mutate()}
+                >
+                  {releaseMutation.isPending
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : <ListChecks className="h-4 w-4 mr-2" />}
+                  Libérer la liste
+                </Button>
+              )}
             </div>
           )}
 

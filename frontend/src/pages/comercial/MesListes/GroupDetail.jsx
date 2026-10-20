@@ -107,7 +107,7 @@ export default function GroupDetailPage() {
     },
     {
       key: 'YES',
-      label: 'Confirmé',
+      label: 'Oui',
       icon: ThumbsUp,
       iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
       activeClass: 'border border-transparent bg-emerald-700',
@@ -116,7 +116,7 @@ export default function GroupDetailPage() {
     },
     {
       key: 'NO',
-      label: 'Refusé',
+      label: 'Non',
       icon: ThumbsDown,
       iconClass: 'bg-destructive/10 text-destructive',
       activeClass: 'border border-transparent bg-destructive',

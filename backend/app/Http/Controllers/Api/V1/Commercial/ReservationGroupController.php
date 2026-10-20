@@ -37,6 +37,10 @@ class ReservationGroupController extends Controller
                     ->whereHas('client', fn ($c) => $c->where('is_blacklisted', true)),
             ])
             ->where('comercial_id', $user->id)
+            // Listes « vides » masquées : un groupe sans aucune réservation
+            // (lot libéré dont les réservations ont été supprimées, ou
+            // réservation à zéro client) n'a rien à montrer dans Mes listes.
+            ->has('reservations')
             ->orderByDesc('created_at')
             ->paginate($perPage);
 

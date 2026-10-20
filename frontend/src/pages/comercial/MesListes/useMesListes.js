@@ -13,6 +13,11 @@ export function useMesListes() {
   const { data, isLoading } = useQuery({
     queryKey: ['reservation-groups', currentPage, rowsPerPage],
     queryFn: () => listReservationGroupsApi({ page: currentPage, per_page: rowsPerPage }),
+    // Compteurs des listes (traitements en cours / terminés) : toujours
+    // rechargés à l'entrée sur « Mes listes » — mêmes raisons que pour
+    // le détail `/mes-listes/:id` (voir `useGroupDetail`).
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const groups = data?.data?.groups ?? []

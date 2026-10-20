@@ -114,23 +114,12 @@ class ReminderController extends Controller
      * Le rappel quitte les listes (« Rappels » / « Auto-rappels ») et le
      * compteur du menu ; si une note est saisie, elle est écrite dans
      * l'historique du client (onglet « Historique » de `/prospects/:id`).
-     * Même règle que toute note saisie à la main : 8 mots maximum.
+     * Note **libre** (plus de limite de mots), bornée à 500 caractères.
      */
     public function done(Request $request, string $id): JsonResponse
     {
         $validated = $request->validate([
-            'note' => [
-                'nullable',
-                'string',
-                'max:500',
-                function (string $attribute, mixed $value, $fail): void {
-                    $words = preg_split('/\s+/u', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY);
-
-                    if (is_array($words) && count($words) > Note::MAX_NOTE_WORDS) {
-                        $fail('La note ne peut pas dépasser '.Note::MAX_NOTE_WORDS.' mots.');
-                    }
-                },
-            ],
+            'note' => 'nullable|string|max:500',
         ], [
             'note.max' => 'La note est trop longue.',
         ]);

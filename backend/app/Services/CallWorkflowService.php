@@ -19,8 +19,9 @@ use Illuminate\Support\Facades\DB;
  *  - NO          -> client UNAVAILABLE, returned_at = now + 3 mois,
  *                   réservation NO + vérification d'auto-blacklist.
  *  - BV          -> le client reste RESERVED, bv_count++, rappel automatique
- *                   à 3 jours ; 3e tentative (BV_ATTEMPTS_LIMIT) ->
- *                   UNAVAILABLE 21 jours + note automatique de l'employé.
+ *                   à 3 jours ; 3e **saisie explicite** « BV »
+ *                   (BV_ATTEMPTS_LIMIT) -> UNAVAILABLE 21 jours + note
+ *                   automatique de l'employé.
  *  - CALL_BACK   -> injoinable_count++ et rappel planifié par l'employé, mais
  *                   **sans limite** : il peut enchaîner autant de rappels
  *                   qu'il veut (CALL_BACK_ATTEMPTS_LIMIT = null).
@@ -31,8 +32,16 @@ use Illuminate\Support\Facades\DB;
  *  - BLACKLISTED -> client BLACKLISTED.
  *
  * Chaque issue est journalisée dans `notes` (type = événement, description =
- * la note de 8 mots max, sender_id = l'employé). Un seul rappel par
+ * la note libre de l'employé, sender_id = l'employé). Un seul rappel par
  * réservation, stocké dans `rappels` (jamais dans la réservation).
+ *
+ * Les rappels **n'expirent plus** : aucune action automatique à l'échéance
+ * (le cron `clients:process-timeouts` a été supprimé). Un rappel — BV ou
+ * « à rappeler » — reste donc affiché « en retard » dans les pages
+ * « BV » / « À rappeler » jusqu'à une action explicite : « Terminer »,
+ * nouvelle issue (le rappel est remplacé ou annulé), ou blacklist/déblocage.
+ * Seuls les compteurs `bv_count` / `injoinable_count` suivent les saisies
+ * explicites de l'employé.
  *
  * Plus aucune expiration de réservation et aucune libération manuelle :
  * seul le déblocage admin ne supprime rien — il vide les réservations.
@@ -64,8 +73,8 @@ class CallWorkflowService
     public const CALL_BACK_ATTEMPTS_LIMIT = null;
 
     /**
-     * Note d'épuisement des BV (8 mots max : l'émetteur est un employé, la
-     * limite de saisie s'applique comme pour toute note d'issue).
+     * Note d'épuisement des BV : description courte générée par le workflow
+     * (l'émetteur est l'employé qui a saisi la 3e BV).
      */
     public const AUTO_BLOCK_DESCRIPTION = 'Auto indisponible après 3 BV, retour 21 j';
 
@@ -98,8 +107,8 @@ class CallWorkflowService
         return DB::transaction(function () use ($client, $reservation, $event, $validated, $actor) {
             $note = trim((string) ($validated['note'] ?? ''));
 
-            // Journalisation AVANT l'application : la limite de 8 mots est
-            // levée par le modèle, la transaction annule tout (422, rien écrit).
+            // Journalisation AVANT l'application du statut : tout est écrit
+            // (ou annulé) dans la même transaction.
             Note::create([
                 'client_id' => $client->id,
                 // Rattachée à la réservation que l'événement fait bouger
@@ -146,49 +155,6 @@ class CallWorkflowService
                 Note::TYPE_BLACKLISTED => $this->handleBlacklist($client),
                 default => throw new \InvalidArgumentException("Evénement non géré : {$event}"),
             };
-        });
-    }
-
-    /**
-     * Rappel échu sans action : échec automatique. Incrémente le compteur
-     * correspondant ; 3e BV -> UNAVAILABLE 21 jours + note automatique de
-     * l'employé. Un « à rappeler » n'a pas de seuil : le rappel est retiré,
-     * le client reste `RESERVED`. La réservation n'est jamais supprimée.
-     *
-     * @return bool true si le client a basculé en UNAVAILABLE
-     */
-    public function handleRecallExpired(Rappel $rappel): bool
-    {
-        $client = $rappel->client;
-        $reservation = $rappel->reservation;
-
-        if (! $client || ! $reservation || $client->status === Client::STATUS_BLACKLISTED) {
-            $rappel->delete();
-
-            return false;
-        }
-
-        return DB::transaction(function () use ($rappel, $client, $reservation) {
-            [$status, $counter] = $reservation->status === Reservation::STATUS_CALL_BACK
-                ? [Reservation::STATUS_CALL_BACK, 'injoinable_count']
-                : [Reservation::STATUS_BV_VOICEMAIL, 'bv_count'];
-
-            $attempts = $this->bumpCounter($reservation, $counter);
-            $limit = $this->attemptsLimit($counter);
-
-            if ($limit !== null && $attempts >= $limit) {
-                // 3e tentative : indisponible 21 jours pour tous.
-                $this->blockTemporarily($client, $reservation, $status, $counter);
-
-                return true;
-            }
-
-            // Sous le seuil : le client reste RESERVED et ré-apparaît dans les
-            // listes (rappel retiré => à rappeler manuellement).
-            $reservation->update(['status' => $status]);
-            $rappel->delete();
-
-            return false;
         });
     }
 
@@ -384,7 +350,8 @@ class CallWorkflowService
      * Épuisement des tentatives : client `UNAVAILABLE` 21 jours, rappel
      * annulé, **réservation conservée**, et journalisation automatique d'une
      * note de type `BV` (ou `CALL_BACK`) émise par l'employé qui a changé le
-     * statut — l'appel (cas 4) et le rappel expiré (§4, cron) passent par ici.
+     * statut — seul le 3e « BV » saisi par l'employé passe ici (les rappels
+     * n'expirent plus, aucune action automatique à l'échéance).
      */
     private function blockTemporarily(
         Client $client,

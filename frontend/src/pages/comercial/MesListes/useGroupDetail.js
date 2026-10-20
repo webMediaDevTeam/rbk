@@ -24,6 +24,12 @@ export function useGroupDetail() {
     queryKey: ['reservation-group', id],
     queryFn: () => getReservationGroupApi(id),
     enabled: !!id,
+    // Fraîcheur à l'entrée sur `/mes-listes/:id` comme pour l'historique
+    // client : issues saisies ailleurs (« Terminer » d'un rappel, blacklist,
+    // déblocage admin) ne passent plus par une invalidation de cette page ;
+    // le `staleTime` global de 30 s servirait un état périmé.
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const group = data?.data?.group
@@ -42,9 +48,16 @@ export function useGroupDetail() {
   const { user } = useAuth()
   const canSeeDouble = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
 
+  // Clients **mis en liste noire** (manuelle ou auto) : masqués dans la liste.
+  // La réservation reste historisée côté serveur ; la ligne et ses compteurs
+  // disparaissent dès que le client n'est plus réservable par personne.
+  const visibleRows = allReservations.filter(
+    (r) => !r.client?.is_blacklisted && r.client?.status !== 'BLACKLISTED'
+  )
+
   const reservations = canSeeDouble
-    ? allReservations
-    : allReservations.filter((r) => r.status !== 'DOUBLE' && r.client?.status !== 'DOUBLE')
+    ? visibleRows
+    : visibleRows.filter((r) => r.status !== 'DOUBLE' && r.client?.status !== 'DOUBLE')
   const rappelCount = allReservations.filter((r) => r.recall_at).length
 
   const renameMutation = useMutation({
@@ -78,7 +91,7 @@ export function useGroupDetail() {
 
   // Tri : les lignes **« En attente » (PENDING) passent toujours en tête**,
   // les autres statuts gardent l'ordre du serveur (created_at desc) — donc
-  // Confirmé → Refusé → Boîte vocale → À rappeler. Copie (`[...]`) : on ne
+  // Oui → Non → Boîte vocale → À rappeler. Copie (`[...]`) : on ne
   // trie jamais le tableau du cache React Query.
   const filteredReservations = [...visibleReservations].sort(
     (a, b) => (a.status === 'PENDING' ? 0 : 1) - (b.status === 'PENDING' ? 0 : 1)

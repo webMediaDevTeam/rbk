@@ -16,11 +16,10 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
     Route::get('clients/mes', [ClientController::class, 'mine']);
     Route::get('clients/{id}', [ClientController::class, 'show']);
     Route::patch('clients/{id}', [ClientController::class, 'update']);
-    // Mise en liste noire = mise à jour d'une fiche client : réservée aux
-    // commerciaux **autorisés** (`users.has_permission`, « Privilège de
-    // libération ») — 403 sinon (middleware CheckPermission, §7.1).
-    Route::post('clients/{id}/blacklist', [ClientController::class, 'blacklist'])
-        ->middleware(CheckPermission::class);
+    // Mise en liste noire : ouverte à **tous** les commerciaux (plus de
+    // portail « Privilège de libération » sur cette action — le privilège
+    // ne protège plus que la libération de la liste ci-dessous).
+    Route::post('clients/{id}/blacklist', [ClientController::class, 'blacklist']);
     Route::get('clients/{clientId}/notes', [NoteController::class, 'index']);
     Route::post('notes', [NoteController::class, 'store']);
     Route::delete('notes/{id}', [NoteController::class, 'destroy']);

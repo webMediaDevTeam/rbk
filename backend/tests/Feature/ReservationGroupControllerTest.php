@@ -187,6 +187,29 @@ class ReservationGroupControllerTest extends TestCase
             ->assertJsonPath('data.pagination.per_page', 300);
     }
 
+    /** Listes « vides » masquées (`has('reservations')`) : un groupe sans
+     *  réservation ne doit plus apparaître dans Mes listes, ni entrer dans
+     *  le total de pagination. */
+    public function test_index_hides_lists_without_reservations(): void
+    {
+        $commercial = $this->makeCommercial();
+
+        $empty = $this->makeGroup($commercial, ['name' => 'Liste vide']);
+        $filled = $this->makeGroup($commercial, ['name' => 'Liste remplie']);
+        $this->makeReservation($this->makeClient(['status' => 'RESERVED']), $commercial, [
+            'reservation_group_id' => $filled->id,
+        ]);
+
+        Sanctum::actingAs($commercial);
+
+        $response = $this->getJson('/api/v1/reservation-groups')->assertOk();
+
+        $ids = collect($response->json('data.groups'))->pluck('id');
+        $this->assertTrue($ids->contains($filled->id));
+        $this->assertFalse($ids->contains($empty->id), 'Une liste sans réservation est masquée.');
+        $response->assertJsonPath('data.pagination.total', 1);
+    }
+
     // ------------------------------------------------------------------ Détail show
 
     public function test_show_returns_own_group_with_reservations_and_clients(): void

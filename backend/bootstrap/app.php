@@ -14,8 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function ($schedule) {
-        // Rappels expirés (BV / Injoignable) : échec automatique, réservation conservée
-        $schedule->command('clients:process-timeouts')->everyTenMinutes();
+        // Rappels : plus aucun traitement à l'échéance (cron
+        // `clients:process-timeouts` supprimé) — un rappel reste visible
+        // « en retard » jusqu'à « Terminer » ou une nouvelle issue.
 
         // Réactivation des UNAVAILABLE_TEMP (returned_at atteint) -> AVAILABLE pour tous
         $schedule->command('clients:reactivate')->hourly();

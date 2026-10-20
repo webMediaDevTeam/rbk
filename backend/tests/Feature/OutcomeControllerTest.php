@@ -273,7 +273,11 @@ class OutcomeControllerTest extends TestCase
         $this->assertSame(Reservation::STATUS_PENDING, $reservation->fresh()->status);
     }
 
-    public function test_note_longer_than_eight_words_is_rejected_by_the_model_rule(): void
+    /**
+     * La note d'issue est **libre** — plus aucune limite de mots nulle part
+     * (une issue `YES` s'enregistre avec une note longue).
+     */
+    public function test_note_longer_than_eight_words_is_accepted_for_an_outcome(): void
     {
         $commercial = $this->makeCommercial();
         [$client, $reservation] = $this->reservedClientFor($commercial);
@@ -283,13 +287,15 @@ class OutcomeControllerTest extends TestCase
         $this->postJson("/api/v1/clients/{$client->id}/outcome", [
             'outcome' => Note::TYPE_YES,
             'note' => 'un deux trois quatre cinq six sept huit neuf',
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors(['description']);
+        ])->assertOk();
 
-        // La transaction du workflow est annulée : rien n'a bougé.
-        $this->assertSame(0, Note::count());
-        $this->assertSame(Client::STATUS_RESERVED, $client->fresh()->status);
-        $this->assertSame(Reservation::STATUS_PENDING, $reservation->fresh()->status);
+        $this->assertDatabaseHas('notes', [
+            'client_id' => $client->id,
+            'type' => Note::TYPE_YES,
+            'description' => 'un deux trois quatre cinq six sept huit neuf',
+        ]);
+        $this->assertSame(Client::STATUS_CONFIRMED, $client->fresh()->status);
+        $this->assertNotSame(Reservation::STATUS_PENDING, $reservation->fresh()->status);
     }
 
     // ------------------------------------------------------------ Garde d'état

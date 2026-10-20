@@ -240,6 +240,44 @@ class ReminderControllerTest extends TestCase
         $this->getJson('/api/v1/reminders?type=NON_EXISTENT')->assertStatus(422);
     }
 
+    /**
+     * Rappels échus : plus aucune expiration automatique (cron
+     * `clients:process-timeouts` supprimé) — ils restent listés « en retard »
+     * sur les pages « Rappels » et « Auto-rappels » jusqu'à « Terminer » ou
+     * une nouvelle issue.
+     */
+    public function test_index_keeps_overdue_reminders_listed(): void
+    {
+        $commercial = $this->makeCommercial();
+
+        $dueCallBack = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_CALL_BACK]
+            ),
+            now()->subDays(2)
+        );
+        $dueBv = $this->makeRappel(
+            $this->makeReservation(
+                $this->makeClient(['status' => 'RESERVED']),
+                $commercial,
+                ['status' => Reservation::STATUS_BV_VOICEMAIL]
+            ),
+            now()->subDays(2)
+        );
+
+        Sanctum::actingAs($commercial);
+
+        $callBackRows = collect($this->getJson('/api/v1/reminders')->assertOk()->json('data'));
+        $this->assertTrue($callBackRows->pluck('id')->contains($dueCallBack->id), 'Rappel « à rappeler » échu toujours listé.');
+        $this->assertTrue($callBackRows->firstWhere('id', $dueCallBack->id)['is_due']);
+
+        $bvRows = collect($this->getJson('/api/v1/reminders?type=BV')->assertOk()->json('data'));
+        $this->assertTrue($bvRows->pluck('id')->contains($dueBv->id), 'Rappel BV échu toujours listé.');
+        $this->assertTrue($bvRows->firstWhere('id', $dueBv->id)['is_due']);
+    }
+
     // ------------------------------------------------------------------ Compteur
 
     public function test_count_only_counts_due_reminders_per_type(): void
@@ -333,19 +371,23 @@ class ReminderControllerTest extends TestCase
         $this->assertSame($commercial->id, $note->sender_id);
     }
 
-    public function test_done_rejects_note_longer_than_eight_words(): void
+    public function test_done_accepts_note_longer_than_eight_words(): void
     {
         $commercial = $this->makeCommercial();
         $rappel = $this->makeDueCallBackRappel($commercial);
 
         Sanctum::actingAs($commercial);
 
+        // Plus aucune limite de mots : une note longue est acceptée.
         $this->postJson("/api/v1/reminders/{$rappel->id}/done", [
-            'note' => 'un deux trois quatre cinq six sept huit neuf',
-        ])->assertStatus(422);
+            'note' => 'un deux trois quatre cinq six sept huit neuf dix onze douze',
+        ])->assertOk();
 
-        $this->assertNull($rappel->fresh()->done_at, 'Refus : le rappel reste en attente.');
-        $this->assertSame(0, Note::count());
+        $this->assertNotNull($rappel->fresh()->done_at);
+        $this->assertDatabaseHas('notes', [
+            'client_id' => $rappel->client_id,
+            'description' => 'un deux trois quatre cinq six sept huit neuf dix onze douze',
+        ]);
     }
 
     public function test_done_returns_404_for_unknown_reminder(): void

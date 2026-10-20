@@ -12,6 +12,7 @@ use App\Models\ReservationGroup;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -275,7 +276,9 @@ class ReservationWorkflowApiTest extends TestCase
         ]);
     }
 
-    public function test_outcome_rejects_more_than_eight_words_in_note(): void
+    /** Issues d'appel : la note est **libre** — plus aucune limite de mots
+     *  (le trait `LimitsNoteWords` a été supprimé du modèle). */
+    public function test_outcome_accepts_a_note_longer_than_eight_words(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient(['status' => 'RESERVED']);
@@ -286,9 +289,13 @@ class ReservationWorkflowApiTest extends TestCase
         $this->postJson("/api/v1/clients/{$client->id}/outcome", [
             'outcome' => 'BV',
             'note' => 'un deux trois quatre cinq six sept huit neuf',
-        ])->assertStatus(422);
+        ])->assertOk();
 
-        $this->assertSame(0, Note::count());
+        $this->assertDatabaseHas('notes', [
+            'client_id' => $client->id,
+            'type' => 'BV',
+            'description' => 'un deux trois quatre cinq six sept huit neuf',
+        ]);
     }
 
     public function test_outcome_rejects_unknown_status_value(): void
@@ -341,6 +348,49 @@ class ReservationWorkflowApiTest extends TestCase
 
         $groupId = $response->json('data.group.id');
         $this->assertStringStartsWith('Liste du ', ReservationGroup::find($groupId)->name);
+    }
+
+    /**
+     * Tirage du lot : **aléatoire** dans le périmètre filtré — plus la tête
+     * du tri de la page (`sort_by` ignoré pour la sélection) — mais toujours
+     * strictement borné aux filtres courants et à la source de l'entreprise
+     * du commercial.
+     */
+    public function test_reservation_draws_randomly_within_current_filters(): void
+    {
+        $commercial = $this->makeCommercial();
+
+        foreach (range(1, 3) as $i) {
+            $this->makeClient(['name' => "Lévis #{$i}", 'municipality' => 'Lévis']);
+            $this->makeClient(['name' => "Montréal #{$i}", 'municipality' => 'Montréal']);
+        }
+
+        Sanctum::actingAs($commercial);
+
+        DB::enableQueryLog();
+
+        $response = $this->postJson('/api/v1/clients/reserver', [
+            'count' => 50,
+            'municipality' => 'Lévis',
+            'sort_by' => 'name',   // tri affiché à l'écran : sans effet sur le tirage
+            'sort_order' => 'asc',
+        ])->assertCreated()->assertJsonPath('data.reserved', 3);
+
+        $log = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        // 1) Le tirage reste dans le filtre : uniquement des clients de Lévis.
+        foreach ($response->json('data.clients') as $client) {
+            $this->assertStringStartsWith('Lévis #', $client['name']);
+        }
+
+        // 2) La requête des candidats est triée au sort, pas sur `name`.
+        $randomOrdered = array_filter(
+            $log,
+            fn (array $q): bool => str_contains($q['query'], 'from "clients"')
+                && preg_match('/order by.*(random|rand\s*\()/i', $q['query']) === 1
+        );
+        $this->assertNotEmpty($randomOrdered, 'Le lot doit être tiré au sort dans le périmètre filtré.');
     }
 
     // --------------------------------------------------- Bouton « Suite appel »
@@ -480,11 +530,6 @@ class ReservationWorkflowApiTest extends TestCase
             ->firstOrFail();
         $this->assertSame($admin->id, $note->sender_id);
         $this->assertStringContainsString('restauré AVAILABLE par', $note->description);
-        $this->assertLessThanOrEqual(
-            Note::MAX_NOTE_WORDS,
-            count(preg_split('/\s+/u', trim($note->description), -1, PREG_SPLIT_NO_EMPTY)),
-            'La description est une saisie humaine : 8 mots maximum.'
-        );
     }
 
     public function test_commercial_cannot_unblock_client(): void
@@ -922,9 +967,15 @@ class ReservationWorkflowApiTest extends TestCase
     {
         $commercial = $this->makeCommercial(['email' => 'sansnom@rbk.local']);
 
-        ReservationGroup::create([
+        $group = ReservationGroup::create([
             'comercial_id' => $commercial->id,
             'name' => 'Liste sans nom d\'employé',
+        ]);
+
+        // Le listage masque les listes vides (`has('reservations')`) : la
+        // liste doit porter une réservation pour être testeable ici.
+        $this->makeReservation($this->makeClient(['status' => 'RESERVED']), $commercial, [
+            'reservation_group_id' => $group->id,
         ]);
 
         Sanctum::actingAs($commercial);
@@ -934,9 +985,9 @@ class ReservationWorkflowApiTest extends TestCase
 
         $this->assertNotNull($row);
         $this->assertSame('sansnom@rbk.local', $row['employe']);
-        $this->assertSame(0, $row['clients_count']);
+        $this->assertSame(1, $row['clients_count']);
         $this->assertSame(0, $row['traites_count']);
-        $this->assertSame(0, $row['restant_count']);
+        $this->assertSame(1, $row['restant_count']);
     }
 
     // -------------------------------------------- Reminders « terminer » (done)
@@ -998,7 +1049,7 @@ class ReservationWorkflowApiTest extends TestCase
         $this->postJson("/api/v1/reminders/{$rappel->id}/done")->assertStatus(404);
     }
 
-    public function test_mark_reminder_done_is_limited_to_owner_and_to_eight_words(): void
+    public function test_mark_reminder_done_is_limited_to_owner_and_accepts_long_note(): void
     {
         $commercial = $this->makeCommercial();
         $rappel = $this->makeDueCallBackRappel($commercial);
@@ -1008,13 +1059,16 @@ class ReservationWorkflowApiTest extends TestCase
         $this->postJson("/api/v1/reminders/{$rappel->id}/done")->assertStatus(404);
         $this->assertNull($rappel->fresh()->done_at);
 
-        // Plus de 8 mots : refusé, le rappel reste en attente.
+        // Note longue acceptée : plus aucune limite de mots.
         Sanctum::actingAs($commercial);
         $this->postJson("/api/v1/reminders/{$rappel->id}/done", [
-            'note' => 'un deux trois quatre cinq six sept huit neuf',
-        ])->assertStatus(422);
+            'note' => 'un deux trois quatre cinq six sept huit neuf dix onze douze',
+        ])->assertOk();
 
-        $this->assertNull($rappel->fresh()->done_at);
-        $this->assertSame(0, Note::count());
+        $this->assertNotNull($rappel->fresh()->done_at);
+        $this->assertDatabaseHas('notes', [
+            'client_id' => $rappel->client_id,
+            'description' => 'un deux trois quatre cinq six sept huit neuf dix onze douze',
+        ]);
     }
 }

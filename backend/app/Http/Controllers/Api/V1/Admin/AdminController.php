@@ -63,15 +63,15 @@ class AdminController extends Controller
 
     /**
      * Description de l'événement de déblocage : « Client restauré AVAILABLE
-     * par <nom> ». La note est **saisie humaine** (émetteur = l'admin) :
-     * 8 mots maximum, donc repli sur l'email / l'id quand le nom est absent
-     * ou trop composé.
+     * par <nom> ». La note est émise par l'admin (émetteur = son compte) ;
+     * repli sur l'email / l'id quand le nom est absent ou trop composé,
+     * pour garder une description lisible dans le journal.
      */
     private function unblockDescription(?User $user): string
     {
         $name = trim(($user?->first_name ?? '').' '.($user?->last_name ?? ''));
 
-        // 4 mots de préfixe + 3 mots de nom = 7 <= 8.
+        // Nom court : au-delà de 3 mots, l'email ou l'id sont plus lisibles.
         if ($name === '' || substr_count($name, ' ') > 2) {
             $name = $user?->email ?: (string) $user?->id;
         }

@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\LimitsNoteWords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *   CALL_BACK              à rappeler (issue injoignable)
  *   BLACKLISTED            mise en liste noire
  *   RETURNED_TO_AVAILABLE  déblocage admin ou réactivation automatique (cron)
- *   NOTE                   commentaire libre de l'employé (8 mots max)
+ *   NOTE                   commentaire libre de l'employé
  *   MISE_A_JOUR            diff automatique d'édition de fiche (toute la
  *                          description est générée, champ par champ — voir
  *                          `ClientUpdateNote`)
@@ -39,8 +38,6 @@ class Note extends Model
     use HasFactory, HasUuids;
 
     public const UPDATED_AT = null;
-
-    use LimitsNoteWords;
 
     /** Émetteur des événements automatiques (cron `clients:reactivate`…). */
     public const SENDER_SYSTEM = 'SYSTEM';
@@ -160,23 +157,5 @@ class Note extends Model
     public function scopeComments(Builder $query): Builder
     {
         return $query->where('type', self::TYPE_NOTE);
-    }
-
-    protected function noteWordField(): string
-    {
-        return 'description';
-    }
-
-    /**
-     * La limite de 8 mots porte sur la **saisie humaine** : les descriptions
-     * générées (`sender_id = SYSTEM`, ex. « Réservé par … le … »)
-     * ne sont pas de la saisie et ne sont donc pas comptées. La note
-     * `MISE_A_JOUR` l'est aussi : sa description est le diff champ par champ
-     * produit par `ClientUpdateNote`, même si l'émetteur est l'éditeur.
-     */
-    protected function noteWordsAreLimited(): bool
-    {
-        return $this->sender_id !== self::SENDER_SYSTEM
-            && $this->type !== self::TYPE_MISE_A_JOUR;
     }
 }

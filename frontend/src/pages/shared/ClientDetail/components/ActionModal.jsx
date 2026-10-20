@@ -102,8 +102,10 @@ export default function ActionModal({
           )}
 
           <div>
+            {/* La note est **libre** partout : plus aucune limite de mots
+                côté modèle (trait `LimitsNoteWords` supprimé). */}
             <label className="block text-sm font-bold mb-1">
-              Note (optionnel — 8 mots max)
+              Note (optionnel)
             </label>
             <textarea
               value={note}

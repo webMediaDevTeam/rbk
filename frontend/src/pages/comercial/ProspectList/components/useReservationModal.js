@@ -73,9 +73,10 @@ export function useReservationModal({ open, onClose, filters = {} }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     setResult(null)
-    // `filters` = filtres + tri de la page Prospects : le serveur réutilise
-    // exactement la même requête que l'écran pour préparer le lot
-    // (Client::scopeProspectList). `page` / `per_page` sont ignorés.
+    // `filters` = filtres de la page Prospects : le serveur reprend le même
+    // périmètre (filtres + exclusions, source de l'entreprise) mais **tire au
+    // sort** dans ce périmètre — le tri affiché n'est pas envoyé en jeu.
+    // `page` / `per_page` sont ignorés.
     mutation.mutate({ count, ...filters })
   }
 

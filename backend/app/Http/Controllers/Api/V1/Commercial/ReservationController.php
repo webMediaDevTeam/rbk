@@ -54,9 +54,13 @@ class ReservationController extends Controller
      *   3. client `RESERVED`, `returned_at` vidé ;
      *   4. note système `RESERVED` rattachée à la réservation.
      *
-     * Le lot est pré-sélectionné avec **la même requête que la page
-     * Prospects** (`ClientSearchService::applyFilters`) : mêmes filtres, mêmes
-     * exclusions, même tri que ce que l'employé voit à l'écran.
+     * Le lot est pré-sélectionné avec **les mêmes filtres et les mêmes
+     * exclusions que la page Prospects** (`ClientSearchService::applyFilters`)
+     * — mais les candidats sont ensuite **tirés au sort** dans ce périmètre,
+     * jamais dans l'ordre alphabétique/colonne de la page : deux lots aux
+     * mêmes filtres ne ramènent pas toujours les mêmes noms. `sort_by` /
+     * `sort_order` restent acceptés (payload du modal) mais n'ont plus d'effet
+     * sur la sélection.
      *
      * Garde de traitement : `409 unfinished_treatment` tant que l'employé a
      * des réservations encore `PENDING` (prospects non traités) — il doit
@@ -76,7 +80,8 @@ class ReservationController extends Controller
             // nombre libre (COUNT_OPTIONS du modal côté client).
             'count' => 'required|integer|in:50,80,100,120',
             // Nouvelles entrées optionnelles — identiques à `GET /clients` :
-            // le lot doit suivre les filtres et le tri de la page.
+            // le lot suit les filtres de la page. Le tri (`sort_by` /
+            // `sort_order`) est ignoré pour la sélection : tirage aléatoire.
             'search' => 'nullable|string|max:255',
             'municipality' => 'nullable|string|max:255',
             'category' => 'nullable|string|max:255',
@@ -119,9 +124,13 @@ class ReservationController extends Controller
             'reserved_count' => 0,
         ]);
 
-        // Pré-sélection = requête de la page Prospects (filtres + exclusions
-        // + tri) complétée des règles métier de réservation : pas de
-        // prospect déjà traité en NO / BV par cet employé.
+        // Pré-sélection = filtres + exclusions de la page Prospects,
+        // complétés des règles métier de réservation : pas de prospect déjà
+        // traité en NO / BV par cet employé.
+        //
+        // **Tirage aléatoire** : le tri de la page est écrasé
+        // (`reorder()->inRandomOrder()`) — les noms sont mélangés dans le
+        // périmètre filtré, pas piochés en tête de liste alphabétique.
         //
         // **Même périmètre « source » que la page** : le lot ne peut être
         // pris que dans la source de l'entreprise du commercial (sinon le
@@ -132,6 +141,8 @@ class ReservationController extends Controller
             ->whereDoesntHave('notes', fn ($q) => $q
                 ->where('sender_id', $user->id)
                 ->whereIn('type', [Note::TYPE_NO, Note::TYPE_BV]))
+            ->reorder()
+            ->inRandomOrder()
             ->limit($count * 3)
             ->get();
 

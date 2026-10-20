@@ -5,6 +5,7 @@ import ProspectToolbar from './components/ProspectToolbar.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ReservationModal from './components/ReservationModal.jsx'
 import Button from '@/components/ui/button.jsx'
+import { useAuth } from '@/context/AuthContext.jsx'
 
 export default function ProspectListPage() {
   const {
@@ -27,6 +28,11 @@ export default function ProspectListPage() {
     filters,
   } = useCommercialProspectList()
 
+  // Sans le privilège commercial (`users.has_permission`), la libération de
+  // liste est refusée par le serveur : le bandeau ne doit pas la proposer.
+  const { user } = useAuth()
+  const canRelease = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-3">
@@ -44,7 +50,7 @@ export default function ProspectListPage() {
               {isLoadingCounts
                 ? 'Vérification de vos listes en cours…'
                 : typeof pendingReservations === 'number'
-                  ? `${pendingReservations} prospect(s) à traiter dans vos listes : terminez-les ou libérez votre liste.`
+                  ? `${pendingReservations} prospect(s) à traiter dans vos listes : terminez-les${canRelease ? ' ou libérez votre liste' : ''}.`
                   : 'Vérification de vos listes en cours…'}
             </p>
           )}

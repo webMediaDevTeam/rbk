@@ -211,7 +211,7 @@ class NoteControllerTest extends TestCase
         $this->assertSame(0, Note::count());
     }
 
-    public function test_store_rejects_more_than_eight_words_in_description(): void
+    public function test_store_accepts_long_comment_without_word_limit(): void
     {
         $commercial = $this->makeCommercial();
         $client = $this->makeClient();
@@ -219,13 +219,16 @@ class NoteControllerTest extends TestCase
 
         Sanctum::actingAs($commercial);
 
+        // Plus aucune limite de mots (trait `LimitsNoteWords` supprimé).
         $this->postJson('/api/v1/notes', [
             'client_id' => $client->id,
-            'description' => 'un deux trois quatre cinq six sept huit neuf',
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors(['description']);
+            'description' => 'un deux trois quatre cinq six sept huit neuf dix onze douze',
+        ])->assertCreated();
 
-        $this->assertSame(0, Note::count());
+        $this->assertDatabaseHas('notes', [
+            'client_id' => $client->id,
+            'description' => 'un deux trois quatre cinq six sept huit neuf dix onze douze',
+        ]);
     }
 
     // ---------------------------------------------------------------- Destroy

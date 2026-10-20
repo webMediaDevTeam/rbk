@@ -501,10 +501,12 @@ class ClientSearchService
      * d'affichage et tri (ex-`Client::scopeProspectList()`).
      *
      * `GET /clients` **et** `POST clients/reserver` passent par cette
-     * méthode : le lot réservé est exactement celui que l'employé voit à
-     * l'écran, dans le même ordre (docs/RULES.md §7 — « même filtre et
-     * même tri que la page »). `page` / `per_page` sont ignorés : la
-     * réservation prend le premier lot de candidats de cette liste.
+     * méthode : le lot réservé puise dans exactement le périmètre que
+     * l'employé voit à l'écran (mêmes filtres, mêmes exclusions —
+     * docs/RULES.md §7). `page` / `per_page` sont ignorés : la réservation
+     * prend un lot de candidats de cette liste, **tiré au sort** par le
+     * contrôleur (`reorder()->inRandomOrder()`) — le tri rendu ici est donc
+     * écrasé pour la sélection, seul le périmètre filtre compte.
      *
      * **Held `DOUBLE` / `INFO`** (issues « Double » / « Info », régime
      * `RESERVED`) : `$heldByUserId` (connecté) les rend visibles **à leur
