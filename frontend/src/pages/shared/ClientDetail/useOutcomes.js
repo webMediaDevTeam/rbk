@@ -41,12 +41,12 @@ export function useReminders(type = 'CALL_BACK') {
   })
 }
 
-// Compteur des rappels échus (badge de la sidebar), rafraîchi chaque minute.
+// Compteur des rappels échus (badge de la sidebar), lu au montage
+// (connexion / rafraîchissement de la page) — pas de rafraîchissement périodique.
 export function useRemindersCount(enabled = true, type = 'CALL_BACK') {
   return useQuery({
     queryKey: ['reminders-count', type],
     queryFn: () => remindersCountApi(type),
-    refetchInterval: 60000,
     enabled,
   })
 }
@@ -55,7 +55,6 @@ export function useActiveReservationsCount(enabled = true) {
   return useQuery({
     queryKey: ['active-reservations-count'],
     queryFn: activeReservationsCountApi,
-    refetchInterval: 60000,
     enabled,
   })
 }

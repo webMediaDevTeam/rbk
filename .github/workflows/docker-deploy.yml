@@ -6,7 +6,6 @@ name: Deploy to VPS
 #
 #   Réseau / déploiement : VPS_HOST, VPS_USERNAME, VPS_SSH_KEY, VPS_PORT
 #   Laravel               : APP_KEY, DB_PASSWORD, DB_ROOT_PASSWORD
-#   Reverb                : REVERB_APP_ID, REVERB_APP_KEY, REVERB_APP_SECRET
 #   **SMTP Gmail**        : MAIL_USERNAME, MAIL_PASSWORD, MAIL_FROM_ADDRESS,
 #                           MAIL_FROM_NAME
 #   **RingCentral**       : RINGCENTRAL_CLIENT_ID, RINGCENTRAL_CLIENT_SECRET,
@@ -45,9 +44,6 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_ROOT_PASSWORD: ${{ secrets.DB_ROOT_PASSWORD }}
           APP_KEY: ${{ secrets.APP_KEY }}
-          REVERB_APP_ID: ${{ secrets.REVERB_APP_ID }}
-          REVERB_APP_KEY: ${{ secrets.REVERB_APP_KEY }}
-          REVERB_APP_SECRET: ${{ secrets.REVERB_APP_SECRET }}
           MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
           MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
           MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
@@ -63,7 +59,7 @@ jobs:
           port: ${{ secrets.VPS_PORT || 22 }}
           command_timeout: 20m
 
-          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,REVERB_APP_ID,REVERB_APP_KEY,REVERB_APP_SECRET,MAIL_USERNAME,MAIL_PASSWORD,MAIL_FROM_ADDRESS,MAIL_FROM_NAME,RINGCENTRAL_CLIENT_ID,RINGCENTRAL_CLIENT_SECRET,RINGCENTRAL_SERVER_URL,RINGCENTRAL_JWT,EXTERNAL_SYSTEM_API_KEY,GITHUB_REPOSITORY,GITHUB_SHA
+          envs: VPS_HOST,DB_PASSWORD,DB_ROOT_PASSWORD,APP_KEY,MAIL_USERNAME,MAIL_PASSWORD,MAIL_FROM_ADDRESS,MAIL_FROM_NAME,RINGCENTRAL_CLIENT_ID,RINGCENTRAL_CLIENT_SECRET,RINGCENTRAL_SERVER_URL,RINGCENTRAL_JWT,EXTERNAL_SYSTEM_API_KEY,GITHUB_REPOSITORY,GITHUB_SHA
 
           script: |
             set -e
@@ -80,7 +76,6 @@ jobs:
             # ----------------------------------------
 
             for name in VPS_HOST APP_KEY DB_PASSWORD DB_ROOT_PASSWORD \
-                        REVERB_APP_ID REVERB_APP_KEY REVERB_APP_SECRET \
                         MAIL_USERNAME MAIL_PASSWORD MAIL_FROM_ADDRESS; do
               value="$(printenv "$name" 2>/dev/null || true)"
               if [ -z "$value" ]; then
@@ -130,7 +125,7 @@ jobs:
             # ----------------------------------------
             # 2. Environnement de production
             #    Source unique : docker-compose.prod.yml lit uniquement
-            #    MYSQL_* / CORS_* / REVERB_APP_* / VPS_IP / APP_KEY.
+            #    MYSQL_* / CORS_* / VPS_IP / APP_KEY.
             # ----------------------------------------
 
             cat > .env <<EOF
@@ -167,12 +162,6 @@ jobs:
             REDIS_HOST=redis
             REDIS_PORT=6379
             REDIS_PASSWORD=null
-
-            REVERB_HOST=0.0.0.0
-            REVERB_PORT=8080
-            REVERB_APP_ID=${REVERB_APP_ID}
-            REVERB_APP_KEY=${REVERB_APP_KEY}
-            REVERB_APP_SECRET=${REVERB_APP_SECRET}
 
             # Origines CORS (backend/config/cors.php) : le front est servi
             # depuis la même origine que l'API en production.
