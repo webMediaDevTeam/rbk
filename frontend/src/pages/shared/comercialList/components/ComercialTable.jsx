@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { AlertTriangle, Eye, Pencil, Power, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import Badge from '@/components/ui/badge'
 import StatusBadge from './StatusBadge'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
@@ -18,11 +19,9 @@ export default function ComercialTable(props) {
             <TableHead>
               <SortHeader column="name" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Employé</SortHeader>
             </TableHead>
-            <TableHead>
-              <SortHeader column="email" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Adresse e-mail</SortHeader>
-            </TableHead>
             <TableHead>N° RingCentral</TableHead>
             <TableHead>Entreprise</TableHead>
+            <TableHead>Privilège</TableHead>
             <TableHead>
               <SortHeader column="status" currentSortBy={sortBy} sortOrder={sortOrder} onSort={onSort}>Statut</SortHeader>
             </TableHead>
@@ -35,10 +34,12 @@ export default function ComercialTable(props) {
               <TableCell>
                 <div className="flex items-center gap-2.5">
                   <UserAvatar user={row.c} size="sm" onEdit={row.handleAvatarClick} />
-                  <span className="font-medium">{row.name}</span>
+                  <div className="flex flex-col leading-tight">
+                    <span className="font-medium">{row.name}</span>
+                    <span className="text-xs text-muted-foreground">{row.c.email}</span>
+                  </div>
                 </div>
               </TableCell>
-              <TableCell className="text-muted-foreground">{row.c.email}</TableCell>
               <TableCell className="text-muted-foreground">
                 {row.rcNumber ? (
                   <span className="inline-flex items-center gap-1.5">
@@ -56,7 +57,23 @@ export default function ComercialTable(props) {
                   '—'
                 )}
               </TableCell>
-              <TableCell className="text-muted-foreground">{row.enterpriseName}</TableCell>
+              <TableCell className="text-muted-foreground">
+                <div className="flex flex-col gap-1">
+                  <span>{row.enterpriseName}</span>
+                  {row.enterpriseSource && (
+                    <Badge variant="secondary" className="w-fit" title={`Source de l'entreprise : ${row.enterpriseSource}`}>
+                      {row.enterpriseSource}
+                    </Badge>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {row.hasPermission ? (
+                  <Badge variant="primary" className="uppercase">Oui</Badge>
+                ) : (
+                  '-'
+                )}
+              </TableCell>
               <TableCell><StatusBadge status={row.c.status} /></TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">

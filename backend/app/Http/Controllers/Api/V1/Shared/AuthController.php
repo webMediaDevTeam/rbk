@@ -299,19 +299,32 @@ class AuthController extends Controller
 
     public function updateProfilePassword(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        // Un COMERCIAL ne peut pas modifier son propre mot de passe : il doit
+        // passer par un administrateur (le front affiche ce message et ne
+        // propose pas le formulaire). On le renforce ici côté serveur.
+        if ($user->role === 'COMERCIAL') {
+            return response()->json([
+                'message' => 'Merci de demander à un administrateur de modifier votre mot de passe.',
+                'code' => 'PASSWORD_CHANGE_ADMIN_ONLY',
+            ], 403);
+        }
+
+        // Rôles non-commerciaux (ADMIN / SUPER_ADMIN) : changement direct sans
+        // code OTP, mais confirmation du mot de passe actuel.
         $request->validate([
-            'password_update_token' => 'required|string',
+            'current_password' => ['required', 'string'],
             'password' => ['required', 'confirmed', Password::min(8)],
         ]);
 
-        $user = $request->user();
-        $cacheKey = $this->passwordUpdateTokenCacheKey($user, $request->password_update_token);
-
-        if (! Cache::pull($cacheKey)) {
+        if (! Hash::check($request->current_password, $user->password_hash)) {
             return response()->json([
-                'message' => 'La vérification a expiré. Demandez un nouveau code.',
-                'code' => 'PASSWORD_UPDATE_TOKEN_EXPIRED',
-            ], 400);
+                'message' => 'Le mot de passe actuel est incorrect.',
+                'errors' => [
+                    'current_password' => ['Le mot de passe actuel est incorrect.'],
+                ],
+            ], 422);
         }
 
         $user->update([

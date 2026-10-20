@@ -1,41 +1,62 @@
-import { AlertCircle, CheckCircle2, Loader2, Lock, Mail, ShieldCheck } from 'lucide-react'
+import { AlertCircle, Info, Loader2, Lock, ShieldCheck } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import Input from '@/components/ui/input.jsx'
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from '@/components/ui/input-otp.jsx'
 import { useSecuritySection } from './useSecuritySection.js'
 
-export default function SecuritySection({ user }) {
+export default function SecuritySection({ user, role }) {
+  const isComercial = role === 'COMERCIAL'
   const {
-    step,
-    otp,
-    onOtpChange,
+    currentPassword,
+    onCurrentPasswordChange,
     password,
     onPasswordChange,
     confirmation,
     onConfirmationChange,
     error,
-    canResendOtp,
-    email,
     isBusy,
-    sendOtpPending,
-    verifyOtpPending,
     updatePasswordPending,
-    otpSubmitDisabled,
-    requestOtp,
-    verifyOtp,
     updatePassword,
-  } = useSecuritySection({ user })
+  } = useSecuritySection()
+
+  // COMERCIAL : pas d'auto-modification du mot de passe, passage par un admin.
+  if (isComercial) {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Sécurité & mot de passe</h2>
+          <p className="text-sm text-muted-foreground">
+            Gestion de la sécurité de votre compte.
+          </p>
+        </div>
+
+        <div className="border-b border-border" />
+
+        <div className="rounded-xl border border-border p-5">
+          <div className="flex items-start gap-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <Info className="h-5 w-5 text-primary" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold text-foreground">Modification du mot de passe</h3>
+              <p className="text-sm text-muted-foreground">
+                Bonjour {user?.first_name || user?.email} 👋<br />
+                En tant que commercial, vous ne pouvez pas modifier vous-même votre
+                mot de passe. Merci de demander à votre administrateur de le changer
+                pour vous.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Sécurité & mot de passe</h2>
         <p className="text-sm text-muted-foreground">
-          Recevez un code OTP par email avant de modifier votre mot de passe.
+          Modifiez votre mot de passe en confirmant votre mot de passe actuel.
         </p>
       </div>
 
@@ -44,16 +65,13 @@ export default function SecuritySection({ user }) {
       <div className="rounded-xl border border-border p-5 space-y-5">
         <div className="flex items-start gap-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-            {step === 'password' ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            ) : (
-              <Mail className="h-5 w-5 text-muted-foreground" />
-            )}
+            <Lock className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-foreground">Modification protégée par OTP</h3>
+            <h3 className="text-sm font-semibold text-foreground">Modifier votre mot de passe</h3>
             <p className="text-xs text-muted-foreground">
-              Le code sera envoyé à {email}. Les champs de mot de passe restent verrouillés tant que le code n’est pas vérifié.
+              Saisissez votre mot de passe actuel, puis votre nouveau mot de passe
+              (8 caractères minimum) et sa confirmation.
             </p>
           </div>
         </div>
@@ -65,103 +83,66 @@ export default function SecuritySection({ user }) {
           </div>
         )}
 
-        {step === 'idle' && (
-          <Button type="button" onClick={requestOtp} disabled={isBusy}>
-            {sendOtpPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Envoi…
-              </>
-            ) : (
-              <>
-                <Mail className="h-4 w-4" />
-                Mettre à jour le mot de passe
-              </>
-            )}
-          </Button>
-        )}
-
-        {step === 'otp' && (
-          <form onSubmit={verifyOtp} className="space-y-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">Code OTP</label>
-              <InputOTP maxLength={6} value={otp} onChange={onOtpChange} disabled={isBusy}>
-                <InputOTPGroup>
-                  {[0, 1, 2, 3, 4, 5].map((index) => (
-                    <InputOTPSlot key={index} index={index} />
-                  ))}
-                </InputOTPGroup>
-              </InputOTP>
+        <form onSubmit={updatePassword} className="space-y-6">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-foreground">Mot de passe actuel</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="password"
+                value={currentPassword}
+                onChange={onCurrentPasswordChange}
+                placeholder="••••••••"
+                className="pl-9"
+                disabled={isBusy}
+                autoComplete="current-password"
+              />
             </div>
+          </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" disabled={otpSubmitDisabled}>
-                {verifyOtpPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Vérification…
-                  </>
-                ) : (
-                  'Vérifier le code'
-                )}
-              </Button>
-
-              {canResendOtp && (
-                <Button type="button" variant="outline" onClick={requestOtp} disabled={isBusy}>
-                  {sendOtpPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Renvoi…
-                    </>
-                  ) : (
-                    'Renvoyer le code'
-                  )}
-                </Button>
-              )}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-foreground">Nouveau mot de passe</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="password"
+                value={password}
+                onChange={onPasswordChange}
+                placeholder="••••••••"
+                className="pl-9"
+                disabled={isBusy}
+                autoComplete="new-password"
+              />
             </div>
-          </form>
-        )}
+          </div>
 
-        {step === 'password' && (
-          <form onSubmit={updatePassword} className="space-y-6">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">Nouveau mot de passe</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={onPasswordChange}
-                  placeholder="••••••••"
-                  className="pl-9"
-                  disabled={isBusy}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-foreground">Confirmer le mot de passe</label>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-foreground">Confirmer le mot de passe</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="password"
                 value={confirmation}
                 onChange={onConfirmationChange}
                 placeholder="••••••••"
+                className="pl-9"
                 disabled={isBusy}
+                autoComplete="new-password"
               />
             </div>
+          </div>
 
-            <Button type="submit" disabled={isBusy}>
-              {updatePasswordPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Mise à jour…
-                </>
-              ) : (
-                'Enregistrer le nouveau mot de passe'
-              )}
-            </Button>
-          </form>
-        )}
+          <Button type="submit" disabled={isBusy}>
+            {updatePasswordPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Mise à jour…
+              </>
+            ) : (
+              'Enregistrer le nouveau mot de passe'
+            )}
+          </Button>
+        </form>
       </div>
 
       <div className="pt-4">

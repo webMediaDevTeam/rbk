@@ -31,7 +31,7 @@ export default function ProfilPage() {
               {activeTab === 'avatar' && <AvatarSection user={profile} queryKey={queryKey} />}
               {activeTab === 'user-data' && <UserDataSection user={profile} role={role} />}
               {activeTab === 'employee-data' && role === 'COMERCIAL' && <EmployeeDataSection user={profile} />}
-              {activeTab === 'security' && <SecuritySection user={profile} />}
+              {activeTab === 'security' && <SecuritySection user={profile} role={role} />}
               {activeTab === 'appearance' && <ThemeSection />}
             </>
           )}

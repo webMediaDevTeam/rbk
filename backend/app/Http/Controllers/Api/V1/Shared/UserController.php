@@ -170,6 +170,10 @@ class UserController extends Controller
                         'phone' => $user->employee->enterprise->phone,
                         'address' => $user->employee->enterprise->address,
                         'status' => $user->employee->enterprise->status,
+                        // Source de l'entreprise (répertoire `sources`, lu par
+                        // `GET /api/v1/sources`) — affichée en badge dans la
+                        // liste des employés.
+                        'source' => $user->employee->enterprise->source,
                         'logo_url' => $user->employee->enterprise->logo
                             ? "{$base}/storage/logos/{$user->employee->enterprise->logo}"
                             : null,
