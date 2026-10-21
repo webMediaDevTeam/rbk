@@ -4,8 +4,9 @@ import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/
 /**
  * Barre de filtres « Tous / Libre / Double / Info » de la Grande liste
  * **commerciale** — 4 pastilles en sélection unique, même vocabulaire de
- * couleurs que la barre admin (`ProspectKpis`) : *Libre* vert émeraude,
- * *Double* couleur primaire de l'app, *Info* bleu ciel, *Tous* bleu.
+ * couleurs que la barre admin (`ProspectKpis`) et les tuiles du tableau de
+ * bord : *Tous* violet, *Libre* bleu, *Double* couleur primaire de l'app,
+ * *Info* bleu ciel.
  *
  * Les compteurs viennent de `data.badges` de `GET clients` : le **périmètre de
  * l'employé** (sa source, les prospects qu'il détient, son privilège §7.1),
@@ -48,8 +49,8 @@ export default function ProspectStatusPills({ badges, statusFilter, onStatusFilt
       label: 'Tous',
       value: badges.prospects?.system ?? 0,
       icon: Users,
-      iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-      activeClass: 'border border-transparent bg-blue-600',
+      iconClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+      activeClass: 'border border-transparent bg-violet-600',
       title: 'Toutes les lignes de votre liste — cliquez pour retirer le filtre',
     },
     {
@@ -57,8 +58,8 @@ export default function ProspectStatusPills({ badges, statusFilter, onStatusFilt
       label: 'Libre',
       value: counts.AVAILABLE ?? 0,
       icon: CircleCheck,
-      iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      activeClass: 'border border-transparent bg-emerald-700',
+      iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+      activeClass: 'border border-transparent bg-blue-600',
       title: 'Prospects libres à réserver — cliquez pour filtrer',
     },
     {

@@ -17,11 +17,12 @@ use Tests\TestCase;
 
 /**
  * Endpoint `GET /api/v1/dashboard/stats` — filtre de période **global**
- * (`?year` / `?month` / `?week`, cartes + graphique + réservations +
+ * (`?year` / `?month` / `?week` / `?day`, cartes + graphique + réservations +
  * « Meilleurs employés ») : appels = notes porteuses d'un `call_log_id`
  * créées par le bouton « Appel » RingCentral, OUI = notes d'issue `YES`,
  * échec = appels − OUI. Le graphique rend un point par mois (année seule),
- * par jour du mois (mois choisi) ou par jour de la semaine (1 = jours 1–7).
+ * par jour du mois (mois choisi) ou par jour de la semaine (1 = jours 1–7),
+ * et un point unique pour un jour seul (`?day`).
  * Exception : `stats.blacklisted_clients` = instantané des clients
  * actuellement blacklistés.
  *
@@ -401,6 +402,68 @@ class DashboardStatsTest extends TestCase
         $this->getJson('/api/v1/dashboard/stats?year=2020&week=1')
             ->assertOk()
             ->assertJsonPath('data.stats.period.calls', 3);
+    }
+
+    /**
+     * Raccourci « Ce jour » (`?day=`) : le plus fin des réglages borne la
+     * période sur **un seul jour** (`[00:00, minuit suivant)`), un seul point de
+     * graphique, et éclipse la semaine. Hors mois ou hors plage il vaut « tous
+     * les jours » — la cascade de remise à « tous » est côté UI, le serveur ne
+     * fait pas tomber la requête.
+     */
+    public function test_day_filter_bounds_the_period_to_a_single_day(): void
+    {
+        $commercial = $this->makeCommercial();
+        $client = $this->makeClient();
+        $employee = $this->makeEmployee($commercial);
+
+        // Février 2020 : jour 3 = 2 appels dont 1 OUI, jour 4 = 1 appel juste
+        // après minuit (il ne doit PAS être compté dans le jour 3), jour 10 =
+        // 1 appel de plus pour le mois entier.
+        $this->travelTo(Carbon::create(2020, 2, 3, 8, 30));
+        $this->makeCallNote($client, $employee);
+        $this->makeNote($client, $commercial, Note::TYPE_YES);
+        $this->travelTo(Carbon::create(2020, 2, 3, 23, 30));
+        $this->makeCallNote($client, $employee);
+        $this->travelTo(Carbon::create(2020, 2, 4, 0, 30));
+        $this->makeCallNote($client, $employee);
+        $this->travelTo(Carbon::create(2020, 2, 10, 10, 0));
+        $this->makeCallNote($client, $employee);
+
+        Sanctum::actingAs($commercial);
+
+        // Jour 3 : ses 2 appels et son OUI, un seul point de graphique.
+        $points = $this->getJson('/api/v1/dashboard/stats?year=2020&month=2&day=3')
+            ->assertOk()
+            ->assertJsonPath('data.stats.period.calls', 2)
+            ->assertJsonPath('data.stats.period.yes', 1)
+            ->assertJsonPath('data.stats.period.failed', 1)
+            ->assertJsonPath('data.chart.day', 3)
+            ->json('data.calls_by_day');
+
+        $this->assertCount(1, $points);
+        $this->assertSame('2020-02-03', $points[0]['date']);
+        $this->assertSame(2, $points[0]['total']);
+        $this->assertSame(1, $points[0]['oui']);
+
+        // Le jour prime sur la semaine : la méta echoée ne montre que lui.
+        $this->getJson('/api/v1/dashboard/stats?year=2020&month=2&week=2&day=3')
+            ->assertOk()
+            ->assertJsonPath('data.stats.period.calls', 2)
+            ->assertJsonPath('data.chart.week', null)
+            ->assertJsonPath('data.chart.day', 3);
+
+        // Jour hors plage (février 2020 n'a que 29 jours) : le mois entier revient.
+        $this->getJson('/api/v1/dashboard/stats?year=2020&month=2&day=30')
+            ->assertOk()
+            ->assertJsonPath('data.stats.period.calls', 4)
+            ->assertJsonPath('data.chart.day', null);
+
+        // `day` sans `month` : ignoré, l'année entière reste filtrante.
+        $this->getJson('/api/v1/dashboard/stats?year=2020&day=3')
+            ->assertOk()
+            ->assertJsonPath('data.stats.period.calls', 4)
+            ->assertJsonPath('data.chart.day', null);
     }
 
     public function test_chart_is_monthly_for_a_year_and_daily_for_a_month_or_week(): void

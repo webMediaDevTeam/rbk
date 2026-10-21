@@ -23,9 +23,11 @@ export default function DashboardPage() {
     year,
     month,
     week,
+    day,
     setYear,
     setMonth,
     setWeek,
+    setDay,
     applyQuickPeriod,
     resetPeriod,
   } = useDashboard()
@@ -46,9 +48,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Filtre de période global : cartes, graphique, réservations et
-          « Meilleurs employés » suivent Année → Mois → Semaine. Le gestionnaire
-          ajoute l'onglet « Source » à droite — le **même** que celui de la
-          Grande liste, partagé et mémorisé (`useSourcePreference`).
+          « Meilleurs employés » suivent Année → Mois → Semaine → Jour. Le
+          gestionnaire ajoute l'onglet « Source » à droite — le **même** que celui
+          de la Grande liste, partagé et mémorisé (`useSourcePreference`).
 
           Masqué pour l'`OPERATOR` : ses tuiles sont des instantanés et il n'a
           pas de graphique — un filtre sans effet serait trompeur. */}
@@ -58,9 +60,11 @@ export default function DashboardPage() {
           year={year}
           month={month}
           week={week}
+          day={day}
           onYearChange={setYear}
           onMonthChange={setMonth}
           onWeekChange={setWeek}
+          onDayChange={setDay}
           onPresetChange={applyQuickPeriod}
           onReset={resetPeriod}
           showSource={isAdmin}

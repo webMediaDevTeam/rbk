@@ -23,18 +23,22 @@ class DashboardController extends Controller
     ) {}
 
     /**
-     * GET /dashboard/stats?year=YYYY&month=M&week=W&source=…
+     * GET /dashboard/stats?year=YYYY&month=M&week=W&day=D&source=…
      *
      * Tableau de bord role-aware (les gestionnaires voient les chiffres
      * globaux, les commerciaux/opérateurs les leurs) filtré par une période
-     * **globale** — les mêmes sélecteurs Année / Mois / Semaine pilotent les
-     * cartes, le graphique, les réservations et « Meilleurs employés » :
+     * **globale** — les mêmes sélecteurs Année / Mois / Semaine / Jour pilotent
+     * les cartes, le graphique, les réservations et « Meilleurs employés » :
      *  - `year` seul (défaut : année courante) : année calendaire, le
      *    graphique rend **un point par mois** ;
      *  - `month` : mois calendaire de l'année choisie, un point par jour ;
      *  - `week` : semaine du mois choisi (1 = jours 1–7, 2 = jours 8–14…,
      *    la dernière est partielle), un point par jour de la semaine ;
-     *    ignorée sans `month` (une semaine hors plage vaut « toutes »).
+     *    ignorée sans `month` (une semaine hors plage vaut « toutes ») ;
+     *  - `day` : **jour seul** du mois choisi (`[00:00, minuit suivant)`),
+     *    le plus fin des réglages — il rend `week` sans effet, et il est
+     *    ignoré sans `month` ou hors plage. C'est ce que pose le raccourci
+     *    « Ce jour ».
      * Exception : `stats.blacklisted_clients` reste un instantané des
      * clients **actuellement** blacklistés.
      *
@@ -65,14 +69,34 @@ class DashboardController extends Controller
             }
         }
 
-        [$start, $end, $granularity] = $this->resolvePeriod($year, $month, $week);
+        // Le jour est le réglage le plus fin : hors mois ou hors plage il vaut
+        // « tous », et quand il existe il éclipse la semaine (un jour n'a pas
+        // besoin d'être aussi dans une semaine filtrante).
+        $day = (int) $request->query('day', 0);
+        $day = $day > 0 ? $day : null;
+        if ($month !== null && $day !== null) {
+            $daysInMonth = (int) Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('j');
+            if ($day > $daysInMonth) {
+                $day = null;
+            }
+        } else {
+            $day = null;
+        }
+
+        // Le jour éclipse la semaine : la méta renvoyée à l'UI reste ainsi un
+        // reflet fidèle de ce qui a filtré (un seul réglage fin à la fois).
+        if ($day !== null) {
+            $week = null;
+        }
+
+        [$start, $end, $granularity] = $this->resolvePeriod($year, $month, $week, $day);
 
         // Origine active (`''` / absent = « Toutes ») — gestionnaires seulement.
         $rawSource = $isManager ? trim((string) $request->query('source', '')) : '';
         $source = $rawSource !== '' ? $rawSource : null;
 
         if ($isManager) {
-            return $this->adminStats($user, $start, $end, $granularity, $year, $month, $week, $source);
+            return $this->adminStats($user, $start, $end, $granularity, $year, $month, $week, $day, $source);
         }
 
         // L'`OPERATOR` a un tableau de bord **simple**, indépendant de la
@@ -82,7 +106,7 @@ class DashboardController extends Controller
             return $this->operatorStats($user);
         }
 
-        return $this->commercialStats($user, $start, $end, $granularity, $year, $month, $week);
+        return $this->commercialStats($user, $start, $end, $granularity, $year, $month, $week, $day);
     }
 
     /**
@@ -138,7 +162,7 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function adminStats(User $user, Carbon $start, Carbon $end, string $granularity, int $year, ?int $month, ?int $week, ?string $source): JsonResponse
+    private function adminStats(User $user, Carbon $start, Carbon $end, string $granularity, int $year, ?int $month, ?int $week, ?int $day, ?string $source): JsonResponse
     {
         return response()->json([
             'success' => true,
@@ -166,13 +190,13 @@ class DashboardController extends Controller
                     'blacklisted_clients' => $this->blacklistedClientsCount($source),
                 ],
                 'calls_by_day' => $this->callsByDay($start, $end, $granularity, null, $source),
-                'chart' => $this->chartMeta($year, $month, $week),
+                'chart' => $this->chartMeta($year, $month, $week, $day),
                 'top_commercials' => $this->topCommercials($start, $end, $source),
             ],
         ]);
     }
 
-    private function commercialStats(User $user, Carbon $start, Carbon $end, string $granularity, int $year, ?int $month, ?int $week): JsonResponse
+    private function commercialStats(User $user, Carbon $start, Carbon $end, string $granularity, int $year, ?int $month, ?int $week, ?int $day): JsonResponse
     {
         $id = $user->id;
 
@@ -223,7 +247,7 @@ class DashboardController extends Controller
                     'rappel' => $recallCount(Reservation::STATUS_CALL_BACK),
                 ],
                 'calls_by_day' => $this->callsByDay($start, $end, $granularity, $id),
-                'chart' => $this->chartMeta($year, $month, $week, $id),
+                'chart' => $this->chartMeta($year, $month, $week, $day, $id),
                 'top_commercials' => [],
             ],
         ]);
@@ -252,11 +276,12 @@ class DashboardController extends Controller
      * Bornes de la période filtrante + granularité du graphique :
      * année seule = `[1er janvier, 1er janvier N+1)` mensuel ; mois =
      * `[1er, 1er du mois suivant)` journalier ; semaine N du mois =
-     * `[jour (N−1)×7+1, min(N×7, dernier jour)]` journalier.
+     * `[jour (N−1)×7+1, min(N×7, dernier jour)]` journalier ; jour =
+     * `[jour, lendemain)` journalier (un seul point) et prime sur la semaine.
      *
      * @return array{0: Carbon, 1: Carbon, 2: string} `[début, fin exclusive, granularité]`
      */
-    private function resolvePeriod(int $year, ?int $month, ?int $week): array
+    private function resolvePeriod(int $year, ?int $month, ?int $week, ?int $day): array
     {
         if ($month === null) {
             $start = Carbon::createFromDate($year, 1, 1)->startOfDay();
@@ -265,6 +290,12 @@ class DashboardController extends Controller
         }
 
         $monthStart = Carbon::createFromDate($year, $month, 1)->startOfDay();
+
+        if ($day !== null) {
+            $start = $monthStart->copy()->addDays($day - 1);
+
+            return [$start, $start->copy()->addDay(), 'day'];
+        }
 
         if ($week === null) {
             return [$monthStart, $monthStart->copy()->addMonth(), 'day'];
@@ -473,9 +504,9 @@ class DashboardController extends Controller
      * portable MySQL/SQLite — étendue à l'année courante et à l'année
      * choisie, pour que le sélecteur rende toujours sa valeur).
      *
-     * @return array{year: int, month: ?int, week: ?int, years: list<int>}
+     * @return array{year: int, month: ?int, week: ?int, day: ?int, years: list<int>}
      */
-    private function chartMeta(int $year, ?int $month, ?int $week, ?string $comercialId = null): array
+    private function chartMeta(int $year, ?int $month, ?int $week, ?int $day, ?string $comercialId = null): array
     {
         $query = Note::query()->whereNotNull('call_log_id');
         if ($comercialId) {
@@ -505,6 +536,7 @@ class DashboardController extends Controller
             'year' => $year,
             'month' => $month,
             'week' => $week,
+            'day' => $day,
             'years' => range($to, $from),
         ];
     }

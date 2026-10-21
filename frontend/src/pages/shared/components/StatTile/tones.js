@@ -4,9 +4,9 @@
  * variante sombre (les tuiles restent lisibles en thème foncé : le fond
  * pastel devient une coloration 10 % et la pastille s'éclaircit).
  *
- * Les teintes sont **sémantiques et partagées** : « Libre » est vert partout
- * (badges de la liste, tuiles du dashboard), « BV » ambre, « Double » couleur
- * primaire… — la couleur est un raccourci de statut, pas une décoration.
+ * Les teintes sont **sémantiques et partagées** : « Oui » est vert, « Libre »
+ * bleu, « BV » ambre, « Double » couleur primaire… — la couleur est un
+ * raccourci de statut, pas une décoration.
  */
 export const TILE_TONES = {
   violet: {

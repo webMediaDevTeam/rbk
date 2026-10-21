@@ -19,27 +19,27 @@ import { Ban, CircleCheck, Copy, Info, PhoneCall, PhoneOff, ThumbsDown, ThumbsUp
  * → `Blacklist` → `Sans tel..` (le badge « Tous » est ajouté par l'appelant).
  *
  * Chaque entrée porte aussi un `tone` : la **teinte sémantique** utilisée par
- * les tuiles du tableau de bord (`StatTile`) — même couleur du « Libre » vert
- * au « Double » primaire, de la pastille de liste à la carte du dashboard.
+ * les tuiles du tableau de bord (`StatTile`) — même couleur du « Oui » vert au
+ * « Double » primaire, de la pastille de liste à la carte du dashboard.
  */
 export const STATUS_PILLS = [
   {
     key: 'AVAILABLE',
-    tone: 'emerald',
+    tone: 'blue',
     label: 'Libre',
     icon: CircleCheck,
-    iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    activeClass: 'border border-transparent bg-emerald-700',
+    iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    activeClass: 'border border-transparent bg-blue-600',
     activeFg: 'text-white',
     title: 'Clients (re)disponibles — clique pour filtrer',
   },
   {
     key: 'YES',
-    tone: 'blue',
+    tone: 'emerald',
     label: 'Oui',
     icon: ThumbsUp,
-    iconClass: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
-    activeClass: 'border border-transparent bg-teal-600',
+    iconClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    activeClass: 'border border-transparent bg-emerald-700',
     activeFg: 'text-white',
     title: 'Réservation courante « Oui » — clique pour filtrer',
   },

@@ -35,28 +35,44 @@ export function useDashboard() {
   const { source, setSource } = useSourcePreference()
 
   // Filtre de période **global** du tableau de bord (graphique, réservations,
-  // « Meilleurs employés ») : Année → Mois → Semaine. Les tuiles, elles, sont
-  // des instantanés : compteurs de la Grande liste côté gestionnaire, compteurs
-  // de la liste de travail côté commercial — la période ne les borne pas.
-  // Réglage en cascade : changer l'année remet le mois et la semaine à
-  // « tous », changer le mois remet la semaine à « toutes ».
+  // « Meilleurs employés ») : Année → Mois → Semaine → Jour. Les tuiles, elles,
+  // sont des instantanés : compteurs de la Grande liste côté gestionnaire,
+  // compteurs de la liste de travail côté commercial — la période ne les borne
+  // pas.
+  // Réglage en cascade : changer l'année remet le mois, la semaine et le jour
+  // à « tous », changer le mois remet la semaine et le jour à « tous ».
+  // « Semaine » et « Jour » sont les deux réglages **fins** du mois choisi et
+  // s'excluent mutuellement (le serveur applique la même règle).
   const [year, setYearValue] = useState(() => new Date().getFullYear())
   const [month, setMonthValue] = useState(null)
-  const [week, setWeek] = useState(null)
+  const [week, setWeekValue] = useState(null)
+  const [day, setDayValue] = useState(null)
+
+  const setWeek = (value) => {
+    setWeekValue(value)
+    setDayValue(null)
+  }
+
+  const setDay = (value) => {
+    setDayValue(value)
+    setWeekValue(null)
+  }
 
   const setYear = (value) => {
     setYearValue(value)
     setMonthValue(null)
-    setWeek(null)
+    setWeekValue(null)
+    setDayValue(null)
   }
 
   const setMonth = (value) => {
     setMonthValue(value)
-    setWeek(null)
+    setWeekValue(null)
+    setDayValue(null)
   }
 
-  // Raccourcis « Cette semaine / Ce mois-ci / Cette année » : posent les
-  // trois sélecteurs d'un coup (les réglages en cascade sont court-circuités
+  // Raccourcis « Ce jour / Cette semaine / Ce mois-ci / Cette année » : posent
+  // les sélecteurs d'un coup (les réglages en cascade sont court-circuités
   // volontairement). La semaine suit le découpage serveur du mois courant :
   // jours 1–7 = semaine 1, 8–14 = semaine 2…
   const applyQuickPeriod = (preset) => {
@@ -66,7 +82,8 @@ export function useDashboard() {
     if (preset === 'year') {
       setYearValue(currentYear)
       setMonthValue(null)
-      setWeek(null)
+      setWeekValue(null)
+      setDayValue(null)
       return
     }
 
@@ -75,20 +92,27 @@ export function useDashboard() {
 
     if (preset === 'month') {
       setMonthValue(currentMonth)
-      setWeek(null)
+      setWeekValue(null)
+      setDayValue(null)
     } else if (preset === 'week') {
       setMonthValue(currentMonth)
-      setWeek(Math.ceil(now.getDate() / 7))
+      setWeekValue(Math.ceil(now.getDate() / 7))
+      setDayValue(null)
+    } else if (preset === 'today') {
+      setMonthValue(currentMonth)
+      setWeekValue(null)
+      setDayValue(now.getDate())
     }
   }
 
   // Bouton « Réinitialiser » : retour au filtre par défaut (année courante,
-  // mois et semaine « tous »).
+  // mois, semaine et jour « tous »).
   const resetPeriod = () => applyQuickPeriod('year')
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['dashboard-stats', year, month, week, isAdmin ? source : ''],
-    queryFn: () => getDashboardStatsApi({ year, month, week, source: isAdmin ? source : undefined }),
+    queryKey: ['dashboard-stats', year, month, week, day, isAdmin ? source : ''],
+    queryFn: () =>
+      getDashboardStatsApi({ year, month, week, day, source: isAdmin ? source : undefined }),
   })
 
   const payload = data?.data
@@ -117,11 +141,13 @@ export function useDashboard() {
   const chart = payload?.chart ?? {}
   const availableYears = chart.years ?? [year]
 
-  // Sous-titre du graphique : la granularité suit le filtre (mois ou
+  // Sous-titre du graphique : la granularité suit le filtre (jour, mois ou
   // semaine choisis → par jour ; année seule → par mois).
-  const chartCaption = month
-    ? `${MONTH_LABELS[month - 1]} ${year}${week ? ` — semaine ${week}` : ''} — évolution par jour`
-    : `Année ${year} — évolution par mois`
+  const chartCaption = day
+    ? `${MONTH_LABELS[month - 1]} ${year} — jour ${day}`
+    : month
+      ? `${MONTH_LABELS[month - 1]} ${year}${week ? ` — semaine ${week}` : ''} — évolution par jour`
+      : `Année ${year} — évolution par mois`
 
   // ── Tuiles du tableau de bord ─────────────────────────────────────────
   // Côté **gestionnaire**, il n'y a plus de tuiles de période : les chiffres
@@ -280,9 +306,11 @@ export function useDashboard() {
     year,
     month,
     week,
+    day,
     setYear,
     setMonth,
     setWeek,
+    setDay,
     applyQuickPeriod,
     resetPeriod,
   }

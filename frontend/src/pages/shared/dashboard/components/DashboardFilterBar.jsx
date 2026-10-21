@@ -2,23 +2,25 @@ import { RotateCcw } from 'lucide-react'
 import Select from '@/components/ui/select'
 import Button from '@/components/ui/button.jsx'
 import SourceTabs from '@/pages/shared/components/SourceTabs/index.jsx'
-import { MONTH_LABELS, countWeeks, weekRange } from '../filters.js'
+import { MONTH_LABELS, countWeeks, daysInMonth, weekRange } from '../filters.js'
 
 /**
  * Filtre **global** du tableau de bord, sur une seule rangée :
- * Année → Mois → Semaine (+ le bouton « Réinitialiser »).
+ * Année → Mois → Semaine → Jour (+ le bouton « Réinitialiser »).
  *
- * Le parent applique la cascade (choix d'une année ⇒ mois et semaine remis à
- * « tous » ; choix d'un mois ⇒ semaine remise à « toutes ») — la semaine
- * n'est proposée qu'une fois le mois choisi. Les semaines suivent le découpage
- * serveur : 1 = jours 1–7, 2 = jours 8–14…, la dernière est partielle.
- * Le premier sélecteur « Période » est un menu de raccourcis (Cette semaine /
- * Ce mois-ci / Cette année) qui pose les trois sélecteurs d'un coup ; il
- * reste sur son invite une fois l'action appliquée. Le bouton
- * « Réinitialiser » revient au filtre par défaut (année courante, mois et
- * semaine « tous ») — il est inactif quand on y est déjà. Il ne touche **pas**
- * à l'origine : celle-ci est une préférence mémorisée, pas un réglage de
- * période.
+ * Le parent applique la cascade (choix d'une année ⇒ mois, semaine et jour
+ * remis à « tous » ; choix d'un mois ⇒ semaine et jour remis à « tous ») — la
+ * semaine et le jour ne sont proposés qu'une fois le mois choisi. Les semaines
+ * suivent le découpage serveur : 1 = jours 1–7, 2 = jours 8–14…, la dernière
+ * est partielle. Semaine et Jour sont les deux réglages **fins** du mois et
+ * s'excluent mutuellement (le jour gagne côté serveur comme dans l'UI).
+ * Le premier sélecteur « Période » est un menu de raccourcis (Ce jour /
+ * Cette semaine / Ce mois-ci / Cette année) qui pose les sélecteurs d'un coup ;
+ * il reste sur son invite une fois l'action appliquée. Le bouton
+ * « Réinitialiser » revient au filtre par défaut (année courante, mois,
+ * semaine et jour « tous ») — il est inactif quand on y est déjà. Il ne touche
+ * **pas** à l'origine : celle-ci est une préférence mémorisée, pas un réglage
+ * de période.
  *
  * À droite de la même rangée, **gestionnaires seulement** (`showSource`) : les
  * onglets « Source » de la Grande liste (`<SourceTabs>`, privilège
@@ -31,9 +33,11 @@ export default function DashboardFilterBar({
   year,
   month,
   week,
+  day,
   onYearChange,
   onMonthChange,
   onWeekChange,
+  onDayChange,
   onPresetChange,
   onReset,
   showSource = false,
@@ -41,8 +45,9 @@ export default function DashboardFilterBar({
   onSourceChange,
 }) {
   const weeks = month ? countWeeks(year, month) : 0
+  const days = month ? daysInMonth(year, month) : 0
   const isDefault =
-    month === null && week === null && year === new Date().getFullYear()
+    month === null && week === null && day === null && year === new Date().getFullYear()
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-2xl bg-card p-4 text-card-foreground shadow-sm">
@@ -55,6 +60,7 @@ export default function DashboardFilterBar({
           aria-label="Raccourcis de période"
         >
           <option value="">Choisir…</option>
+          <option value="today">Ce jour</option>
           <option value="week">Cette semaine</option>
           <option value="month">Ce mois-ci</option>
           <option value="year">Cette année</option>
@@ -115,13 +121,32 @@ export default function DashboardFilterBar({
         </Select>
       </label>
 
+      <label className="flex items-center gap-2 text-sm">
+        <span className="font-medium">Jour</span>
+        <Select
+          value={day ?? ''}
+          onChange={(e) => onDayChange(e.target.value ? Number(e.target.value) : null)}
+          className="w-28 shrink-0"
+          aria-label="Jour du tableau de bord"
+          disabled={!month}
+          title="Un seul jour du mois choisi — retire la semaine sélectionnée"
+        >
+          <option value="">Tous</option>
+          {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </Select>
+      </label>
+
       <Button
         type="button"
         variant="outline"
         size="sm"
         onClick={onReset}
         disabled={isDefault}
-        title="Retour à l'année courante, tous mois et toutes semaines"
+        title="Retour à l'année courante, tous mois, toutes semaines et tous jours"
       >
         <RotateCcw className="h-3.5 w-3.5" />
         Réinitialiser

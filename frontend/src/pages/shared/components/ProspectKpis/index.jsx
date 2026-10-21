@@ -72,8 +72,11 @@ export default function ProspectKpis({ statusFilters = [], onStatusFilterChange,
     primary: prospects.system ?? 0,
     value: fmt(prospects.system ?? 0),
     icon: Users,
-    iconClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-    activeClass: 'border border-transparent bg-blue-600',
+    // « Tous » est **violet** comme sa tuile homologue du tableau de bord
+    // (`DashboardStatusCards`) : le premier badge de la barre reste ainsi
+    // distinct du « Libre » bleu qui le suit.
+    iconClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+    activeClass: 'border border-transparent bg-violet-600',
     activeFg: 'text-white',
     compact: true,
     active: statusFilters.length === 0,
