@@ -39,10 +39,14 @@ export default function ClientsHistoryToolbar(props) {
   // `showFacets={false}` (page partagée avec l'`OPERATOR`, dont le périmètre
   // est forcé par l'API) : seule la recherche reste utile, la grille de
   // filtres est masquée — et n'est donc jamais envoyée.
-  const { showFacets = true, filtersActive = false, onResetFilters } = props
+  const { showFacets = true, filtersActive = false, onResetFilters, source } = props
   const { searchInputProps } = useClientsHistoryToolbar(props)
-  const { municipalitiesList, categoriesList, regionsList } = useFilterOptions()
-  const { enterprises, employees } = useInteractionFilters()
+  // Options des facettes + entreprises/employés scopées par l'onglet « source »
+  // actif : seules les valeurs présentes chez les clients de cette origine sont
+  // proposées (sinon un libellé peut n'avoir aucun client une fois la source
+  // appliquée).
+  const { municipalitiesList, categoriesList, regionsList } = useFilterOptions(source)
+  const { enterprises, employees } = useInteractionFilters(source)
   const {
     municipality, setMunicipality,
     categories, setCategories,

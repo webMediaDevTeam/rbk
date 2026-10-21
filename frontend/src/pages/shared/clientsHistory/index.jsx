@@ -94,6 +94,7 @@ export default function ClientsHistoryPage() {
         region={region} setRegion={handleRegionChange}
         enterprise={enterprise} setEnterprise={handleEnterpriseChange}
         employee={employee} setEmployee={handleEmployeeChange}
+        source={source}
         filtersActive={filtersActive} onResetFilters={resetFilters}
         showFacets={!isOperator}
       />

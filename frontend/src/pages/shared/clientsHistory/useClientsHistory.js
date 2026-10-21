@@ -204,8 +204,18 @@ export function useClientsHistoryPage() {
   // Onglets « source » (origine) : sélection unique — le composant bascule
   // déjà vers `''` (« Tous ») au second clic ; revient à la 1re page comme
   // tous les filtres de la liste.
+  //
+  // Les facettes (municipalité / catégorie / région) et les filtres
+  // d'interaction (entreprise / employé) sont **vidés** : leurs options sont
+  // désormais scopées sur la nouvelle source, une sélection antérieure peut ne
+  // plus exister dans ce périmètre et laisserait la liste désespérément vide.
   const handleSourceChange = (value) => {
     setSource(value ?? '')
+    setMunicipality('')
+    setCategories('')
+    setRegion('')
+    setEnterprise('')
+    setEmployee('')
     setCurrentPage(1)
   }
 

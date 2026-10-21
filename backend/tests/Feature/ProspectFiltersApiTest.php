@@ -95,6 +95,31 @@ class ProspectFiltersApiTest extends TestCase
         $this->assertSame(['Industriel', 'Résidentiel'], $response->json('data.categories'));
     }
 
+    /**
+     * `GET /filters?source=` restreint les options (municipalités +
+     * catégories) aux clients de cette origine ; sans `?source=`, toutes.
+     */
+    public function test_filters_endpoint_scopes_options_by_source(): void
+    {
+        $this->makeClient(['municipality' => 'Québec', 'categories' => ['Résidentiel'], 'source' => 'Affaire']);
+        $this->makeClient(['municipality' => 'Lévis', 'categories' => ['Industriel'], 'source' => 'Anglais']);
+
+        Sanctum::actingAs($this->makeCommercial());
+
+        $affaire = $this->getJson('/api/v1/filters?source='.urlencode('Affaire'))->assertOk()->json('data');
+        $this->assertSame(['Québec'], $affaire['municipalities']);
+        $this->assertSame(['Résidentiel'], $affaire['categories']);
+
+        $anglais = $this->getJson('/api/v1/filters?source='.urlencode('Anglais'))->assertOk()->json('data');
+        $this->assertSame(['Lévis'], $anglais['municipalities']);
+        $this->assertSame(['Industriel'], $anglais['categories']);
+
+        // Sans source : toutes les valeurs (onglet « Tous »).
+        $all = $this->getJson('/api/v1/filters')->assertOk()->json('data');
+        $this->assertEqualsCanonicalizing(['Lévis', 'Québec'], $all['municipalities']);
+        $this->assertEqualsCanonicalizing(['Industriel', 'Résidentiel'], $all['categories']);
+    }
+
     public function test_clients_list_filters_on_municipality_and_category_label(): void
     {
         $commercial = $this->makeCommercial();

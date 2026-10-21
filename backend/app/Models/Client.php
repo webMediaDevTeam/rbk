@@ -562,6 +562,14 @@ class Client extends Model
     public const DISTINCT_CACHE_TTL = 604800;
 
     /**
+     * Clé du compteur de version du cache des listes distinctes. Les listes
+     * étant cachées par (colonne, source), on ne peut pas énumérer les clés à
+     * invalider : `forgetDistinctValues()` pousse ce compteur, intégré à
+     * chaque clé, ce qui rend toutes les variantes obsolètes d'un coup.
+     */
+    private const DISTINCT_VERSION_KEY = 'clients:distinct:__version';
+
+    /**
      * Valeurs distinctes d'une colonne, sans doublons, triées — alimente les
      * filtres de la liste des prospects. Lu via Eloquent : les casts du
      * modèle s'appliquent aux colonnes JSON, plus aucune requête DB::table().
@@ -572,7 +580,7 @@ class Client extends Model
      *
      * @return list<string>
      */
-    public static function distinctValues(string $column): array
+    public static function distinctValues(string $column, ?string $source = null): array
     {
         if (!in_array($column, self::DISTINCT_COLUMNS, true)) {
             throw new InvalidArgumentException(sprintf(
@@ -583,9 +591,9 @@ class Client extends Model
         }
 
         return Cache::remember(
-            self::distinctCacheKey($column),
+            self::distinctCacheKey($column, $source),
             self::DISTINCT_CACHE_TTL,
-            fn() => self::queryDistinctValues($column)
+            fn() => self::queryDistinctValues($column, $source)
         );
     }
 
@@ -598,15 +606,34 @@ class Client extends Model
      */
     public static function forgetDistinctValues(): void
     {
-        foreach (self::DISTINCT_COLUMNS as $column) {
-            Cache::forget(self::distinctCacheKey($column));
+        // Les listes sont cachées par (colonne, source) : on ne peut pas
+        // énumérer les clés. On **pousse le compteur de version** intégré à
+        // chaque clé — toutes les variantes (toutes sources) tombent obsolètes
+        // d'un coup ; les entrées orphelines sont purgées par le TTL.
+        if (! Cache::has(self::DISTINCT_VERSION_KEY)) {
+            Cache::forever(self::DISTINCT_VERSION_KEY, 1);
+
+            return;
         }
+
+        Cache::increment(self::DISTINCT_VERSION_KEY);
     }
 
-    /** Clé de cache d'une liste distincte. */
-    private static function distinctCacheKey(string $column): string
+    /** Version courante du cache des listes distinctes (défaut : 1). */
+    private static function distinctVersion(): int
     {
-        return 'clients:distinct:' . $column;
+        return (int) Cache::rememberForever(self::DISTINCT_VERSION_KEY, fn() => 1);
+    }
+
+    /**
+     * Clé de cache d'une liste distincte, scopée par source et versionnée.
+     * `source` vide / null = toutes les sources (onglet « Tous »).
+     */
+    private static function distinctCacheKey(string $column, ?string $source = null): string
+    {
+        $scope = ($source === null || $source === '') ? 'all' : $source;
+
+        return sprintf('clients:distinct:%s:s:%s:v%d', $column, $scope, self::distinctVersion());
     }
 
     /** Auto-invalidation du cache des listes distinctes. */
@@ -655,9 +682,10 @@ class Client extends Model
      * sont des chaînes (`SELECT DISTINCT`). Dans les deux cas, valeurs vides
      * écartées, doublons supprimés même à la casse près, puis tri.
      */
-    private static function queryDistinctValues(string $column): array
+    private static function queryDistinctValues(string $column, ?string $source = null): array
     {
         $values = static::query()
+            ->when($source !== null && $source !== '', fn($q) => $q->where('source', $source))
             ->whereNotNull($column)
             ->where($column, '!=', '')
             ->distinct()
@@ -698,9 +726,9 @@ class Client extends Model
      *
      * @return array{categories: list<string>, municipalities: list<string>, administrative_regions: list<string>}
      */
-    public static function getUniqueCategoriesAndMunicipalities(): array
+    public static function getUniqueCategoriesAndMunicipalities(?string $source = null): array
     {
-        $rawCategories = self::distinctValues('categories');
+        $rawCategories = self::distinctValues('categories', $source);
 
         $parsedCategories = collect($rawCategories)
             ->flatMap(function ($item) {
@@ -772,8 +800,8 @@ class Client extends Model
 
         return [
             'categories' => array_values($finalCategories),
-            'municipalities' => self::distinctValues('municipality'),
-            'administrative_regions' => self::distinctValues('administrative_region'),
+            'municipalities' => self::distinctValues('municipality', $source),
+            'administrative_regions' => self::distinctValues('administrative_region', $source),
         ];
     }
 }

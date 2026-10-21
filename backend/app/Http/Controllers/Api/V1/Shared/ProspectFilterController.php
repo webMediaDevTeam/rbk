@@ -9,6 +9,7 @@ use App\Models\Note;
 use App\Models\Source;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ProspectFilterController extends Controller
 {
@@ -16,14 +17,32 @@ class ProspectFilterController extends Controller
      * Distinct filter values (municipalities + categories) read straight from
      * the clients table — no dependency on the categories table.
      *
+     * `?source=` (origine du prospect) restreint les options au périmètre de
+     * l'onglet « source » actif : la liste ne propose alors que les valeurs
+     * présentes chez les clients de cette source (sinon un libellé peut
+     * s'afficher sans aucun client correspondant une fois la source appliquée).
+     *
      * GET /filters
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         return response()->json([
             'success' => true,
-            'data' => Client::getUniqueCategoriesAndMunicipalities(),
+            'data' => Client::getUniqueCategoriesAndMunicipalities(
+                self::sourceParam($request)
+            ),
         ]);
+    }
+
+    /**
+     * Source du périmètre des filtres : `?source=` vide / absent = `null`
+     * (toutes les sources, onglet « Tous »).
+     */
+    private static function sourceParam(Request $request): ?string
+    {
+        $source = $request->query('source');
+
+        return (is_string($source) && $source !== '') ? $source : null;
     }
 
     /**
@@ -33,7 +52,7 @@ class ProspectFilterController extends Controller
      */
     public function categories(): JsonResponse
     {
-       $rawCategories = self::distinctValues('categories');
+       $rawCategories = Client::distinctValues('categories');
 
     $parsedCategories = collect($rawCategories)
         ->flatMap(function ($item) {
@@ -162,9 +181,18 @@ class ProspectFilterController extends Controller
      *
      * GET /clients/interaction-filters
      */
-    public function interactionFilters(): JsonResponse
+    public function interactionFilters(Request $request): JsonResponse
     {
-        $senderIds = Note::query()->whereNotNull('sender_id')->distinct()->pluck('sender_id');
+        // Même périmètre « source » que la liste : on ne retient que les notes
+        // portées sur un client de la source choisie, donc que les employés /
+        // entreprises ayant réellement interagi avec cette source.
+        $source = self::sourceParam($request);
+
+        $senderIds = Note::query()
+            ->whereNotNull('sender_id')
+            ->when($source !== null, fn($q) => $q->whereHas('client', fn($c) => $c->where('source', $source)))
+            ->distinct()
+            ->pluck('sender_id');
 
         $employees = User::query()
             ->whereIn('id', $senderIds)
