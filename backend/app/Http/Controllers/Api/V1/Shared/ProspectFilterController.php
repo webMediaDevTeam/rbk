@@ -41,10 +41,33 @@ class ProspectFilterController extends Controller
                     return [];
                 }
 
+                // If the whole string is wrapped in JSON-like array brackets and quotes, e.g. ["..."]
+                // we can decode it or strip the outer brackets/quotes first.
+                $cleaned = trim($item);
+                if (str_starts_with($cleaned, '[') && str_ends_with($cleaned, ']')) {
+                    $decoded = json_decode($cleaned, true);
+                    if (is_array($decoded)) {
+                        return $decoded; // let flatMap handle the array items
+                    }
+                }
+
+                return [$item];
+            })
+            ->flatMap(function ($item) {
+                if (!is_string($item)) {
+                    return [];
+                }
+
+                // Remove unwanted wrapping quotes or brackets if any remain
+                $item = trim($item, " \t\n\r\0\x0B\"'[]");
+
                 // Split by comma, pipe, 'and', 'et', or '&' with surrounding whitespace
                 $tokens = preg_split('/,\s*|\s*\|\s*|\s+and\s+|\s+et\s+|\s*&\s*/i', $item);
 
-                return array_map('trim', $tokens);
+                return array_map(function ($token) {
+                    // Clean extra internal/external quotes around individual categories
+                    return trim($token, " \t\n\r\0\x0B\"'[]");
+                }, $tokens);
             })
             ->filter(function ($value) {
                 return !empty($value);
