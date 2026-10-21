@@ -732,15 +732,46 @@ class Client extends Model
                 }, $tokens);
             })
             ->filter(function ($value) {
-                return !empty($value);
+                if (empty($value)) {
+                    return false;
+                }
+
+                // Optional: Remove obvious dangling truncations ending in prepositions/letters 
+                // if they look incomplete (e.g. ends with trailing ' d', ' du', etc. without completing)
+                $lower = mb_strtolower($value);
+                if (preg_match('/\b(du|d\'|de|et|la|le)\s*$/ui', $lower) && mb_strlen($value) < 15) {
+                    return false;
+                }
+
+                return true;
             })
             ->unique()
-            ->sort()
-            ->values()
-            ->all();
+            ->values();
+
+        // Remove shorter fragments that are exact prefixes of longer categories (e.g., "Structure du Bâtim" vs "Structure du Bâtiment")
+        $sortedCategories = $parsedCategories->sort(function ($a, $b) {
+            return mb_strlen($b) <=> mb_strlen($a); // Sort longest first
+        });
+
+        $finalCategories = [];
+        foreach ($sortedCategories as $category) {
+            $isPrefixOfAnother = false;
+            foreach ($finalCategories as $existing) {
+                // If current category is a starting prefix of a longer already-accepted category, skip it
+                if (str_starts_with(mb_strtolower($existing), mb_strtolower($category))) {
+                    $isPrefixOfAnother = true;
+                    break;
+                }
+            }
+            if (!$isPrefixOfAnother) {
+                $finalCategories[] = $category;
+            }
+        }
+
+        sort($finalCategories);
 
         return [
-            'categories' => $parsedCategories,
+            'categories' => array_values($finalCategories),
             'municipalities' => self::distinctValues('municipality'),
             'administrative_regions' => self::distinctValues('administrative_region'),
         ];

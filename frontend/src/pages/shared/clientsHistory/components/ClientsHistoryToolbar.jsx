@@ -2,6 +2,7 @@ import { Building2, Map, MapPin, RotateCcw, Tags, UserCog } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar.jsx'
 import Select from '@/components/ui/select'
 import Button from '@/components/ui/button.jsx'
+import { truncateLabel } from '@/lib/utils'
 import { useClientsHistoryToolbar } from './useClientsHistoryToolbar.js'
 import { useFilterOptions } from '@/hooks/use-filter-options.js'
 import { useInteractionFilters } from '@/hooks/use-interaction-filters.js'
@@ -118,7 +119,7 @@ export default function ClientsHistoryToolbar(props) {
         <FilterSelect icon={Tags} value={categories} onChange={(e) => setCategories?.(e.target.value)}>
           <option value="">Catégorie: Toutes</option>
           {categoriesList.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c} title={c}>{truncateLabel(c)}</option>
           ))}
         </FilterSelect>
       </div>

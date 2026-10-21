@@ -67,18 +67,17 @@ class ClientSearchService
     /**
      * Filtre par catégorie. Plusieurs valeurs = OU.
      *
-     * Cas nominal (données atomiques) : `whereJsonContains()` — le libellé
-     * est un élément **exact** du tableau (JSON_CONTAINS sur MySQL,
-     * json_each sur SQLite) ; « Résidentiel » n'attrape pas un libellé qui
-     * le contient par hasard.
+     * Correspondance **partielle** (`LIKE %clé%`) sur le texte JSON brut de la
+     * colonne `categories` : la saisie n'a plus besoin d'être un libellé exact,
+     * il suffit qu'elle soit contenue dans l'un des éléments du tableau
+     * (« Plomb » rattrape « Plomberie », « Plombier », un élément fusionné
+     * « A , B , C », etc.). Insensible à la casse selon le collationnement de
+     * la colonne.
      *
-     * Données fusionnées : certains payloads RBQ/n8n regroupent plusieurs
-     * catégories en un seul élément séparé par « , » (ex. « Bâtiments
-     * Complexes , CVC-Maisons , Détection, éclairage… »). Le sélecteur
-     * n'offrant que des libellés atomiques (`Client::splitCategories`), un
-     * LIKE ciblé complète la correspondance : le libellé doit être un
-     * **élément entier** de la chaîne fusionnée (délimité par les
-     * guillemets JSON ou par « , »), jamais un simple sous-chaîne.
+     * Deux rendus du texte JSON selon le moteur : MySQL normalise le JSON et le
+     * rend en UTF-8 **brut**, SQLite stocke la chaîne **échappée** du cast
+     * Eloquent (`\u00e2` pour « â »). On teste donc la clé telle quelle **et**
+     * échappée ; le motif qui ne correspond à rien est inoffensif.
      */
     public function filterByCategories(Builder $query, string|array $categories): Builder
     {
@@ -95,25 +94,11 @@ class ClientSearchService
                 foreach ($values as $category) {
                     $category = trim($category);
 
-                    // Deux rendus du texte JSON selon le moteur : MySQL
-                    // normalise le JSON et le rend en UTF-8 **brut**, SQLite
-                    // stocke la chaîne **échappée** du cast Eloquent
-                    // (`\u00e2` pour « â »). Les motifs couvre les deux ;
-                    // celui qui ne correspond à rien est inoffensif. (Les
-                    // libellés RBQ ne contiennent ni `%` ni `_`, méta-
-                    // caractères LIKE, ni guillemet ni contre-oblique.)
                     $escaped = substr(json_encode($category), 1, -1);
 
                     $nested->orWhere(function (Builder $part) use ($category, $escaped) {
-                        $part->whereJsonContains('categories', $category);
-
                         foreach ([$category, $escaped] as $label) {
-                            // Libellé en tête / fin / milieu d'un élément
-                            // fusionné « A , B , C » (séparateur « , » avec
-                            // blancs, cf. `Client::splitCategories`).
-                            $part->orWhere('categories', 'like', '%"'.$label.' , %')
-                                ->orWhere('categories', 'like', '% , '.$label.'"%')
-                                ->orWhere('categories', 'like', '% , '.$label.' , %');
+                            $part->orWhere('categories', 'like', '%'.$label.'%');
                         }
                     });
                 }

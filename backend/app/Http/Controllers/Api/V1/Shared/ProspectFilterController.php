@@ -33,51 +33,81 @@ class ProspectFilterController extends Controller
      */
     public function categories(): JsonResponse
     {
-        $rawCategories = Client::distinctValues('categories');
+       $rawCategories = self::distinctValues('categories');
 
-        $parsedCategories = collect($rawCategories)
-            ->flatMap(function ($item) {
-                if (!is_string($item)) {
-                    return is_array($item) ? $item : [];
+    $parsedCategories = collect($rawCategories)
+        ->flatMap(function ($item) {
+            if (!is_string($item)) {
+                return is_array($item) ? $item : [];
+            }
+            
+            $cleaned = trim($item);
+            if (str_starts_with($cleaned, '[') && str_ends_with($cleaned, ']')) {
+                $decoded = json_decode($cleaned, true);
+                if (is_array($decoded)) {
+                    return $decoded; 
                 }
+            }
 
-                $cleaned = trim($item);
-                // Si la chaîne est un tableau JSON (ex: ["..."])
-                if (str_starts_with($cleaned, '[') && str_ends_with($cleaned, ']')) {
-                    $decoded = json_decode($cleaned, true);
-                    if (is_array($decoded)) {
-                        return $decoded;
-                    }
-                }
+            return [$item];
+        })
+        ->flatMap(function ($item) {
+            if (!is_string($item)) {
+                return [];
+            }
 
-                return [$item];
-            })
-            ->flatMap(function ($item) {
-                if (!is_string($item)) {
-                    return [];
-                }
+            $item = trim($item, " \t\n\r\0\x0B\"'[]");
 
-                // Nettoyer les guillemets et crochets superflus
-                $item = trim($item, " \t\n\r\0\x0B\"'[]");
+            $tokens = preg_split('/,\s*|\s*\|\s*|\s+and\s+|\s+et\s+|\s*&\s*/i', $item);
 
-                // Découpage par virgule, pipe, and, et, ou &
-                $tokens = preg_split('/,\s*|\s*\|\s*|\s+and\s+|\s+et\s+|\s*&\s*/i', $item);
+            return array_map(function ($token) {
+                return trim($token, " \t\n\r\0\x0B\"'[]");
+            }, $tokens);
+        })
+        ->filter(function ($value) {
+            if (empty($value)) {
+                return false;
+            }
 
-                return array_map(function ($token) {
-                    return trim($token, " \t\n\r\0\x0B\"'[]");
-                }, $tokens);
-            })
-            ->filter(function ($value) {
-                return !empty($value);
-            })
-            ->unique()
-            ->sort()
-            ->values()
-            ->all();
+            // Optional: Remove obvious dangling truncations ending in prepositions/letters 
+            // if they look incomplete (e.g. ends with trailing ' d', ' du', etc. without completing)
+            $lower = mb_strtolower($value);
+            if (preg_match('/\b(du|d\'|de|et|la|le)\s*$/ui', $lower) && mb_strlen($value) < 15) {
+                return false;
+            }
+
+            return true;
+        })
+        ->unique()
+        ->values();
+
+    // Remove shorter fragments that are exact prefixes of longer categories (e.g., "Structure du Bâtim" vs "Structure du Bâtiment")
+    $sortedCategories = $parsedCategories->sort(function ($a, $b) {
+        return mb_strlen($b) <=> mb_strlen($a); // Sort longest first
+    });
+
+    $finalCategories = [];
+    foreach ($sortedCategories as $category) {
+        $isPrefixOfAnother = false;
+        foreach ($finalCategories as $existing) {
+            // If current category is a starting prefix of a longer already-accepted category, skip it
+            if (str_starts_with(mb_strtolower($existing), mb_strtolower($category))) {
+                $isPrefixOfAnother = true;
+                break;
+            }
+        }
+        if (!$isPrefixOfAnother) {
+            $finalCategories[] = $category;
+        }
+    }
+
+    sort($finalCategories);
+
+   
 
         return response()->json([
             'success' => true,
-            'data' => $parsedCategories,
+            'data' => array_values($finalCategories),
         ]);
     }
 

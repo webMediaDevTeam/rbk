@@ -1,5 +1,6 @@
 import SearchBar from '@/components/ui/search-bar.jsx'
 import Select from '@/components/ui/select'
+import { truncateLabel } from '@/lib/utils'
 import { useProspectToolbar } from './useProspectToolbar.js'
 
 export default function ProspectToolbar(props) {
@@ -41,7 +42,7 @@ export default function ProspectToolbar(props) {
       >
         <option value="">Catégorie: Toutes</option>
         {Array.isArray(categoriesList) && categoriesList.map((c) => (
-          <option key={c} value={c}>{c}</option>
+          <option key={c} value={c} title={c}>{truncateLabel(c)}</option>
         ))}
       </Select>
       <Select

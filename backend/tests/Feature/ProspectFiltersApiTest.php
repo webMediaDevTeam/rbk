@@ -136,6 +136,31 @@ class ProspectFiltersApiTest extends TestCase
     }
 
     /**
+     * Le filtre `?category=` fonctionne en **partiel** (`LIKE %clé%`) : une
+     * sous-chaîne rattrape tout libellé qui la contient, quelle que soit sa
+     * place dans le tableau JSON (élément exact ou fusionné « A , B , C »).
+     */
+    public function test_category_filter_matches_partial_key(): void
+    {
+        $plombier = $this->makeClient(['name' => 'Plomba', 'categories' => ['Plomberie']]);
+        $plomb2 = $this->makeClient(['name' => 'Plomba2', 'categories' => ['Plombier']]);
+        $merged = $this->makeClient(['name' => 'Fusion', 'categories' => ['Maison , Plomberie-Maison']]);
+        $unrelated = $this->makeClient(['name' => 'Toit', 'categories' => ['Toiture']]);
+
+        Sanctum::actingAs($this->makeCommercial());
+
+        $ids = collect(
+            $this->getJson('/api/v1/clients?category='.urlencode('Plomb'))
+                ->assertOk()->json('data.clients')
+        )->pluck('id');
+
+        $this->assertTrue($ids->contains($plombier->id), '« Plomb » doit matcher « Plomberie ».');
+        $this->assertTrue($ids->contains($plomb2->id), '« Plomb » doit matcher « Plombier ».');
+        $this->assertTrue($ids->contains($merged->id), '« Plomb » doit matcher un élément fusionné.');
+        $this->assertFalse($ids->contains($unrelated->id), '« Plomb » ne doit pas matcher « Toiture ».');
+    }
+
+    /**
      * Éléments `categories` **fusionnés** (« A , B , C » — séparateur « , »
      * avec espace avant la virgule) : le sélecteur `/filters` n'expose que
      * des libellés atomiques sans doublons — les noms légitimes contenant
@@ -185,12 +210,13 @@ class ProspectFiltersApiTest extends TestCase
         )->pluck('name');
         $this->assertEqualsCanonicalizing(['Complexe A', 'Complexe B'], $byTail->all());
 
-        // Un sous-chaîne d'un libellé ne matche pas (« CVC-Maison » ≠
-        // « CVC-Maisons »).
-        $this->assertCount(
-            0,
+        // Correspondance **partielle** (`LIKE %clé%`) : une sous-chaîne d'un
+        // libellé rattrape désormais les éléments qui la contiennent
+        // (« CVC-Maison » matche « CVC-Maisons »).
+        $byPartial = collect(
             $this->getJson('/api/v1/clients?category='.urlencode('CVC-Maison'))
                 ->assertOk()->json('data.clients') ?? []
-        );
+        )->pluck('name');
+        $this->assertEqualsCanonicalizing(['Complexe A', 'Complexe B'], $byPartial->all());
     }
 }
