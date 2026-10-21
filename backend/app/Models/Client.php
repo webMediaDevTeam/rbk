@@ -185,7 +185,7 @@ class Client extends Model
     /** Trim + espaces répétés (dont insécables) réduits, quotes retirées. */
     public static function cleanText(mixed $value): ?string
     {
-        if ($value === null || ! is_scalar($value)) {
+        if ($value === null || !is_scalar($value)) {
             return null; // NULL ou liste placée dans une colonne texte
         }
 
@@ -205,7 +205,7 @@ class Client extends Model
         $separators = [' ', "\xC2\xA0", '-', '(', ')', '.', '+', '/'];
 
         foreach ($separators as $separator) {
-            $expr = 'REPLACE('.$expr.", '".$separator."', '')";
+            $expr = 'REPLACE(' . $expr . ", '" . $separator . "', '')";
         }
 
         return $expr;
@@ -266,7 +266,7 @@ class Client extends Model
      */
     public static function normalizePhone(mixed $value): ?string
     {
-        if (! is_scalar($value)) {
+        if (!is_scalar($value)) {
             return null; // NULL ou liste placée dans un champ téléphone
         }
 
@@ -332,7 +332,7 @@ class Client extends Model
     {
         return $query
             ->where('status', self::STATUS_AVAILABLE)
-            ->where(fn ($q) => $q->whereNull('returned_at')->orWhere('returned_at', '<=', now()));
+            ->where(fn($q) => $q->whereNull('returned_at')->orWhere('returned_at', '<=', now()));
     }
 
     /**
@@ -345,7 +345,7 @@ class Client extends Model
      */
     public function scopeWithoutPhone($query)
     {
-        return $query->where(fn ($q) => $q->whereNull('phone')->orWhere('phone', ''));
+        return $query->where(fn($q) => $q->whereNull('phone')->orWhere('phone', ''));
     }
 
     /** Inverse de `scopeWithoutPhone()` — au moins un numéro renseigné. */
@@ -483,7 +483,7 @@ class Client extends Model
 
         if ($this->relationLoaded('reservations')) {
             return $this->reservations
-                ->sortByDesc(fn (Reservation $r) => [$r->created_at, $r->id])
+                ->sortByDesc(fn(Reservation $r) => [$r->created_at, $r->id])
                 ->first()?->status;
         }
 
@@ -506,9 +506,9 @@ class Client extends Model
     public static function loadLatestReservations(iterable $clients): void
     {
         $pending = collect($clients)
-            ->filter(fn ($client) => $client instanceof self
+            ->filter(fn($client) => $client instanceof self
                 && in_array($client->status, [self::STATUS_RESERVED, self::STATUS_CONFIRMED, self::STATUS_UNAVAILABLE], true)
-                && ! $client->relationLoaded('latestReservation'));
+                && !$client->relationLoaded('latestReservation'));
 
         $ids = $pending->pluck('id');
         if ($ids->isEmpty()) {
@@ -574,7 +574,7 @@ class Client extends Model
      */
     public static function distinctValues(string $column): array
     {
-        if (! in_array($column, self::DISTINCT_COLUMNS, true)) {
+        if (!in_array($column, self::DISTINCT_COLUMNS, true)) {
             throw new InvalidArgumentException(sprintf(
                 'Colonne non exposée aux filtres : %s (attendu : %s)',
                 $column,
@@ -585,7 +585,7 @@ class Client extends Model
         return Cache::remember(
             self::distinctCacheKey($column),
             self::DISTINCT_CACHE_TTL,
-            fn () => self::queryDistinctValues($column)
+            fn() => self::queryDistinctValues($column)
         );
     }
 
@@ -606,14 +606,14 @@ class Client extends Model
     /** Clé de cache d'une liste distincte. */
     private static function distinctCacheKey(string $column): string
     {
-        return 'clients:distinct:'.$column;
+        return 'clients:distinct:' . $column;
     }
 
     /** Auto-invalidation du cache des listes distinctes. */
     protected static function booted(): void
     {
-        static::saved(fn () => static::forgetDistinctValues());
-        static::deleted(fn () => static::forgetDistinctValues());
+        static::saved(fn() => static::forgetDistinctValues());
+        static::deleted(fn() => static::forgetDistinctValues());
     }
 
     /**
@@ -634,7 +634,7 @@ class Client extends Model
         $labels = [];
 
         foreach ($values as $value) {
-            if (! is_string($value)) {
+            if (!is_string($value)) {
                 continue;
             }
 
@@ -679,10 +679,10 @@ class Client extends Model
 
                 return [$raw];
             })
-            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->filter(fn($value) => is_string($value) && trim($value) !== '')
             // Déduplication insensible à la casse : « Montréal » et
             // « montréal » ne doivent pas revenir en double.
-            ->unique(fn ($value) => mb_strtolower(trim($value)))
+            ->unique(fn($value) => mb_strtolower(trim($value)))
             ->sort()
             ->values()
             ->all();
@@ -700,8 +700,47 @@ class Client extends Model
      */
     public static function getUniqueCategoriesAndMunicipalities(): array
     {
+        $rawCategories = self::distinctValues('categories');
+
+        $parsedCategories = collect($rawCategories)
+            ->flatMap(function ($item) {
+                if (!is_string($item)) {
+                    return is_array($item) ? $item : [];
+                }
+
+                $cleaned = trim($item);
+                if (str_starts_with($cleaned, '[') && str_ends_with($cleaned, ']')) {
+                    $decoded = json_decode($cleaned, true);
+                    if (is_array($decoded)) {
+                        return $decoded;
+                    }
+                }
+
+                return [$item];
+            })
+            ->flatMap(function ($item) {
+                if (!is_string($item)) {
+                    return [];
+                }
+
+                $item = trim($item, " \t\n\r\0\x0B\"'[]");
+
+                $tokens = preg_split('/,\s*|\s*\|\s*|\s+and\s+|\s+et\s+|\s*&\s*/i', $item);
+
+                return array_map(function ($token) {
+                    return trim($token, " \t\n\r\0\x0B\"'[]");
+                }, $tokens);
+            })
+            ->filter(function ($value) {
+                return !empty($value);
+            })
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
         return [
-            'categories' => self::distinctValues('categories'),
+            'categories' => $parsedCategories,
             'municipalities' => self::distinctValues('municipality'),
             'administrative_regions' => self::distinctValues('administrative_region'),
         ];
