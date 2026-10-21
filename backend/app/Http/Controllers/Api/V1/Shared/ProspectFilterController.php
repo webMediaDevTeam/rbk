@@ -38,16 +38,15 @@ class ProspectFilterController extends Controller
         $parsedCategories = collect($rawCategories)
             ->flatMap(function ($item) {
                 if (!is_string($item)) {
-                    return [];
+                    return is_array($item) ? $item : [];
                 }
 
-                // If the whole string is wrapped in JSON-like array brackets and quotes, e.g. ["..."]
-                // we can decode it or strip the outer brackets/quotes first.
                 $cleaned = trim($item);
+                // Si la chaîne est un tableau JSON (ex: ["..."])
                 if (str_starts_with($cleaned, '[') && str_ends_with($cleaned, ']')) {
                     $decoded = json_decode($cleaned, true);
                     if (is_array($decoded)) {
-                        return $decoded; // let flatMap handle the array items
+                        return $decoded;
                     }
                 }
 
@@ -58,14 +57,13 @@ class ProspectFilterController extends Controller
                     return [];
                 }
 
-                // Remove unwanted wrapping quotes or brackets if any remain
+                // Nettoyer les guillemets et crochets superflus
                 $item = trim($item, " \t\n\r\0\x0B\"'[]");
 
-                // Split by comma, pipe, 'and', 'et', or '&' with surrounding whitespace
+                // Découpage par virgule, pipe, and, et, ou &
                 $tokens = preg_split('/,\s*|\s*\|\s*|\s+and\s+|\s+et\s+|\s*&\s*/i', $item);
 
                 return array_map(function ($token) {
-                    // Clean extra internal/external quotes around individual categories
                     return trim($token, " \t\n\r\0\x0B\"'[]");
                 }, $tokens);
             })
