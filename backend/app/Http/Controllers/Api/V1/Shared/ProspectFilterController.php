@@ -33,7 +33,31 @@ class ProspectFilterController extends Controller
      */
     public function categories(): JsonResponse
     {
-        return $this->values('categories');
+        $rawCategories = Client::distinctValues('categories');
+
+        $parsedCategories = collect($rawCategories)
+            ->flatMap(function ($item) {
+                if (!is_string($item)) {
+                    return [];
+                }
+
+                // Split by comma, pipe, 'and', 'et', or '&' with surrounding whitespace
+                $tokens = preg_split('/,\s*|\s*\|\s*|\s+and\s+|\s+et\s+|\s*&\s*/i', $item);
+
+                return array_map('trim', $tokens);
+            })
+            ->filter(function ($value) {
+                return !empty($value);
+            })
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return response()->json([
+            'success' => true,
+            'data' => $parsedCategories,
+        ]);
     }
 
     /**
@@ -101,7 +125,7 @@ class ProspectFilterController extends Controller
                 // sur le nom / l'email du `User` (pas de nullsafe — Larastan
                 // tient la relation eagerly-loaded pour non-nulle).
                 $employee = $u->employee;
-                $name = trim(($employee ? $employee->first_name.' '.$employee->last_name : $u->first_name.' '.$u->last_name));
+                $name = trim(($employee ? $employee->first_name . ' ' . $employee->last_name : $u->first_name . ' ' . $u->last_name));
 
                 return [
                     'id' => $u->id,
@@ -119,7 +143,7 @@ class ProspectFilterController extends Controller
             ->whereIn('id', $enterpriseIds)
             ->orderBy('name')
             ->get(['id', 'name'])
-            ->map(fn (Enterprise $e): array => ['id' => $e->id, 'name' => $e->name])
+            ->map(fn(Enterprise $e): array => ['id' => $e->id, 'name' => $e->name])
             ->all();
 
         return response()->json([
