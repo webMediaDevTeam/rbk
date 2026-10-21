@@ -6,7 +6,8 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { isSearchActive } from '@/lib/search.js'
 import { useIsDesktop } from '@/hooks/use-mobile.js'
 import { listAdminClientsApi, adminBlacklistClientApi, adminUnblockClientApi } from '@/api/commercial.api.js'
-import { CLIENT_STATUS_KEYS, STATUS_FILTER_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
+import { CLIENT_STATUS_KEYS, STATUS_FILTER_KEYS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
+import { useSourcePreference } from '@/hooks/use-source-preference.js'
 
 export function useAdminClientsHistory(params = {}) {
   return useQuery({
@@ -48,7 +49,11 @@ export function useClientsHistoryPage() {
   // Onglet « source » actif (origine du prospect, §13) : `''` = « Tous »
   // (aucun `?source=` envoyé). Sert aussi aux compteurs des badges de statut
   // (`<ProspectKpis source>` → `GET clients/overview?source=`).
-  const [source, setSource] = useState('')
+  //
+  // **Préférence partagée et persistée** (`useSourcePreference`, localStorage)
+  // : le même onglet est exposé sur le tableau de bord gestionnaire, et le
+  // choix survit à un rechargement — voir `hooks/use-source-preference.js`.
+  const { source, setSource } = useSourcePreference()
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [sortBy, setSortBy] = useState('created_at')
@@ -209,6 +214,36 @@ export function useClientsHistoryPage() {
     setCurrentPage(1)
   }
 
+  // « Réinitialiser les filtres » : vide la recherche, le badge de statut,
+  // les facettes (municipalité / catégorie / région) et les filtres
+  // d'interaction (entreprise / employé), puis revient à la 1re page.
+  //
+  // L'onglet « source » est **volontairement épargné** : ce n'est pas un
+  // réglage de la page mais une préférence mémorisée (`useSourcePreference`),
+  // partagée avec le tableau de bord — le même choix y est aussi respecté par
+  // son propre bouton « Réinitialiser ». Le tri et le nombre de lignes par page
+  // restent également tels quels (ce sont des préférences d'affichage).
+  const filtersActive = Boolean(
+    search || statusFilter || municipality || categories || region || enterprise || employee,
+  )
+
+  const resetFilters = () => {
+    setSearch('')
+    setStatusFilter(null)
+    setMunicipality('')
+    setCategories('')
+    setRegion('')
+    setEnterprise('')
+    setEmployee('')
+    setCurrentPage(1)
+
+    // Le badge était peut-être arrivé par l'URL (`/clients-historique?status=…`)
+    // : le paramètre est retiré pour qu'un rafraîchissement ne le remette pas.
+    const params = new URLSearchParams(searchParams)
+    params.delete('status')
+    setSearchParams(params, { replace: true })
+  }
+
   return {
     isDesktop,
     isLoading,
@@ -234,6 +269,9 @@ export function useClientsHistoryPage() {
     handleSourceChange,
     currentPage,
     setCurrentPage,
+    // Bouton « Réinitialiser les filtres » de la barre d'outils.
+    filtersActive,
+    resetFilters,
     rowsPerPage,
     handleRowsPerPageChange,
     totalPages,

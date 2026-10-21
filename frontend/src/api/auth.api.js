@@ -14,6 +14,15 @@ export async function loginApi(payload) {
   return api.post('/auth/login', payload)
 }
 
+/**
+ * État public du coupe-circuit GPS (`GET /auth/geofence`) — la page de
+ * connexion ne réclame la position au navigateur que quand le contrôle est
+ * activé côté serveur (interrupteur de la page « GPS »).
+ */
+export function geofenceStatusApi() {
+  return api.get('/auth/geofence')
+}
+
 export function sendLoginOtpApi(payload) {
   return api.post('/auth/login/otp', payload)
 }

@@ -7,6 +7,7 @@ import StatusBadge from './StatusBadge'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import ComercialStatsChips from './ComercialStatsChips.jsx'
 import { useComercialTable } from './useComercialTable.js'
 
 export default function ComercialTable(props) {
@@ -22,6 +23,7 @@ export default function ComercialTable(props) {
             </TableHead>
             <TableHead>N° RingCentral</TableHead>
             <TableHead>Entreprise</TableHead>
+            
             <TableHead>Privilège</TableHead>
             <TableHead title="Autoriser la connexion en dehors des zones GPS">
               <span className="inline-flex items-center gap-1">Hors zones</span>
@@ -78,6 +80,7 @@ export default function ComercialTable(props) {
                   )}
                 </div>
               </TableCell>
+             
               <TableCell className="text-muted-foreground">
                 {row.hasPermission ? (
                   <Badge variant="primary" className="uppercase">Oui</Badge>

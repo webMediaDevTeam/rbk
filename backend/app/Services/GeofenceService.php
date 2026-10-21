@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\GpsZone;
+use App\Models\Setting;
 use App\Models\User;
 
 /**
@@ -19,11 +20,32 @@ class GeofenceService
     private const EARTH_RADIUS_M = 6371000.0;
 
     /**
+     * Coupe-circuit **effectif** du géorepérage.
+     *
+     * La préférence posée en base (interrupteur « Contrôle GPS à la connexion »
+     * de la page « GPS », clé `Setting::GEOFENCE_ENABLED`) a la main dès qu'elle
+     * existe ; sinon on retombe sur `config('geofence.enabled')` (la variable
+     * d'environnement `GEOFENCE_ENABLED`), **éteinte par défaut**. Un
+     * administrateur peut donc activer et désactiver le contrôle sans
+     * redéploiement, et un environnement neuf démarre sans géorepérage.
+     *
+     * Lu aussi par la page de connexion (route publique) : éteint, elle ne
+     * demande plus la position au navigateur.
+     */
+    public static function isEnabled(): bool
+    {
+        return Setting::bool(
+            Setting::GEOFENCE_ENABLED,
+            (bool) config('geofence.enabled', false),
+        );
+    }
+
+    /**
      * @return array{allowed: bool, code?: string, message?: string}
      */
     public function check(User $user, ?float $lat, ?float $lng, ?float $accuracy): array
     {
-        if (! config('geofence.enabled')) {
+        if (! self::isEnabled()) {
             return ['allowed' => true];
         }
 

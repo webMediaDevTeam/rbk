@@ -19,6 +19,17 @@ export function deleteGpsZoneApi(id) {
   return api.delete(`/gps/zones/${id}`)
 }
 
+// Réglages **globaux** du géorepérage (haut de la page « GPS ») : le
+// coupe-circuit du contrôle à la connexion est stocké en base, il se bascule
+// donc sans redéploiement ni `config:clear`.
+export function getGpsSettingsApi() {
+  return api.get('/gps/settings')
+}
+
+export function updateGpsSettingsApi(geofenceEnabled) {
+  return api.put('/gps/settings', { geofence_enabled: Boolean(geofenceEnabled) })
+}
+
 // Dérogation « Connexion hors zones » d'un compte contraint
 // (COMERCIAL / OPERATOR) — colonne de la page Employés.
 export function toggleGpsBypassApi(id, gpsBypass) {

@@ -58,12 +58,12 @@ class GpsZoneApiTest extends TestCase
     {
         Sanctum::actingAs($this->admin());
 
-        // Rayon hors bornes [50, 20000] + latitude invalide.
+        // Rayon hors bornes [50, 1000] + latitude invalide.
         $this->postJson('/api/v1/gps/zones', [
             'name' => 'Gratte-ciel',
             'latitude' => 95,
             'longitude' => -73.5673,
-            'radius_m' => 25000,
+            'radius_m' => 1500,
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['latitude', 'radius_m']);
@@ -89,12 +89,12 @@ class GpsZoneApiTest extends TestCase
 
         $this->putJson("/api/v1/gps/zones/{$zone->id}", [
             'name' => 'Tunis Centre',
-            'radius_m' => 1200,
+            'radius_m' => 850,
             'is_active' => false,
         ])
             ->assertOk()
             ->assertJsonPath('zone.name', 'Tunis Centre')
-            ->assertJsonPath('zone.radius_m', 1200)
+            ->assertJsonPath('zone.radius_m', 850)
             ->assertJsonPath('zone.is_active', false);
 
         $this->deleteJson("/api/v1/gps/zones/{$zone->id}")->assertOk();

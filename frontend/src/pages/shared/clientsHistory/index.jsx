@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext.jsx'
 import ProspectTable from '@/pages/comercial/ProspectList/components/ProspectTable.jsx'
 import ProspectCard from '@/pages/comercial/ProspectList/components/ProspectCard.jsx'
 import ClientsHistoryToolbar from './components/ClientsHistoryToolbar.jsx'
-import SourceTabs from './components/SourceTabs.jsx'
+import SourceTabs from '@/pages/shared/components/SourceTabs/index.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
 import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
@@ -39,6 +39,8 @@ export default function ClientsHistoryPage() {
     handleSourceChange,
     currentPage,
     setCurrentPage,
+    filtersActive,
+    resetFilters,
     rowsPerPage,
     handleRowsPerPageChange,
     totalPages,
@@ -92,6 +94,7 @@ export default function ClientsHistoryPage() {
         region={region} setRegion={handleRegionChange}
         enterprise={enterprise} setEnterprise={handleEnterpriseChange}
         employee={employee} setEmployee={handleEmployeeChange}
+        filtersActive={filtersActive} onResetFilters={resetFilters}
         showFacets={!isOperator}
       />
 

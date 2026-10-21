@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { api } from '@/api/client.js'
 import { useAuth } from '@/context/AuthContext.jsx'
-import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
+import { CLIENT_STATUS_KEYS, STATUS_FILTER_KEYS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
 
 const BASE_TABS = [
   { value: 'details', label: 'Détails employé' },
@@ -32,6 +32,7 @@ export function useComercialDetail(id, { page = 1, search, status, reservationSt
 export function useComercialDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { role } = useAuth()
   // Onglet « Appels » (journal RingCentral + enregistrements) : réservé aux
   // mêmes rôles que les modales / routes d'appel (ADMIN, SUPER_ADMIN).
@@ -39,13 +40,22 @@ export function useComercialDetailPage() {
   const TABS = isAdmin
     ? [...BASE_TABS, { value: 'appels', label: 'Appels' }]
     : BASE_TABS
-  const [activeTab, setActiveTab] = useState('details')
+  // Pré-filtre par l'URL — les puces « Activité » de la page « Employés »
+  // mènent ici avec `?tab=historique&status=BV_VOICEMAIL|CALL_BACK` : onglet
+  // et badge ouverts au montage, comme les cartes KPI du dashboard vers la
+  // Grande liste. Valeur inconnue → ignorée (sélection « Tous »).
+  const [activeTab, setActiveTab] = useState(() =>
+    searchParams.get('tab') === 'historique' ? 'historique' : 'details',
+  )
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [search, setSearch] = useState('')
   // Barre de badges de statut (onglet Historique) : **sélection unique** —
   // `null` = « Tous », sinon une seule valeur active à la fois.
-  const [statusFilter, setStatusFilter] = useState(null)
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const value = searchParams.get('status')
+    return value && STATUS_FILTER_KEYS.includes(value) ? value : null
+  })
 
   const debouncedSearch = useDebouncedValue(search, 400)
   const searchParam = debouncedSearch.trim().length >= 3 ? debouncedSearch.trim() : undefined

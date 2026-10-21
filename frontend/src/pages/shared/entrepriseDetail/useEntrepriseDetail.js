@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { getEntrepriseStatsApi } from '@/api/admin.api.js'
-import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/index.jsx'
+import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
 
 // Même structure d'onglets que le détail d'un employé (composants partagés),
 // moins l'onglet « Appels » (journal RingCentral propre à un employé).

@@ -4,23 +4,30 @@ import { listClientSourcesApi } from '@/api/shared.api.js'
 import { useAuth } from '@/context/AuthContext.jsx'
 
 /**
- * Onglets « Tous / Affaire / … » de la Grande liste admin : **le filtre par
- * source** (`?source=` de `GET commercials/clients`, origine du prospect —
- * répertoire `sources`, docs/RULES.md §13).
+ * Onglets « Tous / Affaire / … » — **le filtre par source** (`?source=` des
+ * listes de clients, origine du prospect — répertoire `sources`,
+ * docs/RULES.md §13).
+ *
+ * Composant **partagé** par les deux écrans où la même sélection s'applique :
+ * la Grande liste admin (`/clients-historique`) et le tableau de bord
+ * gestionnaire, qui borne ses cartes par l'origine active. La valeur vient du
+ * parent (`useSourcePreference`) : elle est persistée dans `localStorage`,
+ * donc identique sur les deux pages, et survit à un rechargement.
  *
  *  - Onglets = noms du répertoire `sources` (`GET clients/sources`, triés) ;
  *  - sélection **unique** : « Tous » (paramètre `source` vide = aucun filtre)
  *    ou une seule origine — un second clic sur l'onglet actif repasse à
- *    « Tous » ; tout changement ramène à la 1re page ;
+ *    « Tous » ; sur une liste, tout changement ramène à la 1re page (réglé par
+ *    le parent) ;
  *  - **réservé ADMIN / SUPER_ADMIN** (`clients:filter-source`) : sans ce
  *    privilège la barre n'est même pas rendue. Le commercial n'accède pas à
- *    cette page (`ROLES.MANAGERS` + `CheckRole:ADMIN,SUPER_ADMIN`) et sa
+ *    la Grande liste (`ROLES.MANAGERS` + `CheckRole:ADMIN,SUPER_ADMIN`) et sa
  *    propre liste (`/prospects`) est verrouillée **côté serveur** sur la
  *    source de son entreprise : aucun onglet de ce côté-là ;
- *  - la source active borne aussi les compteurs des badges de statut : la
- *    page la transmet à `<ProspectKpis source={…}>`, qui l'envoie à
- *    `GET clients/overview?source=` — l'invariant « compteur du badge =
- *    lignes rendues » (§9) tient donc sous chaque onglet.
+ *  - la source active borne aussi les compteurs (badges de statut de la liste,
+ *    cartes du dashboard) : la page la transmet à `GET clients/overview?source=`
+ *    et `GET dashboard/stats?source=`, donc « compteur du badge = lignes
+ *    rendues » (§9) tient sous chaque onglet.
  *
  * @param {string}   source  Source active (`''` = « Tous »).
  * @param {Function} onChange reçoit la nouvelle source (`''` pour « Tous »).

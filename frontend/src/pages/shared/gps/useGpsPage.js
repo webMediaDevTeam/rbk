@@ -4,7 +4,9 @@ import { toast } from 'sonner'
 import {
   createGpsZoneApi,
   deleteGpsZoneApi,
+  getGpsSettingsApi,
   listGpsZonesApi,
+  updateGpsSettingsApi,
   updateGpsZoneApi,
 } from '@/api/gps.api.js'
 import { getPosition } from '@/lib/geolocation'
@@ -12,7 +14,7 @@ import { getPosition } from '@/lib/geolocation'
 /** Rayon par défaut d'une nouvelle zone (mètres). */
 export const DEFAULT_RADIUS_M = 500
 export const MIN_RADIUS_M = 50
-export const MAX_RADIUS_M = 20000
+export const MAX_RADIUS_M = 1000
 
 /** Brouillon vide (aucune zone en édition). */
 const EMPTY_EDITING = {
@@ -30,6 +32,11 @@ const EMPTY_EDITING = {
  * bascule active et suppression. La cible de recentrage du plan
  * (`flyTarget`) est un { lat, lng, zoom, nonce } — le `nonce` force un
  * `flyTo` même sur la même zone.
+ *
+ * S'y ajoutent les **réglages globaux** : le coupe-circuit du contrôle à la
+ * connexion (`geofence_enabled`, lu et écrit en base par `PUT gps/settings`)
+ * et le nombre de zones actives, affiché à côté pour avertir qu'activer sans
+ * aucune zone valide bloquerait tous les comptes contraints.
  */
 export function useGpsPage() {
   const queryClient = useQueryClient()
@@ -43,7 +50,32 @@ export function useGpsPage() {
 
   const zones = zonesQuery.data?.zones ?? []
 
+  const settingsQuery = useQuery({
+    queryKey: ['gps-settings'],
+    queryFn: getGpsSettingsApi,
+  })
+
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['gps-zones'] })
+
+  // Bascule du contrôle : le serveur renvoie l'état **relu en base**, c'est lui
+  // qui alimente l'affichage (pas d'optimiste — un désaccord visuel sur un
+  // coupe-circuit de sécurité serait pire qu'un court délai).
+  const settingsMut = useMutation({
+    mutationFn: (enabled) => updateGpsSettingsApi(enabled),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['gps-settings'], (prev) => ({
+        ...(prev ?? {}),
+        geofence_enabled: Boolean(data?.geofence_enabled),
+      }))
+      toast.success(
+        data?.geofence_enabled
+          ? 'Contrôle GPS à la connexion activé.'
+          : 'Contrôle GPS à la connexion désactivé.',
+      )
+    },
+    onError: (error) =>
+      toast.error(error?.response?.data?.message ?? 'Bascule impossible.'),
+  })
 
   const saveMut = useMutation({
     mutationFn: ({ id, payload }) => (id ? updateGpsZoneApi(id, payload) : createGpsZoneApi(payload)),
@@ -146,5 +178,12 @@ export function useGpsPage() {
     toggleActive: (zone, isActive) => toggleMut.mutate({ id: zone.id, is_active: isActive }),
     cancelEdit: () => setEditing(EMPTY_EDITING),
     saveDisabled,
+    // Réglages globaux : état du contrôle, zones actives et bascule.
+    geofenceEnabled: Boolean(settingsQuery.data?.geofence_enabled),
+    activeZones: settingsQuery.data?.active_zones ?? 0,
+    enforcedRoles: settingsQuery.data?.enforced_roles ?? [],
+    isLoadingSettings: settingsQuery.isLoading,
+    isTogglingGeofence: settingsMut.isPending,
+    toggleGeofence: (enabled) => settingsMut.mutate(enabled),
   }
 }

@@ -5,6 +5,7 @@ import Switch from '@/components/ui/switch.jsx'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
+import ComercialStatsChips from './ComercialStatsChips.jsx'
 import { useComercialCard } from './useComercialCard.js'
 
 export default function ComercialCard(props) {
@@ -16,6 +17,7 @@ export default function ComercialCard(props) {
     rcDuplicate,
     gpsBypass,
     isOperator,
+    stats,
     toggleLabel,
     canDelete,
     handleAvatarClick,
@@ -94,6 +96,12 @@ export default function ComercialCard(props) {
         <div>
           <span className="text-muted-foreground text-xs">Entreprise</span>
           <p className="truncate">{enterpriseName}</p>
+        </div>
+        <div>
+          <span className="text-muted-foreground text-xs">Activité</span>
+          <div className="mt-1">
+            <ComercialStatsChips stats={stats} userId={comercial.id} linked={!isOperator} />
+          </div>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground text-xs" title="Autoriser la connexion en dehors des zones GPS">Connexion hors zones</span>

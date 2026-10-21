@@ -241,8 +241,10 @@ class DoubleInfoStatusTest extends TestCase
 
     public function test_double_client_is_visible_in_the_grande_list_only_to_its_holder(): void
     {
-        $holder = $this->makeCommercial();
-        $colleague = $this->makeCommercial();
+        // Le privilège commercial (§7.1) est requis : sans `has_permission`,
+        // les « Double » sortent de la liste **même pour leur titulaire**.
+        $holder = $this->makeCommercial(['has_permission' => true]);
+        $colleague = $this->makeCommercial(['has_permission' => true]);
         [$client] = $this->heldClientFor($holder);
 
         $holderIds = $this->listIds('/api/v1/clients', $holder);
@@ -397,5 +399,77 @@ class DoubleInfoStatusTest extends TestCase
         // Le badge « Libre » (dimension client) reste exact lui aussi.
         $this->assertSame([$free->id], $this->listIds('/api/v1/commercials/clients?status=AVAILABLE', $admin));
         $this->assertSame(Reservation::STATUS_DOUBLE, $doubleReservation->fresh()->status);
+    }
+
+    /**
+     * Barre de badges de la Grande liste **commerciale** (`data.badges` de
+     * `GET clients`) : `Tous` / `Libre` / `Double` / `Info`, compteurs du
+     * **périmètre de l'employé** (sa source, ses prospects tenus, son
+     * privilège) — et le clic sur un badge rend exactement son compteur.
+     */
+    public function test_commercial_grande_list_badges_count_and_filter_its_own_rows(): void
+    {
+        $holder = $this->makeCommercial(['has_permission' => true]);
+        $colleague = $this->makeCommercial(['has_permission' => true]);
+
+        [$doubleClient] = $this->heldClientFor($holder);
+        [$infoClient] = $this->heldClientFor($holder, Client::STATUS_INFO);
+        $free = $this->makeClient(['name' => 'Libre inc.']);
+        // « Double » d'un collègue : jamais compté ni rendu côté titulaire.
+        [$colleagueDouble] = $this->heldClientFor($colleague);
+
+        Sanctum::actingAs($holder);
+        $badges = $this->getJson('/api/v1/clients')
+            ->assertOk()
+            ->json('data.badges');
+
+        $this->assertSame(3, $badges['prospects']['system'], 'Toutes les lignes de sa liste.');
+        $this->assertSame(
+            [
+                Client::STATUS_AVAILABLE => 1,
+                Client::STATUS_DOUBLE => 1,
+                Client::STATUS_INFO => 1,
+            ],
+            $badges['by_display_status'],
+            'Un « Double » et un « Info » **tenu par lui**, le collègue reste hors périmètre.'
+        );
+
+        // Invariant compteur ⇄ lignes : le clic rend le compteur.
+        $this->assertSame([$doubleClient->id], $this->listIds('/api/v1/clients?status=DOUBLE', $holder));
+        $this->assertSame([$infoClient->id], $this->listIds('/api/v1/clients?status=INFO', $holder));
+        $this->assertSame([$free->id], $this->listIds('/api/v1/clients?status=AVAILABLE', $holder));
+
+        // Le `status` de la barre ne se transforme jamais en lot : la
+        // réservation d'un lot ignore le paramètre (un « Double » n'est pas
+        // réservable une seconde fois).
+        Sanctum::actingAs($holder);
+        $this->postJson('/api/v1/clients/reserver', ['count' => 50, 'status' => Client::STATUS_DOUBLE])
+            ->assertCreated();
+        $this->assertSame(
+            Client::STATUS_DOUBLE,
+            $colleagueDouble->fresh()->status,
+            'Aucun nouveau prospect « Double » n’est passé en réservation.'
+        );
+        $this->assertSame(1, Reservation::where('client_id', $colleagueDouble->id)->count());
+    }
+
+    /**
+     * Sans le privilège commercial (§7.1), les « Double » disparaissent de la
+     * liste : le badge tombe à 0 comme les lignes (l'employé ne peut pas
+     * cliquer sur une ligne qu'il ne voit pas).
+     */
+    public function test_commercial_badge_double_is_zero_without_the_privilege(): void
+    {
+        $holder = $this->makeCommercial();
+        $this->heldClientFor($holder);
+        $this->makeClient(['name' => 'Libre inc.']);
+
+        Sanctum::actingAs($holder);
+        $payload = $this->getJson('/api/v1/clients')->assertOk()->json('data');
+
+        $this->assertSame(0, $payload['badges']['by_display_status'][Client::STATUS_DOUBLE]);
+        $this->assertSame(1, $payload['badges']['prospects']['system'], 'Ne reste que le prospect libre.');
+        $this->assertCount(1, $payload['clients'], 'Une seule ligne rendue : le badge dit juste.');
+        $this->assertSame([], $this->listIds('/api/v1/clients?status=DOUBLE', $holder), 'Clic « Double » : rien.');
     }
 }

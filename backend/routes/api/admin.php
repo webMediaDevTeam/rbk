@@ -30,6 +30,10 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
     Route::get('liste-noire', [AdminController::class, 'listeNoire']);
     Route::post('liste-noire/{id}/debloquer', [AdminController::class, 'debloquerClient']);
     Route::get('commercials', [CommercialAdminController::class, 'index']);
+    // Compteurs par employé (puces Clients / BV / Rappel / Oui de la page
+    // « Employés ») — déclarée AVANT `commercials/{id}`, sinon « stats »
+    // serait avalé par le segment d'identifiant.
+    Route::get('commercials/stats', [CommercialAdminController::class, 'stats']);
     Route::post('commercials/clients/{id}/blacklist', [CommercialAdminController::class, 'blacklist']);
     Route::get('commercials/{id}', [CommercialAdminController::class, 'show']);
 
@@ -39,4 +43,9 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
     Route::post('gps/zones', [GpsZoneController::class, 'store']);
     Route::put('gps/zones/{zone}', [GpsZoneController::class, 'update']);
     Route::delete('gps/zones/{zone}', [GpsZoneController::class, 'destroy']);
+
+    // Coupe-circuit **global** du contrôle GPS à la connexion (interrupteur en
+    // haut de la page « GPS ») — stocké en base, pas dans la configuration.
+    Route::get('gps/settings', [GpsZoneController::class, 'settings']);
+    Route::put('gps/settings', [GpsZoneController::class, 'updateSettings']);
 });

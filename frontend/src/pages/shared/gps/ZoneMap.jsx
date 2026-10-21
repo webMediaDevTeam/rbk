@@ -37,6 +37,35 @@ function FlyController({ target }) {
 }
 
 /**
+ * Zoom automatique « voir tout le cercle » : dès que le rayon en édition
+ * (ou son déplacement) dépasse la vue affichée, la carte dézoome pour
+ * contenir le cercle entier. Un zoom manuel par l'admin n'est jamais
+ * corrigé : l'ajustement ne se déclenche que sur changement de
+ * position/rayon.
+ */
+function EditingFit({ editing }) {
+  const map = useMap()
+  const { lat, lng } = editing
+  const radius = Math.min(Math.max(Number(editing.radius_m) || 0, MIN_RADIUS_M), MAX_RADIUS_M)
+
+  useEffect(() => {
+    if (lat === null || lng === null) {
+      return
+    }
+    // Bornes approchées du cercle (1° de latitude ≈ 111,32 km).
+    const dLat = radius / 111320
+    const dLng = radius / (111320 * Math.cos((lat * Math.PI) / 180))
+    const circleBounds = L.latLngBounds([lat - dLat, lng - dLng], [lat + dLat, lng + dLng])
+
+    if (!map.getBounds().contains(circleBounds)) {
+      map.fitBounds(circleBounds, { padding: [40, 40], maxZoom: 16 })
+    }
+  }, [map, lat, lng, radius])
+
+  return null
+}
+
+/**
  * « Utiliser ma position » + recherche de lieu (Nominatim OSM) posés en
  * bandeau au-dessus de la carte. La recherche est volontairement limitée :
  * ~1 requête / s maximum, usage admin uniquement (politique d'OSM).
@@ -44,14 +73,14 @@ function FlyController({ target }) {
 function MapToolbar({ onUseMyLocation, searching, query, setQuery }) {
   return (
     <div className="absolute top-2 left-2 right-2 z-[1200] flex flex-col gap-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-2">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Chercher un lieu (ville, adresse…)"
-            className="w-full rounded-md border bg-background py-1.5 pl-8 pr-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full rounded-xl bg-background/90 backdrop-blur px-3 py-1.5 pl-8 text-sm shadow-md outline-none transition placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
           />
           {searching && query.trim().length >= 3 && (
             <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">…</span>
@@ -61,7 +90,7 @@ function MapToolbar({ onUseMyLocation, searching, query, setQuery }) {
           type="button"
           onClick={onUseMyLocation}
           title="Utiliser ma position actuelle"
-          className="inline-flex items-center gap-1.5 rounded-md border bg-background px-2.5 py-1.5 text-sm shadow-sm hover:bg-muted"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-background/90 backdrop-blur px-2.5 py-1.5 text-sm shadow-md transition hover:bg-background"
         >
           <Crosshair className="h-4 w-4" />
           <span className="hidden md:inline">Ma position</span>
@@ -74,7 +103,7 @@ function MapToolbar({ onUseMyLocation, searching, query, setQuery }) {
 /**
  * Carte des zones : Leaflet + tuiles OSM. Les zones enregistrées sont des
  * cercles (vert = active, gris = inactive) ; le cercle en édition est bleu,
- * son pointeau déplaçable, et son rayon suit le curseur (50 m – 20 km).
+ * son pointeau déplaçable, et son rayon suit le curseur (50 m – 1 km).
  */
 export default function ZoneMap({
   zones,
@@ -123,7 +152,7 @@ export default function ZoneMap({
   const visibleResults = query.trim().length >= 3 ? results : []
 
   return (
-    <div className="relative rounded-xl border shadow-sm overflow-hidden">
+    <div className="relative rounded-2xl shadow-sm overflow-hidden">
       <MapToolbar
         onUseMyLocation={onUseMyLocation}
         searching={searching}
@@ -131,7 +160,7 @@ export default function ZoneMap({
         setQuery={setQuery}
       />
       <MapContainer
-        center={[45.5017, -73.5673]}
+        center={[36.8065, 10.1815]}
         zoom={12}
         scrollWheelZoom
         className="h-[560px] w-full"
@@ -142,6 +171,7 @@ export default function ZoneMap({
         />
         <ClickCapture onMapClick={onMapClick} />
         <FlyController target={flyTarget} />
+        <EditingFit editing={editing} />
 
         {zones.map((zone) => (
           <Circle
@@ -180,7 +210,7 @@ export default function ZoneMap({
       </MapContainer>
 
       {visibleResults.length > 0 && (
-        <ul className="absolute top-12 left-2 z-[1300] max-w-sm w-full rounded-md border bg-popover text-popover-foreground shadow-md overflow-hidden">
+        <ul className="absolute top-12 left-1/2 -translate-x-1/2 z-[1300] max-w-sm w-full rounded-xl bg-popover/95 backdrop-blur text-popover-foreground shadow-lg overflow-hidden">
           {visibleResults.map((r) => (
             <li key={`${r.lat}-${r.lon}`}>
               <button

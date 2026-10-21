@@ -3,19 +3,21 @@
 /**
  * Geofencing de la connexion (voir GeofenceService).
  *
- * `enabled` est le coupe-circuit global : à `false`, personne n'est jamais
- * bloqué (utile tant que la prod n'est pas en HTTPS — la géolocalisation
- * navigateur exige un contexte sécurisé).
+ * `enabled` est la valeur de **repli** du coupe-circuit global : l'interrupteur
+ * de la page « GPS » (préférence en base `geofence.enabled`, table `settings`)
+ * prime dès qu'il a été posé. Éteint, personne n'est jamais bloqué — et la page
+ * de connexion ne demande plus la position au navigateur.
  */
 return [
 
     /**
-     * Coupe-circuit global. **Par défaut `false` (éteint)** : la
-     * géolocalisation navigateur exige un contexte sécurisé (HTTPS ou
-     * `localhost`). Tant que l'origine servie n'est pas sûre, l'activer
-     * refuserait toute connexion COMERCIAL / OPERATOR sans dérogation
-     * (`LOCATION_REQUIRED`). Mettre `GEOFENCE_ENABLED=true` uniquement après
-     * passage en HTTPS (ou en local via `localhost`).
+     * Coupe-circuit global, **tant que l'administrateur n'a pas touché à
+     * l'interrupteur de la page « GPS »** (`GeofenceService::isEnabled()` lit la
+     * préférence `geofence.enabled` en base, puis retombe ici). **Par défaut
+     * `false` (éteint)** : la géolocalisation navigateur exige un contexte
+     * sécurisé (HTTPS ou `localhost`). Tant que l'origine servie n'est pas
+     * sûre, l'activer refuserait toute connexion COMERCIAL / OPERATOR sans
+     * dérogation (`LOCATION_REQUIRED`).
      */
     'enabled' => env('GEOFENCE_ENABLED', false),
 

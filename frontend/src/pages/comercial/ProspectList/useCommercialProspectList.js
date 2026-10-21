@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { isSearchActive } from '@/lib/search.js'
@@ -11,13 +11,33 @@ import {
 } from '@/api/commercial.api.js'
 import { useActiveReservationsCount } from '@/pages/shared/ClientDetail/useOutcomes.js'
 
+/**
+ * Valeurs filtrables par la barre « Tous / Libre / Double / Info » de la page
+ * (`ProspectStatusPills`) : sert à valider le filtre **pré-appliqué par le
+ * tableau de bord** (`/prospects?status=AVAILABLE`). Toute autre valeur est
+ * ignorée — la liste commerciale ne connaît pas les autres statuts (les « Oui
+ * » / « Non » / « Blacklist » ne sont jamais des lignes de cette liste).
+ */
+const PROSPECT_STATUS_KEYS = ['AVAILABLE', 'DOUBLE', 'INFO']
+
 export function useCommercialProspectList() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const isDesktop = useIsDesktop()
   const [search, setSearch] = useState('')
   const [municipality, setMunicipality] = useState('')
   const [categories, setCategories] = useState('')
   const [region, setRegion] = useState('')
+  // Badge de statut actif de la barre « Tous / Libre / Double / Info » :
+  // `null` = « Tous » (aucun filtre), sinon la valeur envoyée en `status`.
+  // Peut être **pré-appliqué depuis le tableau de bord**
+  // (`/prospects?status=AVAILABLE`, la tuile « Libre ») : la valeur d'URL est
+  // lue au montage puis tenue à jour à chaque clic, comme sur la Grande liste
+  // admin — un rafraîchissement conserve donc la sélection.
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const value = searchParams.get('status')
+    return value && PROSPECT_STATUS_KEYS.includes(value) ? value : null
+  })
   const [currentPage, setCurrentPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [sortBy, setSortBy] = useState('created_at')
@@ -33,6 +53,7 @@ export function useCommercialProspectList() {
     municipality: municipality || undefined,
     category: categories || undefined,
     administrative_region: region || undefined,
+    status: statusFilter || undefined,
     page: currentPage,
     per_page: rowsPerPage,
     sort_by: sortBy,
@@ -47,6 +68,17 @@ export function useCommercialProspectList() {
   const clients = data?.data?.clients ?? []
   const total = data?.data?.pagination?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / rowsPerPage))
+  // Compteurs de la barre : périmètre de l'employé calculé par le serveur,
+  // sélection de badge **exclue** (sinon les chiffres bougeraient au clic).
+  const badges = data?.data?.badges ?? null
+
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value)
+    setCurrentPage(1)
+    // L'URL suit la sélection (reload = même filtre) ; `searchParams` n'est lu
+    // qu'au montage, une réécriture discrète suffit.
+    setSearchParams(value ? { status: value } : {}, { replace: true })
+  }
 
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -105,6 +137,7 @@ export function useCommercialProspectList() {
     municipality, setMunicipality,
     categories, setCategories,
     region, setRegion,
+    statusFilter, handleStatusFilterChange,
     handleMunicipalityChange,
     handleCategoriesChange,
     handleRegionChange,
@@ -113,12 +146,16 @@ export function useCommercialProspectList() {
     handleRowsPerPageChange,
     sortBy, sortOrder, handleSort,
     clients, isLoading,
-    total, totalPages,
+    total, totalPages, badges,
     showReserve, openReserve, closeReserve,
     handleViewDetail,
     // Filtres + tri de la page, transmis au modal « Réserver des prospects » :
-    // le lot réservé est celui que l'employé voit à l'écran.
-    filters: params,
+    // le lot réservé est celui que l'employé voit à l'écran — **sauf** le
+    // badge de statut : un « Double » / « Info » est déjà tenu par lui, il
+    // n'a jamais sa place dans un lot (le serveur l'ignore de toute façon).
+    filters: Object.fromEntries(
+      Object.entries(params).filter(([key]) => key !== 'status'),
+    ),
   }
 }
 

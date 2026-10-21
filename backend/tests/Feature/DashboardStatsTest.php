@@ -7,6 +7,8 @@ use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Enterprise;
 use App\Models\Note;
+use App\Models\Rappel;
+use App\Models\Reservation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -22,6 +24,11 @@ use Tests\TestCase;
  * par jour du mois (mois choisi) ou par jour de la semaine (1 = jours 1–7).
  * Exception : `stats.blacklisted_clients` = instantané des clients
  * actuellement blacklistés.
+ *
+ * L'`OPERATOR` a un tableau de bord **simple**, hors période : uniquement ses
+ * saisies de numéro de téléphone (notes `MISE_A_JOUR` dont le diff parle de
+ * « Téléphone ») et ce qui reste dans sa liste — voir
+ * `test_operator_dashboard_*`.
  */
 class DashboardStatsTest extends TestCase
 {
@@ -73,6 +80,21 @@ class DashboardStatsTest extends TestCase
             'call_log_id' => $call->id,
             'sender_id' => Note::SENDER_SYSTEM,
             'type' => Note::TYPE_NOTE,
+        ]);
+    }
+
+    /**
+     * Note de journalisation d'une édition humaine, telle que la produit
+     * `ClientUpdateNote::log()` : diff champ par champ, avec les guillemets
+     * français qui servent de repère au comptage des saisies de téléphone.
+     */
+    private function makeUpdateNote(Client $client, User $sender, string $field, string $old, string $new): Note
+    {
+        return Note::create([
+            'client_id' => $client->id,
+            'sender_id' => $sender->id,
+            'type' => Note::TYPE_MISE_A_JOUR,
+            'description' => "Fiche mise à jour — {$field} : « {$old} » → « {$new} ».",
         ]);
     }
 
@@ -130,6 +152,78 @@ class DashboardStatsTest extends TestCase
             ->assertJsonPath('data.stats.prospects', 2);
     }
 
+    /**
+     * Filtre « Source » du tableau de bord gestionnaire (`?source=`) : le même
+     * onglet que la Grande liste admin (§13) — il borne **tous** les chiffres
+     * liés aux clients (prospects, blacklist, appels / OUI / échecs,
+     * réservations, « Meilleurs employés »), jamais les compteurs
+     * structurels (entreprises / commerciaux). Il est **ignoré** côté
+     * commercial, dont le périmètre est décidé par le serveur.
+     */
+    public function test_admin_source_filter_scopes_every_client_derived_card(): void
+    {
+        $commercial = $this->makeCommercial();
+        $employee = $this->makeEmployee($commercial);
+
+        $anglais = $this->makeClient(['source' => 'Anglais']);
+        $francais = $this->makeClient(['source' => 'Francais', 'name' => 'Maçonnerie du Nord']);
+
+        $this->travelTo(Carbon::today()->setTime(10, 0));
+
+        // Anglais : 2 appels, 1 OUI, 1 réservation, 1 blacklisté.
+        $this->makeCallNote($anglais, $employee);
+        $this->makeCallNote($anglais, $employee);
+        $this->makeNote($anglais, $commercial, Note::TYPE_YES);
+        $this->makeClient(['source' => 'Anglais', 'name' => 'Banni EN', 'is_blacklisted' => true]);
+        Reservation::create([
+            'client_id' => $anglais->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        // Français : 1 appel et 1 réservation hors origine sélectionnée.
+        $this->makeCallNote($francais, $employee);
+        Reservation::create([
+            'client_id' => $francais->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_PENDING,
+        ]);
+
+        Sanctum::actingAs(User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']));
+
+        $this->getJson('/api/v1/dashboard/stats?source=Anglais')
+            ->assertOk()
+            ->assertJsonPath('data.source', 'Anglais')
+            ->assertJsonPath('data.stats.prospects', 2)
+            ->assertJsonPath('data.stats.period.calls', 2)
+            ->assertJsonPath('data.stats.period.yes', 1)
+            ->assertJsonPath('data.stats.period.failed', 1)
+            ->assertJsonPath('data.stats.blacklisted_clients', 1)
+            ->assertJsonPath('data.stats.reservations', 1)
+            // Compteurs structurels : inchangés sous filtre source.
+            ->assertJsonPath('data.stats.commercials', 1)
+            ->assertJsonPath('data.top_commercials.0.calls', 2)
+            ->assertJsonPath('data.top_commercials.0.oui', 1)
+            ->assertJsonPath('data.top_commercials.0.reservations', 1);
+
+        // « Toutes » (paramètre absent) : tout est compté.
+        $this->getJson('/api/v1/dashboard/stats')
+            ->assertOk()
+            ->assertJsonPath('data.source', null)
+            ->assertJsonPath('data.stats.prospects', 3)
+            ->assertJsonPath('data.stats.period.calls', 3)
+            ->assertJsonPath('data.stats.reservations', 2)
+            ->assertJsonPath('data.top_commercials.0.calls', 3);
+
+        // Commercial : `source` ne déplace **rien** — sa liste est verrouillée
+        // sur la source de son entreprise côté serveur.
+        Sanctum::actingAs($commercial);
+        $this->getJson('/api/v1/dashboard/stats?source=Anglais')
+            ->assertOk()
+            ->assertJsonMissingPath('data.source')
+            ->assertJsonPath('data.stats.period.calls', 3);
+    }
+
     public function test_commercial_cards_are_scoped_to_own_calls(): void
     {
         $commercial = $this->makeCommercial();
@@ -159,6 +253,102 @@ class DashboardStatsTest extends TestCase
             // Blacklist = instantané global, identique pour le commercial.
             ->assertJsonPath('data.stats.blacklisted_clients', 0)
             ->assertJsonPath('data.top_commercials', []);
+    }
+
+    /**
+     * Cartes « travail en cours » du commercial — `prospects` / `libre` /
+     * `double` / `info` / `bv` / `rappel`. Invariant « carte = lignes rendues »
+     * (§9) : les quatre premiers comptent **les lignes de la Grande liste**
+     * (`GET clients` : source d'entreprise, téléphone, hors blacklist, non
+     * tenu — plus les « Double » / « Info » que l'employé **détient**) ;
+     * `bv` / `rappel`, les rappels `pending` des pages dédiées. Tous
+     * instantanés, non filtrés par la période.
+     */
+    public function test_commercial_work_cards_expose_list_counts_bv_and_rappel(): void
+    {
+        // Privilège de libération accordé : sans lui (§7.1), les « Double »
+        // détenus sortent de la liste — vérifié plus bas.
+        $commercial = $this->makeCommercial(['has_permission' => true]);
+        $employee = $this->makeEmployee($commercial);
+
+        $enterprise = Enterprise::create(['name' => 'Ent. source', 'source' => 'Francais']);
+        $employee->update(['enterprise_id' => $enterprise->id]);
+
+        // Grande liste : 2 disponibles de la source ; hors source, sans
+        // téléphone et blacklistés exclus (mêmes règles que `GET clients`).
+        $this->makeClient(['source' => 'Francais']);
+        $this->makeClient(['source' => 'Francais', 'name' => 'Libre 2']);
+        $this->makeClient(['source' => 'Affaires']);
+        $this->makeClient(['source' => 'Francais', 'phone' => null]);
+        $this->makeClient(['source' => 'Francais', 'is_blacklisted' => true]);
+
+        // Client tenu en BV : sort de « Libre » (réservation active) et
+        // compte dans `bv` ; son rappel terminé ne compte pas.
+        $bv = $this->makeClient(['source' => 'Francais', 'name' => 'Tenu BV', 'status' => Client::STATUS_RESERVED]);
+        $bvReservation = Reservation::create([
+            'client_id' => $bv->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_BV_VOICEMAIL,
+        ]);
+        Rappel::create([
+            'client_id' => $bv->id,
+            'comercial_id' => $commercial->id,
+            'reservation_id' => $bvReservation->id,
+            'reminder_date' => now(),
+        ]);
+        Rappel::create([
+            'client_id' => $bv->id,
+            'comercial_id' => $commercial->id,
+            'reservation_id' => $bvReservation->id,
+            'reminder_date' => now(),
+            'done_at' => now(),
+        ]);
+
+        // Client tenu « À rappeler ».
+        $recall = $this->makeClient(['source' => 'Francais', 'name' => 'Tenu rappel', 'status' => Client::STATUS_RESERVED]);
+        $recallReservation = Reservation::create([
+            'client_id' => $recall->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_CALL_BACK,
+        ]);
+        Rappel::create([
+            'client_id' => $recall->id,
+            'comercial_id' => $commercial->id,
+            'reservation_id' => $recallReservation->id,
+            'reminder_date' => now(),
+        ]);
+
+        // Client **détenu** en « Double » : il compte dans « Tous » et dans
+        // « Double », jamais dans « Libre » (réservation active).
+        $double = $this->makeClient(['source' => 'Francais', 'name' => 'Tenu double', 'status' => Client::STATUS_RESERVED]);
+        Reservation::create([
+            'client_id' => $double->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_DOUBLE,
+        ]);
+        $double->update(['status' => Client::STATUS_DOUBLE]);
+
+        Sanctum::actingAs($commercial);
+
+        $this->getJson('/api/v1/dashboard/stats')
+            ->assertOk()
+            // « Tous » = les 2 libres + le « Double » détenu.
+            ->assertJsonPath('data.stats.prospects', 3)
+            ->assertJsonPath('data.stats.libre', 2)
+            ->assertJsonPath('data.stats.double', 1)
+            ->assertJsonPath('data.stats.info', 0)
+            ->assertJsonPath('data.stats.bv', 1)
+            ->assertJsonPath('data.stats.rappel', 1);
+
+        // Sans le privilège (§7.1) : le « Double » détenu disparaît de la liste
+        // **et** des compteurs — la carte vaut toujours lignes rendues.
+        $commercial->update(['has_permission' => false]);
+
+        $this->getJson('/api/v1/dashboard/stats')
+            ->assertOk()
+            ->assertJsonPath('data.stats.prospects', 2)
+            ->assertJsonPath('data.stats.libre', 2)
+            ->assertJsonPath('data.stats.double', 0);
     }
 
     public function test_month_and_week_narrow_every_card(): void
@@ -285,5 +475,119 @@ class DashboardStatsTest extends TestCase
         $this->assertContains($current, $years);
         $this->assertContains(2019, $years);
         $response->assertJsonPath('data.chart.year', 2019);
+    }
+
+    // ── Tableau de bord **simple** de l'`OPERATOR` ─────────────────────────
+
+    /**
+     * Tuiles « saisies de téléphone » : une note `MISE_A_JOUR` dont le diff
+     * mentionne le champ Téléphone ne compte **que** si elle est de lui, et les
+     * trois fenêtres (aujourd'hui / 7 jours / 30 jours) sont des jours
+     * calendaires incluant aujourd'hui — une édition de la veille à 23 h 59
+     * sort de « Aujourd'hui » mais reste dans la semaine.
+     *
+     * Les autres champs édités (nom, adresse…) ne sont pas des saisies de
+     * numéro et sont exclus.
+     */
+    public function test_operator_dashboard_counts_his_phone_updates_across_fixed_windows(): void
+    {
+        $operator = User::factory()->create(['role' => 'OPERATOR', 'status' => 'ACTIVE']);
+        $colleague = User::factory()->create(['role' => 'OPERATOR', 'status' => 'ACTIVE']);
+        $client = $this->makeClient();
+
+        $today = Carbon::today();
+
+        $this->travelTo($today->copy()->setTime(9, 0));
+        $this->makeUpdateNote($client, $operator, 'Téléphone', '(vide)', '514-555-0101');
+        $this->makeUpdateNote($client, $operator, 'Téléphone', '514-555-0101', '514-555-0102');
+        // Édition d'un autre champ : ce n'est pas une saisie de numéro.
+        $this->makeUpdateNote($client, $operator, 'Nom', 'ACME', 'ACME Renové');
+        // Édition d'un homologue : le tableau de bord ne compte **que** les siennes.
+        $this->makeUpdateNote($client, $colleague, 'Téléphone', '(vide)', '438-555-0100');
+
+        $this->travelTo($today->copy()->subDay()->setTime(23, 59));
+        $this->makeUpdateNote($client, $operator, 'Téléphone', '(vide)', '514-555-0103');
+
+        $this->travelTo($today->copy()->subDays(6)->setTime(10, 0));
+        $this->makeUpdateNote($client, $operator, 'Téléphone', '(vide)', '514-555-0104');
+
+        $this->travelTo($today->copy()->subDays(8)->setTime(10, 0));
+        $this->makeUpdateNote($client, $operator, 'Téléphone', '(vide)', '514-555-0105');
+
+        // Hors des 30 jours : seule la tuile « Total » la voit.
+        $this->travelTo($today->copy()->subDays(31)->setTime(10, 0));
+        $this->makeUpdateNote($client, $operator, 'Téléphone', '(vide)', '514-555-0106');
+
+        $this->travelTo($today->copy()->setTime(12, 0));
+        Sanctum::actingAs($operator);
+
+        $this->getJson('/api/v1/dashboard/stats')
+            ->assertOk()
+            ->assertJsonPath('data.role', 'OPERATOR')
+            ->assertJsonPath('data.stats.phones_today', 2)
+            ->assertJsonPath('data.stats.phones_week', 4)
+            ->assertJsonPath('data.stats.phones_month', 5)
+            ->assertJsonPath('data.stats.phones_total', 6)
+            // Aucun graphique, aucun classement : la page n'en rend pas.
+            ->assertJsonPath('data.calls_by_day', [])
+            ->assertJsonPath('data.top_commercials', []);
+    }
+
+    /**
+     * Le tableau de bord de l'opérateur est **instantané** : le filtre de
+     * période des gestionnaires ne déplace aucun de ses chiffres (l'UI ne lui
+     * rend d'ailleurs ni barre de période ni graphique).
+     */
+    public function test_operator_dashboard_ignores_period_and_source_filters(): void
+    {
+        $operator = User::factory()->create(['role' => 'OPERATOR', 'status' => 'ACTIVE']);
+        $client = $this->makeClient();
+
+        $this->travelTo(Carbon::today()->setTime(9, 0));
+        $this->makeUpdateNote($client, $operator, 'Téléphone', '(vide)', '514-555-0101');
+        $this->travelBack();
+
+        Sanctum::actingAs($operator);
+
+        foreach (['?year=1999', '?year=1999&month=2&week=1', '?source=Anglais'] as $query) {
+            $this->getJson('/api/v1/dashboard/stats'.$query)
+                ->assertOk()
+                ->assertJsonPath('data.stats.phones_today', 1)
+                ->assertJsonPath('data.stats.phones_total', 1);
+        }
+    }
+
+    /**
+     * Invariant « tuile = lignes rendues » (§9) : `pending_without_phone` est
+     * calculé sur le périmètre forcé de l'opérateur (`applyOperatorScope`),
+     * vérifié ici contre `GET /commercials/clients` — même exigence que pour
+     * les cartes du commercial.
+     */
+    public function test_operator_pending_tile_equals_his_grande_liste_rows(): void
+    {
+        $operator = User::factory()->create(['role' => 'OPERATOR', 'status' => 'ACTIVE']);
+
+        // Reste à faire : `AVAILABLE`, hors blacklist, sans numéro — les deux
+        // formes de « sans numéro » (`NULL` et chaîne vide) comptent.
+        $this->makeClient(['name' => 'Sans numéro 1', 'phone' => null]);
+        $this->makeClient(['name' => 'Sans numéro 2', 'phone' => '']);
+        $this->makeClient(['name' => 'Sans numéro 3', 'phone' => null]);
+
+        // Trois hors périmètre, chacune pour une raison différente.
+        $this->makeClient(['name' => 'Déjà joint', 'phone' => '514-555-0199']);
+        $this->makeClient(['name' => 'Blacklisté', 'phone' => null, 'is_blacklisted' => true]);
+        $this->makeClient(['name' => 'Réservé', 'phone' => null, 'status' => Client::STATUS_RESERVED]);
+
+        Sanctum::actingAs($operator);
+
+        $dashboard = $this->getJson('/api/v1/dashboard/stats')->assertOk();
+        $pending = $dashboard->json('data.stats.pending_without_phone');
+
+        $rows = $this->getJson('/api/v1/commercials/clients?search=Sans%20num%20')
+            ->assertOk()
+            ->json('data.pagination.total');
+
+        $this->assertSame(3, $pending);
+        $this->assertSame($pending, $rows);
     }
 }

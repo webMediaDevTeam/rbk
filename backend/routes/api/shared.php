@@ -23,6 +23,11 @@ Route::post('auth/forgot-password/reset', [AuthController::class, 'resetForgotPa
 Route::post('auth/verify-account', [AuthController::class, 'verifyAccount']);
 Route::post('auth/resend-verification', [AuthController::class, 'resendVerification']);
 
+// État du coupe-circuit GPS, lu **avant** la connexion : la page de connexion
+// ne demande la position au navigateur que si le contrôle est activé
+// (interrupteur de la page « GPS », côté serveur sinon).
+Route::get('auth/geofence', [AuthController::class, 'geofenceStatus']);
+
 // ── Webhooks M2M : import / suppression de prospects ─────────
 // AUCUN utilisateur ni `auth:sanctum` (spec docs/public_api.md, règles
 // RULES.md §12) : la barrière est la clé partagée `X-Api-Key`

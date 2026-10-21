@@ -11,6 +11,7 @@ import {
   deleteCommercialApi,
   toggleCommercialStatusApi,
   statistiquesCommerciauxApi,
+  commercialsStatsApi,
 } from '@/api/entreprise.api.js'
 import { syncRingCentralEmployeesApi } from '@/api/shared.api.js'
 import { toggleGpsBypassApi } from '@/api/gps.api.js'
@@ -57,6 +58,19 @@ export function useComercialStats() {
   return useQuery({
     queryKey: ['commerciaux-stats'],
     queryFn: statistiquesCommerciauxApi,
+  })
+}
+
+/**
+ * Compteurs par employé (puces Clients / BV / Rappel / Oui) — une seule
+ * requête groupée côté serveur pour toute la page, indépendamment de la
+ * pagination (`data.stats` = carte `id → stats`).
+ */
+export function useCommercialsStats() {
+  return useQuery({
+    queryKey: ['commercials-stats'],
+    queryFn: commercialsStatsApi,
+    staleTime: 30_000,
   })
 }
 
@@ -163,8 +177,10 @@ export function useComercialListPage() {
   const toggleMut = useToggleCommercialStatus()
   const gpsBypassMut = useToggleGpsBypass()
   const ringCentralSync = useSyncRingCentral()
+  const { data: statsData } = useCommercialsStats()
 
   const commerciaux = data?.data?.utilisateurs ?? []
+  const statsById = statsData?.data?.stats ?? {}
   // Numéros RingCentral partagés par plusieurs employés (alerte ADMIN) —
   // périmètre : la page affichée.
   const duplicateRingCentralNumbers = useMemo(
@@ -231,6 +247,7 @@ export function useComercialListPage() {
     syncRingCentral: ringCentralSync.mutate,
     isSyncingRingCentral: ringCentralSync.isPending,
     commerciaux,
+    statsById,
     duplicateRingCentralNumbers,
     sortBy,
     sortOrder,

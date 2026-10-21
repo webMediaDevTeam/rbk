@@ -44,6 +44,67 @@ class CommercialAdminController extends Controller
         return response()->json(['data' => $data]);
     }
 
+    /**
+     * Compteurs par employé pour la page « Employés » (puces Clients / BV /
+     * Rappel / Oui), en 3 requêtes groupées — pas de N+1.
+     *
+     * Invariant repris du tableau de bord : **le chiffre = les lignes** de la
+     * destination cliquée, i.e. l'historique de `show()` (`GET
+     * commercials/{id}`) avec le même filtre de badge :
+     *  - `clients` : clients distincts appelés ≥ 1 fois par l'employé ;
+     *  - `bv` / `rappel` : ces clients dont la **réservation courante** est
+     *    `BV_VOICEMAIL` / `CALL_BACK` (mêmes bornes que
+     *    `ClientSearchService::filterByReservationStatuses()` : non blacklisté,
+     *    plus `AVAILABLE`) ;
+     *  - `oui` : notes d'issue `YES` émises (définition « Meilleurs employés »
+     *    du dashboard — pas de lien côté UI).
+     */
+    public function stats(): JsonResponse
+    {
+        $ids = User::query()->whereIn('role', ['COMERCIAL', 'OPERATOR'])->pluck('id');
+
+        $clients = $ids->isNotEmpty()
+            ? Note::whereIn('sender_id', $ids)->calls()
+                ->selectRaw('sender_id, count(distinct client_id) as aggregate')
+                ->groupBy('sender_id')
+                ->pluck('aggregate', 'sender_id')
+            : collect();
+
+        $reservationCounts = $ids->isNotEmpty()
+            ? Note::whereIn('sender_id', $ids)
+                ->join('clients', 'clients.id', '=', 'notes.client_id')
+                ->join('reservations', 'reservations.id', '=', 'clients.current_reservation_id')
+                ->whereIn('notes.type', Note::CALL_TYPES)
+                ->where('clients.is_blacklisted', false)
+                ->where('clients.status', '!=', Client::STATUS_AVAILABLE)
+                ->whereIn('reservations.status', [Reservation::STATUS_BV_VOICEMAIL, Reservation::STATUS_CALL_BACK])
+                ->selectRaw('notes.sender_id, reservations.status, count(distinct notes.client_id) as aggregate')
+                ->groupBy('notes.sender_id', 'reservations.status')
+                ->get()
+            : collect();
+
+        $ouis = $ids->isNotEmpty()
+            ? Note::whereIn('sender_id', $ids)->where('type', Note::TYPE_YES)
+                ->selectRaw('sender_id, count(*) as aggregate')
+                ->groupBy('sender_id')
+                ->pluck('aggregate', 'sender_id')
+            : collect();
+
+        $stats = $ids->mapWithKeys(function ($id) use ($clients, $reservationCounts, $ouis): array {
+            $of = fn (?string $status): int => (int) $reservationCounts
+                ->first(fn ($row) => $row->sender_id === $id && $row->status === $status)?->aggregate ?? 0;
+
+            return [$id => [
+                'clients' => (int) $clients->get($id, 0),
+                'bv' => $of(Reservation::STATUS_BV_VOICEMAIL),
+                'rappel' => $of(Reservation::STATUS_CALL_BACK),
+                'oui' => (int) $ouis->get($id, 0),
+            ]];
+        });
+
+        return response()->json(['data' => ['stats' => $stats]]);
+    }
+
     public function show(Request $request, $id)
     {
         $user = User::where('role', 'COMERCIAL')->with('employee.enterprise')->findOrFail($id);

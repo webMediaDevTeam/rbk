@@ -7,10 +7,16 @@ import { api } from './client.js'
 // et « Meilleurs employés » partagent ces bornes ; seul
 // `stats.blacklisted_clients` reste un instantané (clients actuellement
 // blacklistés).
-export function getDashboardStatsApi({ year, month, week } = {}) {
+//
+// `source` (gestionnaires seulement) : l'origine active de la Grande liste —
+// la **même** sélection, persistée dans `localStorage`, borne tous les
+// chiffres liés aux clients. `''` = « Toutes » (paramètre omis). Le serveur
+// l'ignore pour les autres rôles.
+export function getDashboardStatsApi({ year, month, week, source } = {}) {
   const params = {}
   if (year) params.year = year
   if (month) params.month = month
   if (week) params.week = week
+  if (source) params.source = source
   return api.get('/dashboard/stats', { params })
 }

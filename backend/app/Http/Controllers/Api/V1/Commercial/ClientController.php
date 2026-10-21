@@ -24,27 +24,38 @@ class ClientController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        // Périmètre de la page, **reconstruit à l'identique** pour chaque
+        // compteur de badge (un `Builder` ne se clone pas proprement entre
+        // deux `count()`, d'où le `callable`) :
+        //
         // Filtres + exclusions + tri **partagés** avec la réservation d'un
         // lot (`ClientSearchService::applyFilters`) : la page et le lot
-        // réservé
-        // décrivent exactement les mêmes clients, dans le même ordre.
+        // réservé décrivent exactement les mêmes clients, dans le même ordre.
         // `$heldByUserId` = connecté : les prospects « Double » / « Info »
         // ne sont rendus qu'à leur titulaire (le lot, lui, ne les voit pas).
-        $query = $this->search->applyFilters(
-            Client::query(),
-            $request->all(),
-            $request->user()?->id
-        );
-
+        //
         // Périmètre « source » : la Grande liste du commercial est
         // **verrouillée** sur la source de son entreprise — sans entreprise
         // ou sans source, liste vide (jamais de repli vers toute la base).
         // Un paramètre `source` éventuel est ignoré, le serveur décide.
-        $query = $this->search->applyCommercialSourceScope($query, $request->user());
-
+        //
         // Privilège commercial (§7.1) : sans `has_permission`, les doubles
         // disparaissent de la liste — même pour leur titulaire.
-        $query = $this->excludeDoubleForUnprivileged($query, $request->user());
+        $perimeter = function () use ($request, $user): Builder {
+            return $this->excludeDoubleForUnprivileged(
+                $this->search->applyCommercialSourceScope(
+                    $this->search->applyFilters(Client::query(), $request->all(), $user?->id),
+                    $user
+                ),
+                $user
+            );
+        };
+
+        // Badge de statut cliqué (§9) : s'ajoute au périmètre, ne le remplace
+        // jamais.
+        $query = $this->applyBadgeFilter($perimeter(), $request);
 
         $perPage = min((int) $request->input('per_page', 20), 300);
         $clients = $query->paginate($perPage);
@@ -65,8 +76,46 @@ class ClientController extends Controller
                     'per_page' => $clients->perPage(),
                     'total' => $clients->total(),
                 ],
+                // Barre de badges « Tous / Libre / Double / Info » de la page :
+                // même **forme** que `data` de `GET clients/overview` (le
+                // commercial n'en consomme que 3 clés).
+                'badges' => [
+                    'prospects' => ['system' => $perimeter()->count()],
+                    'by_display_status' => [
+                        Client::STATUS_AVAILABLE => $this->search->filterByStatuses($perimeter(), Client::STATUS_AVAILABLE)->count(),
+                        Client::STATUS_DOUBLE => $this->search->filterByStatuses($perimeter(), Client::STATUS_DOUBLE)->count(),
+                        Client::STATUS_INFO => $this->search->filterByStatuses($perimeter(), Client::STATUS_INFO)->count(),
+                    ],
+                ],
             ],
         ]);
+    }
+
+    /**
+     * Filtre de la barre de badges de la Grande liste **commerciale** :
+     * paramètre `status` ∈ { `AVAILABLE`, `DOUBLE`, `INFO` } — sélection
+     * unique ; absente ou inconnue, toute autre valeur laisse la liste
+     * inchangée. S'appuie sur le statut **client** : dans cette liste, un
+     * « Double » / « Info » affiché est toujours un prospect tenu par
+     * l'employé connecté (`applyFilters()` branche `current_comercial_id`),
+     * compteur et lignes rendues proviennent donc de la même colonne —
+     * invariant « compteur = lignes » (§9).
+     *
+     * La réservation d'un lot (`POST clients/reserver`) **n'utilise pas ce
+     * filtre** : elle reste sur tout le périmètre (un « Double » n'est jamais
+     * réservable une seconde fois, un lot « Double » serait vide).
+     */
+    private function applyBadgeFilter(Builder $query, Request $request): Builder
+    {
+        $status = $request->input('status');
+
+        $allowed = [Client::STATUS_AVAILABLE, Client::STATUS_DOUBLE, Client::STATUS_INFO];
+
+        if (! is_string($status) || ! in_array($status, $allowed, true)) {
+            return $query;
+        }
+
+        return $this->search->filterByStatuses($query, $status);
     }
 
     public function mine(Request $request): JsonResponse

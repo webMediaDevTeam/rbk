@@ -1,6 +1,7 @@
-import { Building2, Map, MapPin, Tags, UserCog } from 'lucide-react'
+import { Building2, Map, MapPin, RotateCcw, Tags, UserCog } from 'lucide-react'
 import SearchBar from '@/components/ui/search-bar.jsx'
 import Select from '@/components/ui/select'
+import Button from '@/components/ui/button.jsx'
 import { useClientsHistoryToolbar } from './useClientsHistoryToolbar.js'
 import { useFilterOptions } from '@/hooks/use-filter-options.js'
 import { useInteractionFilters } from '@/hooks/use-interaction-filters.js'
@@ -37,7 +38,7 @@ export default function ClientsHistoryToolbar(props) {
   // `showFacets={false}` (page partagée avec l'`OPERATOR`, dont le périmètre
   // est forcé par l'API) : seule la recherche reste utile, la grille de
   // filtres est masquée — et n'est donc jamais envoyée.
-  const { showFacets = true } = props
+  const { showFacets = true, filtersActive = false, onResetFilters } = props
   const { searchInputProps } = useClientsHistoryToolbar(props)
   const { municipalitiesList, categoriesList, regionsList } = useFilterOptions()
   const { enterprises, employees } = useInteractionFilters()
@@ -58,7 +59,28 @@ export default function ClientsHistoryToolbar(props) {
 
   return (
     <div className="space-y-3">
-      <SearchBar className="w-full" inputProps={searchInputProps} />
+      <div className="flex items-center gap-3">
+        <SearchBar className="min-w-0 flex-1" inputProps={searchInputProps} />
+
+        {/* « Réinitialiser les filtres » — même logique que le bouton du
+            tableau de bord : inactif quand on est déjà sur le périmètre par
+            défaut, et ne touche **pas** l'onglet « source » (préférence
+            mémorisée, partagée avec le tableau de bord). Vide aussi le badge
+            de statut, y compris quand il vient de l'URL. */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onResetFilters}
+          disabled={!filtersActive}
+          aria-label="Réinitialiser les filtres"
+          title="Vider la recherche, le statut, les facettes et les filtres Entreprise / Employé (l'origine est laissée telle quelle)"
+          className="shrink-0"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Réinitialiser les filtres</span>
+        </Button>
+      </div>
 
       {/* Grille responsive : chaque filtre (icône + libellé explicite dans
           l'option « Toutes / Tous ») garde la même largeur ; le nombre de

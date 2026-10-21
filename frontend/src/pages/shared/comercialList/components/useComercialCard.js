@@ -1,6 +1,6 @@
 import { normalizeRcNumber } from '../useComercialList.js'
 
-export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onEdit, duplicateRingCentralNumbers = new Set() }) {
+export function useComercialCard({ comercial, statsById = {}, onAvatarClick, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onEdit, duplicateRingCentralNumbers = new Set() }) {
   const profil = comercial.profil
   const name = profil ? `${profil.prenom ?? ''} ${profil.nom ?? ''}`.trim() || comercial.email : (comercial.first_name ? `${comercial.first_name} ${comercial.last_name ?? ''}`.trim() : comercial.email)
   const enterpriseName = profil?.entreprise_name ?? '—'
@@ -14,6 +14,9 @@ export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onT
   const gpsBypass = Boolean(comercial.gps_bypass)
   // Opérateur : pas de fiche employé ni de page de détail commerciale.
   const isOperator = comercial.role === 'OPERATOR'
+  // Compteurs d'activité (puces Clients / BV / Rappel / Oui) — carte
+  // `id → stats` chargée en une requête pour toute la page.
+  const stats = statsById[comercial.id] ?? null
 
   const handleAvatarClick = () => onAvatarClick?.(comercial)
   const handleEdit = (closeMenu) => {
@@ -39,6 +42,7 @@ export function useComercialCard({ comercial, onAvatarClick, onToggleStatus, onT
     rcDuplicate,
     gpsBypass,
     isOperator,
+    stats,
     toggleLabel,
     canDelete,
     handleAvatarClick,

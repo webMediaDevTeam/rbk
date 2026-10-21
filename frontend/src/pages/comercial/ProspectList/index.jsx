@@ -2,6 +2,7 @@ import { useCommercialProspectList } from './useCommercialProspectList.js'
 import ProspectTable from './components/ProspectTable.jsx'
 import ProspectCard from './components/ProspectCard.jsx'
 import ProspectToolbar from './components/ProspectToolbar.jsx'
+import ProspectStatusPills from './components/ProspectStatusPills.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 import ReservationModal from './components/ReservationModal.jsx'
 import Button from '@/components/ui/button.jsx'
@@ -14,6 +15,7 @@ export default function ProspectListPage() {
     municipality,
     categories,
     region,
+    statusFilter, handleStatusFilterChange,
     handleMunicipalityChange,
     handleCategoriesChange,
     handleRegionChange,
@@ -21,7 +23,7 @@ export default function ProspectListPage() {
     rowsPerPage, handleRowsPerPageChange,
     sortBy, sortOrder, handleSort,
     clients, isLoading,
-    totalPages,
+    totalPages, badges,
     showReserve, openReserve, closeReserve,
     pendingReservations, canReserve, isLoadingCounts,
     handleViewDetail,
@@ -65,8 +67,15 @@ export default function ProspectListPage() {
         </div>
       </div>
 
-      {/* Barre de badges de statut (ProspectKpis) supprimée à la demande :
-          la liste commerciale ne contient que des prospects disponibles. */}
+      {/* Barre de filtres « Tous / Libre / Double / Info » (§9) : la liste
+          commerciale ne contient que ces lignes — les compteurs viennent du
+          serveur (`data.badges` de `GET clients`) et le clic rend exactement
+          le chiffre affiché. */}
+      <ProspectStatusPills
+        badges={badges}
+        statusFilter={statusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
+      />
 
       <ProspectToolbar
         search={search} setSearch={setSearch}

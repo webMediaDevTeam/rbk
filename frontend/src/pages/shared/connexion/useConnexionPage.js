@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTheme } from "@/context/theme-provider";
 import { useAuth } from "@/context/AuthContext";
 import faviconLight from "@/assets/icons/light_logo.svg";
 import faviconDark from "@/assets/icons/dark_logo.svg";
 import { useConnexion } from "@/hooks/useConnexion";
+import { geofenceStatusApi } from "@/api/auth.api.js";
 import { getPosition } from "@/lib/geolocation";
 import { getApiErrorMessage, getApiFieldErrors } from "@/lib/api-errors";
 
@@ -32,12 +34,26 @@ export function useConnexionPage() {
 
   const connexion = useConnexion({ onSuccess: completeLogin });
 
+  // Le contrôle GPS est-il activé **côté serveur** ? L'interrupteur de la page
+  // « GPS » est seul maître : éteint, personne n'est jamais bloqué et le
+  // navigateur n'a aucune raison d'être interrogé (la demande d'autorisation
+  // qui en résulte serait inutile). En cas d'échec du appel, on reste à
+  // « désactivé » : rien ne doit empêcher de se connecter.
+  const { data: geofence } = useQuery({
+    queryKey: ["geofence-status"],
+    queryFn: geofenceStatusApi,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const geofenceEnabled = Boolean(geofence?.enabled);
+
   const submitLogin = async (e) => {
     e.preventDefault();
-    // Position facultative : null si refusée / indisponible / timeout. Le
-    // serveur n'utilise ces coordonnées que pour les rôles contraints
-    // sans dérogation (COMERCIAL / OPERATOR) ; l'admin se connecte pareil.
-    const coords = await getPosition();
+    // Position facultative : null si le contrôle est éteint, refusée,
+    // indisponible ou en timeout. Le serveur n'utilise ces coordonnées que pour
+    // les rôles contraints sans dérogation (COMERCIAL / OPERATOR) ; l'admin se
+    // connecte pareil.
+    const coords = geofenceEnabled ? await getPosition() : null;
     connexion.mutate({
       email,
       password,

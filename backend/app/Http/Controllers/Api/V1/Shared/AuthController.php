@@ -28,6 +28,22 @@ class AuthController extends Controller
     private const PASSWORD_RESET_TOKEN_TTL_MINUTES = 10;
 
     /**
+     * GET /auth/geofence — état **public** du coupe-circuit GPS.
+     *
+     * La page de connexion s'en sert pour ne pas réclamer la géolocalisation
+     * quand le contrôle est éteint : sans ce renseignement, le navigateur
+     * afficherait sa demande d'autorisation à chaque tentative, pour rien.
+     * Aucune donnée sensible : un seul booléen (ni les rôles contraints, ni
+     * les zones, ni les dérogations ne transitent).
+     */
+    public function geofenceStatus(): JsonResponse
+    {
+        return response()->json([
+            'enabled' => GeofenceService::isEnabled(),
+        ]);
+    }
+
+    /**
      * Connexion par **e-mail ou nom d'utilisateur** (« login »).
      *
      * Le champ reste nommé `email` côté API (compatibilité), mais accepte

@@ -26,3 +26,12 @@ export function toggleCommercialStatusApi(id, status) {
 export function statistiquesCommerciauxApi() {
   return api.get('/commerciaux/statistiques')
 }
+
+/**
+ * Compteurs par employé (puces Clients / BV / Rappel / Oui de la page
+ * « Employés ») — ADMIN / SUPER_ADMIN. Réponse : `data.stats` = carte
+ * `id utilisateur → { clients, bv, rappel, oui }`.
+ */
+export function commercialsStatsApi() {
+  return api.get('/commercials/stats')
+}

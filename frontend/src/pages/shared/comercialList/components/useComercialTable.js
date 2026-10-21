@@ -1,6 +1,6 @@
 import { normalizeRcNumber } from '../useComercialList.js'
 
-export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onAvatarClick, onEdit, duplicateRingCentralNumbers = new Set() }) {
+export function useComercialTable({ commerciaux, statsById = {}, sortBy, sortOrder, onSort, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onAvatarClick, onEdit, duplicateRingCentralNumbers = new Set() }) {
   const rows = commerciaux.map((c) => {
     const profil = c.profil
     const name = profil ? `${profil.prenom ?? ''} ${profil.nom ?? ''}`.trim() || c.email : (c.first_name ? `${c.first_name} ${c.last_name ?? ''}`.trim() : c.email)
@@ -22,6 +22,9 @@ export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onTo
     // et pas de page de détail employé (`GET commercials/{id}` ne liste que
     // les COMERCIAL).
     const isOperator = c.role === 'OPERATOR'
+    // Compteurs d'activité (puces Clients / BV / Rappel / Oui) — carte
+    // `id → stats` chargée en une requête pour toute la page.
+    const stats = statsById[c.id] ?? null
 
     const handleAvatarClick = () => onAvatarClick?.(c)
     const handleEdit = (closeMenu) => {
@@ -50,6 +53,7 @@ export function useComercialTable({ commerciaux, sortBy, sortOrder, onSort, onTo
       hasPermission,
       gpsBypass,
       isOperator,
+      stats,
       toggleLabel,
       handleAvatarClick,
       handleEdit,

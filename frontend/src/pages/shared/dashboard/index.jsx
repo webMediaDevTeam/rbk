@@ -1,7 +1,8 @@
 import { Loader2 } from 'lucide-react'
 import { useDashboard } from './useDashboard.js'
 import DashboardFilterBar from './components/DashboardFilterBar.jsx'
-import DashboardStatCard from './components/DashboardStatCard.jsx'
+import DashboardStatTiles from './components/DashboardStatTiles.jsx'
+import DashboardStatusCards from './components/DashboardStatusCards.jsx'
 import CallsChart from './components/CallsChart.jsx'
 import TopCommercialsCard from './components/TopCommercialsCard.jsx'
 
@@ -10,7 +11,11 @@ export default function DashboardPage() {
     isLoading,
     isError,
     isAdmin,
+    isOperator,
     cards,
+    panel,
+    source,
+    setSource,
     callsByDay,
     topCommercials,
     caption,
@@ -34,23 +39,35 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">
           {isAdmin
             ? 'Vue globale : chiffres filtrés par la période sélectionnée'
-            : 'Vos statistiques personnelles, filtrées par la période sélectionnée'}
+            : isOperator
+              ? 'Vos saisies de numéro de téléphone et ce qui reste à faire'
+              : 'Vos statistiques personnelles, filtrées par la période sélectionnée'}
         </p>
       </div>
 
       {/* Filtre de période global : cartes, graphique, réservations et
-          « Meilleurs employés » suivent Année → Mois → Semaine. */}
-      <DashboardFilterBar
-        years={years}
-        year={year}
-        month={month}
-        week={week}
-        onYearChange={setYear}
-        onMonthChange={setMonth}
-        onWeekChange={setWeek}
-        onPresetChange={applyQuickPeriod}
-        onReset={resetPeriod}
-      />
+          « Meilleurs employés » suivent Année → Mois → Semaine. Le gestionnaire
+          ajoute l'onglet « Source » à droite — le **même** que celui de la
+          Grande liste, partagé et mémorisé (`useSourcePreference`).
+
+          Masqué pour l'`OPERATOR` : ses tuiles sont des instantanés et il n'a
+          pas de graphique — un filtre sans effet serait trompeur. */}
+      {!isOperator && (
+        <DashboardFilterBar
+          years={years}
+          year={year}
+          month={month}
+          week={week}
+          onYearChange={setYear}
+          onMonthChange={setMonth}
+          onWeekChange={setWeek}
+          onPresetChange={applyQuickPeriod}
+          onReset={resetPeriod}
+          showSource={isAdmin}
+          source={source}
+          onSourceChange={setSource}
+        />
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center rounded-2xl bg-card p-16 text-muted-foreground shadow-sm">
@@ -62,15 +79,29 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* 4 cartes de la période côté gestionnaire, 5 côté commercial —
-              une rangée de 4 en écran large. */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {cards.map((card) => (
-              <DashboardStatCard key={card.label} {...card} />
-            ))}
-          </div>
+          {/* Gestionnaire : les **compteurs de la Grande liste** — les 10 badges
+              de statut en tuiles pastel, chacun avec sa part (pourcentage +
+              jauge) et menant à la liste pré-filtrée. Instantanés : la période
+              ne les borne pas, seul le filtre « Source » le fait. */}
+          {isAdmin && <DashboardStatusCards source={source} />}
 
-          {isAdmin ? (
+          {/* Commercial : le travail en cours (Libre / Double / Info / BV /
+              À rappeler) — même maquette, mêmes teintes. Opérateur : ses
+              saisies de téléphone. Le gestionnaire n'a pas de second panneau
+              (les tuiles de période ont été retirées : elles doublaient le
+              graphique et la Grande liste). */}
+          {panel ? (
+            <DashboardStatTiles
+              title={panel.title}
+              caption={panel.caption}
+              tiles={cards}
+              meter={panel.meter}
+            />
+          ) : null}
+
+          {/* Graphique et « Meilleurs employés » : l'opérateur n'appelle pas et
+              ne gère personne — ses tuiles suffisent. */}
+          {isOperator ? null : isAdmin ? (
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">{chart}</div>
               <TopCommercialsCard commercials={topCommercials} />
