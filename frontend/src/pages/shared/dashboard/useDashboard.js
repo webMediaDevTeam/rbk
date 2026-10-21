@@ -13,7 +13,7 @@ import { getDashboardStatsApi } from '@/api/dashboard.api.js'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { useSourcePreference } from '@/hooks/use-source-preference.js'
 import { STATUS_PILLS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
-import { MONTH_LABELS } from './filters.js'
+import { MONTH_LABELS, periodLabel } from './filters.js'
 
 /** Métadonnées d'un badge de statut (libellé, icône, teinte) par clé serveur. */
 const pill = (key) => STATUS_PILLS.find((p) => p.key === key)
@@ -35,10 +35,11 @@ export function useDashboard() {
   const { source, setSource } = useSourcePreference()
 
   // Filtre de période **global** du tableau de bord (graphique, réservations,
-  // « Meilleurs employés ») : Année → Mois → Semaine → Jour. Les tuiles, elles,
-  // sont des instantanés : compteurs de la Grande liste côté gestionnaire,
-  // compteurs de la liste de travail côté commercial — la période ne les borne
-  // pas.
+  // « Meilleurs employés » **et tuiles KPI**) : Année → Mois → Semaine → Jour.
+  // Les tuiles comptent les clients « actifs » de la fenêtre (fiche créée,
+  // réservation posée ou trace d'appel émise pendant la période) — côté
+  // gestionnaire comme côté commercial. Changer un filtre change la
+  // `queryKey` : les chiffres se recalculent en temps réel.
   // Réglage en cascade : changer l'année remet le mois, la semaine et le jour
   // à « tous », changer le mois remet la semaine et le jour à « tous ».
   // « Semaine » et « Jour » sont les deux réglages **fins** du mois choisi et
@@ -128,7 +129,8 @@ export function useDashboard() {
     rappel: stats?.rappel ?? 0,
   }
   // Saisies de téléphone de l'opérateur (journal des notes « Mise à jour ») et
-  // reste à faire dans sa liste — instantanés, la période ne les borne pas.
+  // reste à faire dans sa liste — instantanés, la période ne les borne pas
+  // (l'opérateur n'a d'ailleurs pas de barre de période).
   const operatorCounts = {
     today: stats?.phones_today ?? 0,
     week: stats?.phones_week ?? 0,
@@ -150,18 +152,16 @@ export function useDashboard() {
       : `Année ${year} — évolution par mois`
 
   // ── Tuiles du tableau de bord ─────────────────────────────────────────
-  // Côté **gestionnaire**, il n'y a plus de tuiles de période : les chiffres
-  // affichés sont exclusivement les **compteurs de la Grande liste**
-  // (`<DashboardStatusCards>`, instantanés bornés par l'origine). Le filtre
-  // Année / Mois / Semaine ne pilote donc plus que le graphique et « Meilleurs
-  // employés ».
+  // Côté **gestionnaire**, il n'y a plus de tuiles de période dédiées : les
+  // chiffres affichés sont les **compteurs de la Grande liste**
+  // (`<DashboardStatusCards>`), bornés par l'origine **et** par la période
+  // sélectionnée (clients actifs de la fenêtre — le serveur applique la même
+  // cascade Année / Mois / Semaine / Jour qu'au graphique).
   //
-  // Côté **commercial**, les tuiles portent le **travail en cours**, toutes en
-  // **instantané** sur sa liste (même périmètre serveur que `GET prospects`) :
-  // « Libre » / « Double » / « Info » mènent à sa Grande liste **pré-filtrée**
-  // sur le statut — icône et teinte reprises des badges de la liste
-  // (`STATUS_PILLS`), donc une couleur = un statut d'un écran à l'autre —
-  // tandis que « BV » et « À rappeler » mènent aux pages de suivi.
+  // Côté **commercial**, les tuiles portent le **travail en cours** de sa
+  // liste, elles aussi **bornées par la période** (`activeBetween` côté
+  // serveur : compteurs de `GET dashboard/stats`) — les compteurs suivent les
+  // sélecteurs en temps réel :
   //
   // La `ratio` de chaque tuile est sa **part de la liste de travail** (total
   // des prospects du périmètre, « Tous »).
@@ -282,7 +282,7 @@ export function useDashboard() {
         }
       : {
           title: 'Votre liste de travail',
-          caption: 'Instantané de votre liste — à réserver, à reprendre, à rappeler',
+          caption: `Période ${periodLabel({ year, month, week, day })} — clients actifs de la fenêtre, à réserver, à reprendre, à rappeler`,
           meter: { label: 'Contacts libres', ratio: share(workCounts.libre) },
         }
 

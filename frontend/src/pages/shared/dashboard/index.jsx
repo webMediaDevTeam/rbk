@@ -85,9 +85,18 @@ export default function DashboardPage() {
         <>
           {/* Gestionnaire : les **compteurs de la Grande liste** — les 10 badges
               de statut en tuiles pastel, chacun avec sa part (pourcentage +
-              jauge) et menant à la liste pré-filtrée. Instantanés : la période
-              ne les borne pas, seul le filtre « Source » le fait. */}
-          {isAdmin && <DashboardStatusCards source={source} />}
+              jauge) et menant à la liste pré-filtrée. Bornés par la période
+              sélectionnée (clients actifs de la fenêtre) **et** par l'origine :
+              changer un filtre les recalcule aussitôt. */}
+          {isAdmin && (
+            <DashboardStatusCards
+              source={source}
+              year={year}
+              month={month}
+              week={week}
+              day={day}
+            />
+          )}
 
           {/* Commercial : le travail en cours (Libre / Double / Info / BV /
               À rappeler) — même maquette, mêmes teintes. Opérateur : ses

@@ -6,8 +6,10 @@ use App\Models\Client;
 use App\Models\Employee;
 use App\Models\Enterprise;
 use App\Models\Note;
+use App\Models\Reservation;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -140,5 +142,75 @@ class GrandeListeKpiFilterTest extends TestCase
         // « Entreprise » ne borne plus que la liste déroulante « Employé » :
         // l'overview ne le répercute pas sur les compteurs → total inchangé.
         $this->assertSame(2, $this->systemCount(['enterprise_id' => $enterprise->id]));
+    }
+
+    /**
+     * Période **optionnelle** du tableau de bord (`?year` / `?month` / `?week` /
+     * `?day`) : posée, elle ne borne **que** les tuiles d'issue « Oui →
+     * Blacklist », sur la **date de la note** du client (note d'issue du type
+     * créée dans la fenêtre). « Tous », « Libre » et « Sans tel. » restent des
+     * instantanés **fixes**. Sans période, l'overview reste l'instantané complet
+     * des badges de la liste — comportement historique inchangé.
+     */
+    public function test_period_filters_only_the_outcome_tiles_by_note_date(): void
+    {
+        $commercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
+        // figer la date réelle avant tout `travelTo` (sinon `Carbon::today()`
+        // renverrait la date gelée du voyage précédent).
+        $realToday = Carbon::today();
+        $currentYear = (int) $realToday->format('Y');
+
+        // Client « Oui » dont la note d'issue date du 5 mars 2020.
+        $this->travelTo(Carbon::create(2020, 3, 5, 10, 0));
+        $old = $this->makeClient(['name' => 'Oui ancien']);
+        $this->reserveYes($old, $commercial);
+        $this->makeNote($old, $commercial);
+
+        // Client « Oui » dont la note d'issue est d'aujourd'hui (année courante).
+        $this->travelTo($realToday);
+        $recent = $this->makeClient(['name' => 'Oui récent']);
+        $this->reserveYes($recent, $commercial);
+        $this->makeNote($recent, $commercial);
+
+        // Client « Libre » (AVAILABLE), jamais réservé.
+        $this->makeClient(['name' => 'Libre']);
+
+        $this->travelBack();
+
+        /** @return array<string, int> `by_display_status` pour la période donnée. */
+        $badges = fn (array $query): array => (array) $this->getJson(
+            '/api/v1/clients/overview'.($query === [] ? '' : '?'.http_build_query($query))
+        )->assertOk()->json('data.by_display_status');
+
+        // « Tous » = instantané fixe : les 3 clients, quelle que soit la période.
+        $this->assertSame(3, $this->systemCount());
+        $this->assertSame(3, $this->systemCount(['year' => 2020]));
+        $this->assertSame(3, $this->systemCount(['year' => $currentYear]));
+        $this->assertSame(3, $this->systemCount(['year' => 2019]));
+
+        // « Libre » = instantané fixe : le seul AVAILABLE, même sous 2019.
+        $this->assertSame(1, (int) $badges([])[Client::STATUS_AVAILABLE]);
+        $this->assertSame(1, (int) $badges(['year' => 2019])[Client::STATUS_AVAILABLE]);
+
+        // « Oui » suit la période par **date de note** : les 2 sans période,
+        // 1 par année (2020 = l'ancien, courante = le récent), 0 en 2019.
+        $this->assertSame(2, (int) $badges([])[Reservation::STATUS_YES]);
+        $this->assertSame(1, (int) $badges(['year' => 2020])[Reservation::STATUS_YES]);
+        $this->assertSame(1, (int) $badges(['year' => $currentYear])[Reservation::STATUS_YES]);
+        $this->assertSame(1, (int) $badges(['year' => 2020, 'month' => 3, 'day' => 5])[Reservation::STATUS_YES]);
+        $this->assertSame(0, (int) $badges(['year' => 2019])[Reservation::STATUS_YES]);
+    }
+
+    /** Place un client dans le seau « Oui » : réservation YES courante + CONFIRMED. */
+    private function reserveYes(Client $client, User $commercial): Reservation
+    {
+        $reservation = Reservation::create([
+            'client_id' => $client->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_YES,
+        ]);
+        $client->update(['status' => Client::STATUS_CONFIRMED]);
+
+        return $reservation;
     }
 }

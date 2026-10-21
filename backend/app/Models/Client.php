@@ -336,6 +336,35 @@ class Client extends Model
     }
 
     /**
+     * Clients **actifs** sur une période `[début, fin)` : la fiche a été créée
+     * sur la période, **ou** une réservation y a été créée, **ou** une trace
+     * d'appel y a été posée (note d'issue `CALL_TYPES` ou note porteuse d'un
+     * `call_log_id` — bouton « Appel » RingCentral).
+     *
+     * C'est la borne des compteurs de statut du tableau de bord quand le
+     * filtre Année / Mois / Semaine / Jour est posé : « libre sur la période »
+     * = actuellement libre **et** touché (ou créé) pendant la période.
+     */
+    public function scopeActiveBetween($query, $start, $end)
+    {
+        return $query->where(function ($q) use ($start, $end) {
+            $q->where('created_at', '>=', $start)->where('created_at', '<', $end);
+
+            $q->orWhereHas('reservations', function ($r) use ($start, $end) {
+                $r->where('created_at', '>=', $start)->where('created_at', '<', $end);
+            });
+
+            $q->orWhereHas('notes', function ($n) use ($start, $end) {
+                $n->where('created_at', '>=', $start)
+                    ->where('created_at', '<', $end)
+                    ->where(function ($t) {
+                        $t->calls()->orWhereNotNull('call_log_id');
+                    });
+            });
+        });
+    }
+
+    /**
      * Clients **sans numéro** (`status` dérivé `SANS_TELEPHONE`) : `phone`
      * NULL ou chaîne vide — les deux formes ont existé en base.
      *

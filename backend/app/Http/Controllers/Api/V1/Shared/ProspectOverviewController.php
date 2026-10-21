@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\V1\Shared;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Models\Note;
 use App\Models\Reservation;
 use App\Services\Client\ClientSearchService;
+use App\Support\PeriodFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,6 +27,16 @@ class ProspectOverviewController extends Controller
      * **sous filtres**. Le statut n'est pas un paramètre d'entrée : chaque
      * badge le ajoute lui-même, et « Entreprise » est ignoré (il ne borne que
      * la liste déroulante « Employé » côté UI). Voir `applyScopeFilters()`.
+     *
+     * Période **optionnelle** (`year` / `month` / `week` / `day`, mêmes règles
+     * que le tableau de bord — `PeriodFilter`) : posée, elle ne borne **que**
+     * les tuiles d'issue « Oui → Blacklist » (Oui / Non / BV / À rappeler /
+     * Double / Info / Blacklist), sur la **date de la note du client** (la note
+     * d'issue du type correspondant, créée dans `[début, fin)`). « Tous »,
+     * « Libre » et « Sans tel. » — comme tous les compteurs de résumé —
+     * restent des **instantanés fixes**, la période ne les scope pas. **Aucun**
+     * paramètre de période = instantané complet — comportement historique des
+     * badges de la liste, inchangé.
      *
      * Définitions métier :
      *  - « traité » (`processed`) : le client porte au moins une issue
@@ -74,8 +86,48 @@ class ProspectOverviewController extends Controller
         // sinon les badges de statut mentiraient. **Sans** le filtre « Entreprise »
         // — celui-ci ne borne que la liste déroulante « Employé » côté UI et ne
         // filtre pas les clients.
-        /** @var \Closure(): Builder<Client> $clients */
+        // Période du dashboard (`?year`/`?month`/`?week`/`?day`) : absente =
+        // instantané complet (badges de la liste) ; posée, elle borne UNIQUEMENT
+        // les tuiles d'issue « Oui → Blacklist », sur la **date de la note** du
+        // client. « Tous » / « Libre » / « Sans tel. » et les compteurs de résumé
+        // restent instantanés — la période ne les scope pas.
+        $period = PeriodFilter::fromRequest($request, defaultToCurrentYear: false);
+        [$start, $end] = $period !== null ? PeriodFilter::bounds($period) : [null, null];
+
+        /**
+         * Périmètre « filtres de la liste » : **toujours un instantané** (aucune
+         * borne de période ici) — base de « Tous », « Libre », « Sans tel. » et
+         * de tous les compteurs de résumé.
+         *
+         * @var \Closure(): Builder<Client> $clients
+         */
         $clients = fn (): Builder => $this->applyScopeFilters(Client::query(), $request);
+
+        /* Ramène une requête de seau d'issue dans la fenêtre, sur la **date de
+         * la note** du client : note d'issue du type correspondant créée dans
+         * `[start, end)`. Aucun effet sans période, ni pour un seau hors liste
+         * (Tous / Libre / Sans tel. / PENDING) — ils restent fixes. */
+        $issueNoteTypes = [
+            Reservation::STATUS_YES => Note::TYPE_YES,
+            Reservation::STATUS_NO => Note::TYPE_NO,
+            Reservation::STATUS_BV_VOICEMAIL => Note::TYPE_BV,
+            Reservation::STATUS_CALL_BACK => Note::TYPE_CALL_BACK,
+            Reservation::STATUS_DOUBLE => Note::TYPE_DOUBLE,
+            Reservation::STATUS_INFO => Note::TYPE_INFO,
+            Client::STATUS_BLACKLISTED => Note::TYPE_BLACKLISTED,
+        ];
+        $withinPeriod = function (Builder $query, string $bucket) use ($period, $start, $end, $issueNoteTypes): Builder {
+            if ($period === null || ! isset($issueNoteTypes[$bucket])) {
+                return $query;
+            }
+
+            $noteType = $issueNoteTypes[$bucket];
+
+            return $query->whereHas('notes', fn ($n) => $n
+                ->where('type', $noteType)
+                ->where('created_at', '>=', $start)
+                ->where('created_at', '<', $end));
+        };
 
         // ── 1. Prospects ────────────────────────────────────────────────
         $system = $clients()->count();
@@ -143,11 +195,17 @@ class ProspectOverviewController extends Controller
         ];
 
         foreach ($clientBuckets as $bucket) {
-            $displayCounts[$bucket] = $this->search->filterByStatuses($clients(), $bucket)->count();
+            $displayCounts[$bucket] = $withinPeriod(
+                $this->search->filterByStatuses($clients(), $bucket),
+                $bucket,
+            )->count();
         }
 
         foreach ($reservationBuckets as $bucket) {
-            $displayCounts[$bucket] = $this->search->filterByReservationStatuses($clients(), $bucket)->count();
+            $displayCounts[$bucket] = $withinPeriod(
+                $this->search->filterByReservationStatuses($clients(), $bucket),
+                $bucket,
+            )->count();
         }
 
         return response()->json([

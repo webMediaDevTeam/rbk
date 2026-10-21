@@ -30,6 +30,13 @@ import { api } from '@/api/client.js'
  *                               porte que la liste déroulante « Employé ».
  *                             - `source` : raccourci historique (équivaut à
  *                               `filters.source`), conservé par compatibilité.
+ *                             - `year` / `month` / `week` / `day` : période
+ *                               du tableau de bord (tuiles « Grande liste »).
+ *                               Posée, elle ne borne **que** les tuiles d'issue
+ *                               Oui → Blacklist (sur la date de la note du
+ *                               client) ; « Tous » / « Libre » / « Sans tel. »
+ *                               restent fixes. Absente = instantané complet
+ *                               (comportement des badges de liste).
  */
 export function useProspectKpis(counts = undefined, params = {}) {
   const localCounts = counts !== undefined
@@ -44,6 +51,12 @@ export function useProspectKpis(counts = undefined, params = {}) {
     administrative_region: filters.administrative_region || undefined,
     employee_id: filters.employee_id || undefined,
     source: params.source || filters.source || undefined,
+    // Période du dashboard : chaque réglage change la `queryKey` → les tuiles
+    // se recalculent **immédiatement** (nouvelle clé = pas de cache).
+    year: filters.year || undefined,
+    month: filters.month || undefined,
+    week: filters.week || undefined,
+    day: filters.day || undefined,
   }
   const active = Object.fromEntries(Object.entries(scoped).filter(([, value]) => value !== undefined))
   const hasScope = Object.keys(active).length > 0

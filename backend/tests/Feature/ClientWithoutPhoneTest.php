@@ -79,7 +79,7 @@ class ClientWithoutPhoneTest extends TestCase
 
     public function test_overview_counts_clients_without_phone_in_a_derived_bucket(): void
     {
-        $this->makeClient();                                // numéro présent
+        $withPhone = $this->makeClient();                   // numéro présent
         $this->makeClient(['phone' => null]);               // aucun numéro
         $this->makeClient(['phone' => '']);                 // reliquat de forme texte
 
@@ -92,9 +92,19 @@ class ClientWithoutPhoneTest extends TestCase
         $this->assertArrayHasKey(Client::STATUS_SANS_TELEPHONE, $badges, 'Le 8e badge existe.');
         $this->assertSame(2, (int) $badges[Client::STATUS_SANS_TELEPHONE]);
 
-        // Le seau dérivé **recoupe** les autres : les deux clients sans
-        // numéro sont aussi `AVAILABLE`.
-        $this->assertSame(3, (int) $badges[Client::STATUS_AVAILABLE]);
+        // « Libre » ne compte plus que les fiches **joignables** : les deux
+        // clients sans numéro relèvent du seul seau « Sans tel. » et ne sont plus
+        // comptés en `AVAILABLE` (la jauge « Contacts libres » du dashboard lit
+        // cette même valeur).
+        $this->assertSame(1, (int) $badges[Client::STATUS_AVAILABLE]);
+
+        // Invariant §9 : le filtre admin « Libre » rend **exactement** la ligne
+        // téléphonée (compteur = lignes).
+        $this->assertEqualsCanonicalizing(
+            [$withPhone->id],
+            $this->adminListIds('status='.Client::STATUS_AVAILABLE),
+            'Le badge « Libre » égale les lignes rendues par son filtre.',
+        );
     }
 
     public function test_admin_filter_renders_exactly_the_clients_without_phone(): void

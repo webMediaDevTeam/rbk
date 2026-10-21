@@ -183,10 +183,15 @@ class ClientSearchService
      * filtre.
      *
      * Une ligne **blacklistée** appartient au seau `BLACKLISTED`, quel que
-     * soit son `status` (une donnée réelle a encore `status = AVAILABLE`) :
-     * elle n'entre donc que si `BLACKLISTED` est demandé. C'est la définition
+     * soit son `status` (une donnée réelle a encore `status = AVAILABLE`) : elle
+     * n'entre donc que si `BLACKLISTED` est demandé. C'est la définition
      * **exacte** de `by_status` (`GET clients/overview`) — le chiffre affiché
      * sur un badge vaut alors le nombre de lignes renvoyées après clic.
+     *
+     * `AVAILABLE` (« Libre ») est restreint aux fiches **joignables** (`phone`
+     * renseigné) : un prospect sans numéro bascule dans le seau `SANS_TELEPHONE`
+     * et n'est jamais compté en « Libre » — la même règle s'applique au compteur
+     * et au filtre de la liste, donc l'invariant « badge = lignes » tient.
      *
      * `SANS_TELEPHONE` est un seau **dérivé** (colonne `phone` vide, cf.
      * `scopeWithoutPhone()`) : il recoupe les autres seaux client (un
@@ -221,9 +226,19 @@ class ClientSearchService
             $branches = [];
 
             if ($others !== []) {
-                $branches[] = fn (Builder $q) => $q
-                    ->whereIn('status', $others)
-                    ->where('is_blacklisted', false);
+                $branches[] = function (Builder $q) use ($others) {
+                    $q->whereIn('status', $others)
+                        ->where('is_blacklisted', false);
+
+                    // « Libre » (AVAILABLE) ne compte que les fiches **joignables** :
+                    // un prospect sans numéro relève du seau « Sans tel. », jamais de
+                    // « Libre ». Les autres statuts client gardent leur périmètre.
+                    if (in_array(Client::STATUS_AVAILABLE, $others, true)) {
+                        $q->where(fn (Builder $phone) => $phone
+                            ->where('status', '!=', Client::STATUS_AVAILABLE)
+                            ->orWhere(fn (Builder $libre) => $libre->withPhone()));
+                    }
+                };
             }
 
             if ($hasBlacklist) {

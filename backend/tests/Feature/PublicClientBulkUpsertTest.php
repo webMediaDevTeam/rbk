@@ -60,7 +60,8 @@ class PublicClientBulkUpsertTest extends TestCase
         $this->assertSame('Québec', $client->municipality);
         $this->assertSame(['Jean Dupont', 'Marie Curie'], $client->respondents);
         // Dérivations de l'import (§12) : catégories du filtre + licence propre.
-        $this->assertSame(['cat1, 1.2'], $client->categories);
+        // La virgule interne est un séparateur : « cat1, 1.2 » → deux atomes.
+        $this->assertSame(['cat1', '1.2'], $client->categories);
         $this->assertTrue((bool) $client->licence_propre);
         // État applicatif neuf, jamais lu dans le payload.
         $this->assertSame(Client::STATUS_AVAILABLE, $client->status);

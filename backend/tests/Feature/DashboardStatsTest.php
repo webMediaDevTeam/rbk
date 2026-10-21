@@ -352,6 +352,98 @@ class DashboardStatsTest extends TestCase
             ->assertJsonPath('data.stats.double', 0);
     }
 
+    /**
+     * Les cartes de liste du commercial (`prospects` / `libre` / `bv` …) **réagissent
+     * au filtre de période** : elles comptent les clients « actifs » de la fenêtre
+     * (fiche créée, réservation posée ou trace d'appel émise pendant la période)
+     * et les rappels `pending` dont la **réservation** a été créée sur la période.
+     * Filtre par défaut = année courante : les fiches d'une année passée sortent
+     * des compteurs.
+     */
+    public function test_commercial_list_cards_follow_the_period_filter(): void
+    {
+        $commercial = $this->makeCommercial(['has_permission' => true]);
+        $employee = $this->makeEmployee($commercial);
+        $enterprise = Enterprise::create(['name' => 'Ent. période', 'source' => 'Francais']);
+        $employee->update(['enterprise_id' => $enterprise->id]);
+
+        // Fenêtre courante : un libre créé à l'instant + un rappel BV dont la
+        // réservation est créée à l'instant.
+        $this->makeClient(['source' => 'Francais', 'name' => 'Libre cette année']);
+        $bv = $this->makeClient(['source' => 'Francais', 'name' => 'BV cette année', 'status' => Client::STATUS_RESERVED]);
+        $bvReservation = Reservation::create([
+            'client_id' => $bv->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_BV_VOICEMAIL,
+        ]);
+        Rappel::create([
+            'client_id' => $bv->id,
+            'comercial_id' => $commercial->id,
+            'reservation_id' => $bvReservation->id,
+            'reminder_date' => now(),
+        ]);
+
+        // Fenêtre 2020 : un libre créé le 3 février, un BV créé le 10 février
+        // (réservation + rappel du 10) — hors de l'année courante.
+        $this->travelTo(Carbon::create(2020, 2, 3, 10, 0));
+        $this->makeClient(['source' => 'Francais', 'name' => 'Libre 2020']);
+        $this->travelTo(Carbon::create(2020, 2, 10, 10, 0));
+        $oldBv = $this->makeClient(['source' => 'Francais', 'name' => 'BV 2020', 'status' => Client::STATUS_RESERVED]);
+        $oldReservation = Reservation::create([
+            'client_id' => $oldBv->id,
+            'comercial_id' => $commercial->id,
+            'status' => Reservation::STATUS_BV_VOICEMAIL,
+        ]);
+        Rappel::create([
+            'client_id' => $oldBv->id,
+            'comercial_id' => $commercial->id,
+            'reservation_id' => $oldReservation->id,
+            'reminder_date' => now(),
+        ]);
+        $this->travelBack();
+
+        Sanctum::actingAs($commercial);
+
+        // Défaut = année courante : les fiches de 2020 disparaissent des compteurs.
+        $this->getJson('/api/v1/dashboard/stats')
+            ->assertOk()
+            ->assertJsonPath('data.stats.prospects', 1)
+            ->assertJsonPath('data.stats.libre', 1)
+            ->assertJsonPath('data.stats.bv', 1);
+
+        // Année 2020 : le libre du 3 février et le BV du 10 (tenu, hors liste « Tous »
+        // comme sur la liste réelle) ; les deux BV (2020 et courant) suivent leur
+        // réservation — seul celui de 2020 reste sous `?year=2020`.
+        $this->getJson('/api/v1/dashboard/stats?year=2020')
+            ->assertOk()
+            ->assertJsonPath('data.stats.prospects', 1)
+            ->assertJsonPath('data.stats.libre', 1)
+            ->assertJsonPath('data.stats.bv', 1);
+
+        // Semaine 1 de février 2020 (jours 1–7) : le libre créé le 3 est actif,
+        // la réservation BV du 10 sort de la fenêtre → `bv` = 0.
+        $this->getJson('/api/v1/dashboard/stats?year=2020&month=2&week=1')
+            ->assertOk()
+            ->assertJsonPath('data.stats.prospects', 1)
+            ->assertJsonPath('data.stats.libre', 1)
+            ->assertJsonPath('data.stats.bv', 0);
+
+        // Jour 3 février 2020 seul : uniquement le libre créé ce jour.
+        $this->getJson('/api/v1/dashboard/stats?year=2020&month=2&day=3')
+            ->assertOk()
+            ->assertJsonPath('data.stats.prospects', 1)
+            ->assertJsonPath('data.stats.libre', 1)
+            ->assertJsonPath('data.stats.bv', 0);
+
+        // Jour 11 février 2020 : `day` borne sur le seul jour 11 — aucune
+        // activité ce jour-là (le BV a été créé le 10), tous les compteurs tombent à 0.
+        $this->getJson('/api/v1/dashboard/stats?year=2020&month=2&day=11')
+            ->assertOk()
+            ->assertJsonPath('data.stats.prospects', 0)
+            ->assertJsonPath('data.stats.libre', 0)
+            ->assertJsonPath('data.stats.bv', 0);
+    }
+
     public function test_month_and_week_narrow_every_card(): void
     {
         $commercial = $this->makeCommercial();

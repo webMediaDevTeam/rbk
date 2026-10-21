@@ -18,3 +18,13 @@ export const weekRange = (year, month, week) => {
   const from = (week - 1) * 7 + 1
   return [from, Math.min(week * 7, daysInMonth(year, month))]
 }
+
+// Libellé de la période effective (miroir des bornes serveur) — partagé par
+// les mentions des panneaux KPI : jour seul > mois+semaine > mois > année.
+export const periodLabel = ({ year, month, week, day }) => {
+  if (day) return `${MONTH_LABELS[month - 1]} ${year} — jour ${day}`
+  if (month) return week
+    ? `${MONTH_LABELS[month - 1]} ${year} — semaine ${week}`
+    : `${MONTH_LABELS[month - 1]} ${year}`
+  return `Année ${year}`
+}

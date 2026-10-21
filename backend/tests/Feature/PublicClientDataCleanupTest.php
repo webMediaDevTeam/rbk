@@ -126,6 +126,69 @@ class PublicClientDataCleanupTest extends TestCase
         $this->assertSame(['Gestion de projets', 'Électricité'], $client->categories);
     }
 
+    /**
+     * Un élément RBQ **fusionné** est éclaté en libellés atomiques dans
+     * `categories` (colonne filtrable) : la virgule ET la barre verticale sont
+     * des séparateurs, mais « et » / « and » font partie du nom — « éclairage
+     * et installations électriques » reste donc un seul libellé.
+     */
+    public function test_merged_category_element_is_split_into_atomic_categories(): void
+    {
+        $client = $this->import([
+            'Licence' => 'L-9031',
+            'Catégories et sous-catégories autorisées' => [
+                'Bâtiments Complexes , CVC-Maisons , Détection, éclairage et installations électriques',
+            ],
+        ]);
+
+        // `authorized_categories` conserve le libellé RBQ brut (une seule entrée).
+        $this->assertCount(1, $client->authorized_categories);
+
+        // `categories` : chaque virgule casse, mais « éclairage et … » survit.
+        $this->assertSame([
+            'Bâtiments Complexes',
+            'CVC-Maisons',
+            'Détection',
+            'éclairage et installations électriques',
+        ], $client->categories);
+    }
+
+    /**
+     * Tout format d'entrée converge vers le MÊME JSON atomique : virgules
+     * collées, fusionnées (« A , B »), barres verticales, chaîne unique, ou
+     * tableau déjà atomique.
+     */
+    public function test_every_category_input_format_converges_to_one_atomic_json(): void
+    {
+        $expected = [
+            'Building Services', 'Detection', 'Lighting and Power', 'House',
+            'HVAC-House', 'Large Buildings', 'Small Buildings',
+            'CVC-Maisons', 'Détection', 'éclairage et installations électriques',
+            'Grands Bâtiments', 'Maisons', 'Petits',
+        ];
+
+        $forms = [
+            'merged-comma' => [
+                'Building Services, Detection, Lighting and Power, House, HVAC-House, Large Buildings, Small Buildings',
+                'CVC-Maisons , Détection, éclairage et installations électriques , Grands Bâtiments, Maisons, Petits',
+            ],
+            'single-comma-string' => 'Building Services, Detection, Lighting and Power, House, HVAC-House, Large Buildings, Small Buildings, CVC-Maisons , Détection, éclairage et installations électriques , Grands Bâtiments, Maisons, Petits',
+            'pipe' => 'Building Services| Detection| Lighting and Power| House| HVAC-House| Large Buildings| Small Buildings| CVC-Maisons | Détection| éclairage et installations électriques | Grands Bâtiments| Maisons| Petits',
+            'atomic-array' => $expected,
+        ];
+
+        $licence = 9100;
+
+        foreach ($forms as $label => $value) {
+            $client = $this->import([
+                'Licence' => (string) ++$licence,
+                'Catégories et sous-catégories autorisées' => $value,
+            ]);
+
+            $this->assertSame($expected, $client->categories, "Format « {$label} » doit converger au même JSON.");
+        }
+    }
+
     public function test_respondants_are_deduplicated_without_losing_the_qualification(): void
     {
         $client = $this->import([

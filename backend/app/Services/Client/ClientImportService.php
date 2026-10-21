@@ -146,7 +146,12 @@ class ClientImportService
 
         // Dérivations (mêmes conventions que l'import JSON, §12).
         if (array_key_exists('authorized_categories', $attributes)) {
-            $attributes['categories'] = $attributes['authorized_categories'] ?? [];
+            // `categories` est la colonne filtrable : quel que soit le format
+            // reçu (chaîne à virgules, « A , B , C » fusionné, barres
+            // verticales, JSON, tableau déjà atomique), on la normalise en
+            // libellés **atomiques** dédupliqués — le JSON stocké est identique
+            // pour une même liste de catégories, d'où qu'elle vienne.
+            $attributes['categories'] = self::normalizeCategories($attributes['authorized_categories'] ?? []);
         }
 
         if (array_key_exists('licence_propre_numero', $attributes)) {
@@ -557,7 +562,7 @@ class ClientImportService
         ];
 
         foreach (array_values($items) as $index => $item) {
-            $target = self::blacklistTargetFromItem($item, $mode);
+            $target = self::blacklistTargetFromItem($item, $mode, $source);
 
             // Ligne de rapport commune : `index` + `type` / `key` + `name` ou
             // `licence`. Les compteurs la complètent selon le cas.
@@ -647,7 +652,7 @@ class ClientImportService
      *
      * @return array{type: string, key: string}|null
      */
-    private static function blacklistTargetFromItem(mixed $item, string $mode): ?array
+    private static function blacklistTargetFromItem(mixed $item, string $mode, string $source): ?array
     {
         if ($mode === self::BLACKLIST_MODE_LICENCE) {
             $licence = self::blacklistLicenceFromItem($item);
@@ -674,7 +679,7 @@ class ClientImportService
                 return null;
             }
 
-            if (! self::clientsMatchingName($name)->isEmpty()) {
+            if (! self::clientsMatchingName($name, $source)->isEmpty()) {
                 return ['type' => self::BLACKLIST_MODE_NAME, 'key' => $name];
             }
 
@@ -1843,6 +1848,62 @@ class ClientImportService
         }
 
         return array_values($cleaned);
+    }
+
+    /**
+     * `categories` « propres » quelle que soit la **forme** reçue (chaîne,
+     * chaîne JSON, tableau, éléments fusionnés) : on aplatit tout en libellés
+     * bruts, puis on éclate sur les **vrais séparateurs** — la virgule `,` et
+     * la barre verticale `|` — avant de dédupliquer à la casse près (ordre
+     * conservé).
+     *
+     * On ne casse volontairement **pas** sur « et » / « and » : « Lighting and
+     * Power » et « éclairage et installations électriques » sont des libellés
+     * entiers. En revanche une virgule interne est traitée comme séparateur
+     * (« Détection, éclairage… » → « Détection » + « éclairage… ») : le script
+     * d'import doit produire un JSON atomique identique quel que soit le format
+     * envoyé par le scraper / n8n.
+     *
+     * @param  mixed  $value  libellés (déjà nettoyés par `cleanList`, ou bruts)
+     * @return list<string>
+     */
+    private static function normalizeCategories(mixed $value): array
+    {
+        // Toute forme d'entrée → liste de chaînes brutes.
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : [$value];
+        }
+
+        $cleaned = [];
+        $seen = [];
+
+        foreach (is_array($value) ? $value : [$value] as $raw) {
+            if (! is_scalar($raw)) {
+                continue;
+            }
+
+            // Séparateurs réels : virgule et barre verticale (jamais « et » /
+            // « and », qui font partie du nom).
+            foreach (preg_split('/[,|]/', (string) $raw) ?: [] as $token) {
+                $token = trim($token);
+
+                if ($token === '') {
+                    continue;
+                }
+
+                $key = mb_strtolower($token, 'UTF-8');
+
+                if (isset($seen[$key])) {
+                    continue; // doublon (à la casse près)
+                }
+
+                $seen[$key] = true;
+                $cleaned[] = $token;
+            }
+        }
+
+        return $cleaned;
     }
 
     /** Tableau JSON n8n / tableau PHP / chaîne brute → tableau PHP. */

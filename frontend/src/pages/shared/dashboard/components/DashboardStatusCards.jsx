@@ -10,16 +10,20 @@ const LIST_HREF = '/clients-historique'
  * Panneau « Grande liste » du tableau de bord gestionnaire : les **mêmes
  * compteurs que les 10 badges de statut de la liste** (`Tous` + `Libre` →
  * `Sans tel.`, docs/RULES.md §9), lus sur `GET clients/overview` sous
- * l'origine active (`?source=`) — donc identiques à ceux que l'admin verra en
- * arrivant sur la liste.
+ * l'origine active (`?source=`) **et la période du dashboard**
+ * (`?year=&month=&week=&day=`).
  *
- * Ce sont des **instantanés** : la période (Année / Mois / Semaine) ne les
- * borne pas, seule l'origine le fait — c'est dit dans la mention du titre.
+ * Sous période, seules les tuiles d'issue **Oui → Blacklist** se bornent à la
+ * fenêtre, sur la **date de la note** du client (note d'issue du type créé
+ * pendant la période) ; « Tous », « Libre » et « Sans tel. » restent des
+ * **instantanés fixes**. Sans période (badges de la liste elle-même), tous les
+ * compteurs sont instantanés.
  *
  * Chaque tuile mène à la Grande liste **pré-filtrée** sur son statut
  * (`/clients-historique?status=CLE`) ; l'origine active, elle, se lit dans
  * `localStorage` des deux côtés (`useSourcePreference`), donc le clic garde le
- * même périmètre.
+ * même périmètre — la liste n'étant pas bornée par la période, ses lignes
+ * peuvent excéder le chiffre de la tuile quand une période est posée.
  *
  * Chaque tuile porte aussi sa **part** du total de la liste (pourcentage +
  * jauge) : « Tous » est à 100 % par définition, les autres se lisent dessus. La
@@ -27,9 +31,15 @@ const LIST_HREF = '/clients-historique'
  * des neuf n'atteint donc pas 100 %.
  *
  * @param {string} [source] origine active (`''` = « Toutes »).
+ * @param {number} [year]  période du dashboard — posée, seules les tuiles
+ * @param {number} [month] d'issue Oui → Blacklist se bornent aux notes de la
+ * @param {number} [week]  fenêtre ; « Tous » / « Libre » / « Sans tel. »
+ * @param {number} [day]   restent fixes (jour seul > semaine > mois > année).
  */
-export default function DashboardStatusCards({ source = '' }) {
-  const { kpis, isLoading, isError } = useProspectKpis(undefined, { filters: { source } })
+export default function DashboardStatusCards({ source = '', year, month, week, day }) {
+  const { kpis, isLoading, isError } = useProspectKpis(undefined, {
+    filters: { source, year, month, week, day },
+  })
 
   if (isError) return null
 
@@ -67,7 +77,6 @@ export default function DashboardStatusCards({ source = '' }) {
   return (
     <DashboardStatTiles
       title="Grande liste"
-      caption={`Instantané · toutes périodes, origine ${source ? `« ${source} »` : '« toutes »'}`}
       tiles={tiles}
       loading={isLoading}
       meter={kpis ? { label: 'Contacts libres', ratio: total > 0 ? libres / total : 0 } : null}

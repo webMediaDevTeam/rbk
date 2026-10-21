@@ -11,6 +11,7 @@ use App\Models\Reservation;
 use App\Models\ReservationGroup;
 use App\Models\User;
 use App\Services\Client\ClientSearchService;
+use App\Support\PeriodFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,7 +40,13 @@ class DashboardController extends Controller
      *    le plus fin des réglages — il rend `week` sans effet, et il est
      *    ignoré sans `month` ou hors plage. C'est ce que pose le raccourci
      *    « Ce jour ».
-     * Exception : `stats.blacklisted_clients` reste un instantané des
+     * Côté commercial, les compteurs de liste (`prospects` / `libre` /
+     * `double` / `info` / `bv` / `rappel`) sont **bornés par la période** :
+     * ils comptent les clients « actifs » sur la période
+     * (`Client::scopeActiveBetween()` — fiche créée, réservation posée ou
+     * trace d'appel émise pendant la période), rappels BV / À rappeler compris
+     * (réservation créée sur la période).
+     * Exceptions : `stats.blacklisted_clients` reste un instantané des
      * clients **actuellement** blacklistés.
      *
      * `source` (origine du prospect, §13) : **filtre gestionnaire**, le même
@@ -54,42 +61,16 @@ class DashboardController extends Controller
         $user = $request->user();
         $isManager = in_array($user->role, ['ADMIN', 'SUPER_ADMIN'], true);
 
-        $year = (int) $request->query('year', 0);
-        $year = $year > 0 ? $year : (int) Carbon::today()->format('Y');
+        // Réglages normalisés (cascade serveur : `week`/`day` hors plage ou
+        // sans `month` valent « toutes ») + bornes [début, fin) et granularité
+        // du graphique — règles partagées avec `clients/overview`.
+        $period = PeriodFilter::fromRequest($request);
+        $year = $period['year'];
+        $month = $period['month'];
+        $week = $period['week'];
+        $day = $period['day'];
 
-        $month = (int) $request->query('month', 0);
-        $month = ($month >= 1 && $month <= 12) ? $month : null;
-
-        $week = (int) $request->query('week', 0);
-        $week = $week > 0 ? $week : null;
-        if ($month !== null && $week !== null) {
-            $daysInMonth = (int) Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('j');
-            if ($week > (int) ceil($daysInMonth / 7)) {
-                $week = null;
-            }
-        }
-
-        // Le jour est le réglage le plus fin : hors mois ou hors plage il vaut
-        // « tous », et quand il existe il éclipse la semaine (un jour n'a pas
-        // besoin d'être aussi dans une semaine filtrante).
-        $day = (int) $request->query('day', 0);
-        $day = $day > 0 ? $day : null;
-        if ($month !== null && $day !== null) {
-            $daysInMonth = (int) Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('j');
-            if ($day > $daysInMonth) {
-                $day = null;
-            }
-        } else {
-            $day = null;
-        }
-
-        // Le jour éclipse la semaine : la méta renvoyée à l'UI reste ainsi un
-        // reflet fidèle de ce qui a filtré (un seul réglage fin à la fois).
-        if ($day !== null) {
-            $week = null;
-        }
-
-        [$start, $end, $granularity] = $this->resolvePeriod($year, $month, $week, $day);
+        [$start, $end, $granularity] = PeriodFilter::resolve($year, $month, $week, $day);
 
         // Origine active (`''` / absent = « Toutes ») — gestionnaires seulement.
         $rawSource = $isManager ? trim((string) $request->query('source', '')) : '';
@@ -200,15 +181,18 @@ class DashboardController extends Controller
     {
         $id = $user->id;
 
-        // « Grande liste » du commercial = **exactement les lignes de
-        // `GET clients`** : mêmes filtres partagés (`applyFilters`), même
-        // périmètre « source » d'entreprise, et mêmes exclusions de privilège
-        // (§7.1). La closure est réutilisée pour chaque badge, comme côté
-        // admin (`ProspectOverviewController`) — l'invariant « carte = lignes
-        // rendues après clic » (§9) tient donc sur le dashboard aussi.
+        // « Grande liste » du commercial = **les lignes de `GET clients`**
+        // actives sur la période : mêmes filtres partagés (`applyFilters`),
+        // même périmètre « source » d'entreprise, mêmes exclusions de
+        // privilège (§7.1) — plus la borne `activeBetween` (fiche créée,
+        // réservation posée ou trace d'appel émise dans `[start, end)`), qui
+        // fait réagir les tuiles au filtre Année / Mois / Semaine / Jour.
+        // L'invariant « carte = lignes rendues » (§9) vaut donc **par
+        // période** : la liste elle-même reste un instantané, la carte indique
+        // ce que la période a touché.
         $perimeter = fn (): Builder => $this->excludeDoubleForUnprivileged(
             $this->search->applyCommercialSourceScope(
-                $this->search->applyFilters(Client::query(), [], $id),
+                $this->search->applyFilters(Client::query()->activeBetween($start, $end), [], $id),
                 $user,
             ),
             $user,
@@ -216,11 +200,15 @@ class DashboardController extends Controller
 
         // BV / À rappeler en attente = exactement les listes des pages
         // « BV » (`/auto-rappels`) et « Rappels » (`/reminders`) : rappels
-        // `pending` dont la réservation porte le statut — instantané, non
-        // filtré par la période (comme les compteurs de badges du menu).
+        // `pending` dont la réservation porte le statut — bornés par la
+        // période côté dashboard (réservation **créée** dans `[start, end)`),
+        // alors que les badges du menu restent instantanés.
         $recallCount = fn (string $type): int => Rappel::where('comercial_id', $id)
             ->pending()
-            ->whereHas('reservation', fn ($q) => $q->where('status', $type))
+            ->whereHas('reservation', fn ($q) => $q
+                ->where('status', $type)
+                ->where('created_at', '>=', $start)
+                ->where('created_at', '<', $end))
             ->count();
 
         return response()->json([
@@ -236,9 +224,10 @@ class DashboardController extends Controller
                     ),
                     'period' => $this->periodCallStats($start, $end, $id),
                     'blacklisted_clients' => $this->blacklistedClientsCount(),
-                    // Comptes de la liste, par statut affiché (invariants §9) :
-                    // `prospects` = « Tous », `libre` = les libres à réserver,
-                    // `double` / `info` = les prospects encore **détenus**.
+                    // Comptes de la liste, par statut affiché (invariants §9,
+                    // bornés par la période) : `prospects` = « Tous », `libre`
+                    // = les libres à réserver, `double` / `info` = les
+                    // prospects encore **détenus**.
                     'prospects' => $perimeter()->count(),
                     'libre' => $this->search->filterByStatuses($perimeter(), Client::STATUS_AVAILABLE)->count(),
                     'double' => $this->search->filterByStatuses($perimeter(), Client::STATUS_DOUBLE)->count(),
@@ -270,46 +259,6 @@ class DashboardController extends Controller
         }
 
         return $query;
-    }
-
-    /**
-     * Bornes de la période filtrante + granularité du graphique :
-     * année seule = `[1er janvier, 1er janvier N+1)` mensuel ; mois =
-     * `[1er, 1er du mois suivant)` journalier ; semaine N du mois =
-     * `[jour (N−1)×7+1, min(N×7, dernier jour)]` journalier ; jour =
-     * `[jour, lendemain)` journalier (un seul point) et prime sur la semaine.
-     *
-     * @return array{0: Carbon, 1: Carbon, 2: string} `[début, fin exclusive, granularité]`
-     */
-    private function resolvePeriod(int $year, ?int $month, ?int $week, ?int $day): array
-    {
-        if ($month === null) {
-            $start = Carbon::createFromDate($year, 1, 1)->startOfDay();
-
-            return [$start, $start->copy()->addYear(), 'month'];
-        }
-
-        $monthStart = Carbon::createFromDate($year, $month, 1)->startOfDay();
-
-        if ($day !== null) {
-            $start = $monthStart->copy()->addDays($day - 1);
-
-            return [$start, $start->copy()->addDay(), 'day'];
-        }
-
-        if ($week === null) {
-            return [$monthStart, $monthStart->copy()->addMonth(), 'day'];
-        }
-
-        $daysInMonth = (int) $monthStart->copy()->endOfMonth()->format('j');
-        $from = min(($week - 1) * 7 + 1, $daysInMonth);
-        $to = min($week * 7, $daysInMonth);
-
-        return [
-            $monthStart->copy()->addDays($from - 1),
-            $monthStart->copy()->addDays($to),
-            'day',
-        ];
     }
 
     private function countIn(Builder $query, Carbon $start, Carbon $end): int
