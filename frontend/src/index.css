@@ -2372,34 +2372,30 @@ footer a {
   }
 }
 
-/* Éditeur « Note personnalisée » (modale « Modifier le client »,
- * @uiw/react-md-editor) : fond **jaune très pâle** sur la zone de saisie et
- * la barre d'outils, pour signaler l'éditeur de texte libre. */
-.client-note-editor .w-md-editor {
+/* Champ « Note personnalisée » (modale « Modifier le client ») : simple
+ * `<textarea>` sur fond **jaune très pâle** pour signaler la zone de texte
+ * libre. La couleur du texte est posée **explicitement** dans les deux
+ * thèmes — sans ça, le texte hériterait d'un fond identique et deviendrait
+ * invisible (le sélecteur `.client-note-editor textarea` (0,1,1) l'emporte
+ * sur les utilitaires Tailwind (0,1,0) de `FIELD_CLASS`). */
+.client-note-editor textarea {
   background-color: #fffbeb;
+  color: #3f3f46;
   border-color: #fde68a;
 }
 
-.client-note-editor .w-md-editor-toolbar {
-  background-color: #fef3c7;
-  border-bottom-color: #fde68a;
+.client-note-editor textarea::placeholder {
+  color: #a1a1aa;
 }
 
-.client-note-editor .w-md-editor-text,
-.client-note-editor .w-md-editor-text-input {
-  background-color: #fffbeb;
-  color: #3f3f46;
+.dark .client-note-editor textarea {
+  background-color: rgb(245 158 11 / 0.1);
+  color: #f4f4f5;
+  border-color: rgb(245 158 11 / 0.35);
 }
 
-.dark .client-note-editor .w-md-editor,
-.dark .client-note-editor .w-md-editor-text,
-.dark .client-note-editor .w-md-editor-text-input {
-  background-color: rgb(245 158 11 / 0.08);
-  color: inherit;
-}
-
-.dark .client-note-editor .w-md-editor-toolbar {
-  background-color: rgb(245 158 11 / 0.14);
+.dark .client-note-editor textarea::placeholder {
+  color: #a1a1aa;
 }
 
 /* Page « GPS » : pointeau du cercle en édition (Leaflet `divIcon`, sans

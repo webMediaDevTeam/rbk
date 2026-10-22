@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
-import MDEditor from '@uiw/react-md-editor'
-import '@uiw/react-md-editor/markdown-editor.css'
 import Button from '@/components/ui/button.jsx'
 import Select from '@/components/ui/select'
 import { cn } from '@/lib/utils.js'
@@ -155,9 +153,9 @@ export default function ClientEditModal({ open, client, onClose }) {
           {/* Modèle « ancienne version » pour les champs (sections en 2
               colonnes), mais la modale est une **grille de 3 colonnes** :
               les champs occupent les 2 premières, la note personnalisée
-              occupe la 3e sur **toute la hauteur** — vrai éditeur de texte
-              (`@uiw/react-md-editor`), valeur en texte brut : les retours à
-              la ligne restent le séparateur des éléments de liste. */}
+              occupe la 3e sur **toute la hauteur** — simple zone de texte
+              (`<textarea>`), valeur en texte brut : les retours à la ligne
+              restent le séparateur des éléments de liste. */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-5 lg:col-span-2">
               {/* Identité */}
@@ -192,17 +190,19 @@ export default function ClientEditModal({ open, client, onClose }) {
               </div>
             </div>
 
-            {/* Note personnalisée — 3e colonne, pleine hauteur. */}
-            <div className="client-note-editor flex flex-col" data-color-mode="light">
+            {/* Note personnalisée — 3e colonne, pleine hauteur : simple
+                `<textarea>` sur fond jaune pâle, lisible en clair comme en
+                sombre (couleurs portées par `.client-note-editor`, index.css). */}
+            <div className="client-note-editor flex flex-col">
               <label htmlFor="client-note-personnalise" className="block text-sm font-bold mb-1">
                 Note personnalisée
               </label>
-              <MDEditor
-                textareaProps={{ id: 'client-note-personnalise', placeholder: 'Une information par ligne…' }}
+              <textarea
+                id="client-note-personnalise"
                 value={form.note_personnalise}
-                onChange={(value) => setForm((prev) => ({ ...prev, note_personnalise: value ?? '' }))}
-                preview="edit"
-                height={640}
+                onChange={(e) => setForm((prev) => ({ ...prev, note_personnalise: e.target.value }))}
+                placeholder="Une information par ligne…"
+                className={cn(FIELD_CLASS, 'min-h-[640px] flex-1 resize-y leading-relaxed')}
               />
               <p className="mt-1 text-xs text-muted-foreground">
                 Chaque retour à la ligne forme un élément de la liste.
