@@ -34,6 +34,23 @@ export function useDashboard() {
   // décidé par le serveur).
   const { source, setSource } = useSourcePreference()
 
+  // Filtres « Entreprise » / « Employé » (ligne 4), **comme la Grande liste** :
+  // « Entreprise » ne borne que la liste déroulante « Employé » (cascade jouée
+  // côté client, l'identifiant d'entreprise n'est **jamais** envoyé à l'API) ;
+  // seul « Employé » (`employee_id`) filtre les compteurs — les cartes passent
+  // par `clients/overview`, qui applique déjà ce critère (lien par notes).
+  // Le graphique (`dashboard/stats`) l'ignore, exactement comme il ignore la
+  // source. Réservé au gestionnaire ; l'`OPERATOR` a un dashboard instantané.
+  const [enterprise, setEnterpriseValue] = useState(null)
+  const [employee, setEmployeeValue] = useState(null)
+  // Changer d'entreprise réinitialise l'employé : l'option choisie ne serait
+  // plus dans la liste restreinte à la nouvelle entreprise.
+  const setEnterprise = (value) => {
+    setEnterpriseValue(value ? Number(value) : null)
+    setEmployeeValue(null)
+  }
+  const setEmployee = (value) => setEmployeeValue(value ? Number(value) : null)
+
   // Filtre de période **global** du tableau de bord (graphique, réservations,
   // « Meilleurs employés » **et tuiles KPI**) : Année → Mois → Semaine → Jour.
   // Les tuiles comptent les clients « actifs » de la fenêtre (fiche créée,
@@ -142,10 +159,13 @@ export function useDashboard() {
   }
 
   // Bouton « Réinitialiser » : retour au filtre par défaut (année courante,
-  // mois, semaine et jour « tous », aucune fenêtre roulante).
+  // mois, semaine et jour « tous », aucune fenêtre roulante) **et** périmètre
+  // Entreprise / Employé « tous ».
   const resetPeriod = () => {
     setPreset('')
     setRange(null)
+    setEnterpriseValue(null)
+    setEmployeeValue(null)
     applyQuickPeriod('year')
   }
 
@@ -367,5 +387,11 @@ export function useDashboard() {
     preset,
     applyPreset,
     resetPeriod,
+    // Périmètre Entreprise / Employé (ligne 4) + ses bascules ; seul `employee`
+    // est envoyé à l'API (`employee_id`), `enterprise` borne la liste déroulante.
+    enterprise,
+    employee,
+    setEnterprise,
+    setEmployee,
   }
 }

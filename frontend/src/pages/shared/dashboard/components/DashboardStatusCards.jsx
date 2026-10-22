@@ -38,10 +38,13 @@ const LIST_HREF = '/clients-historique'
  * @param {string} [range] fenêtre roulante (`last3days` / `last6months`) —
  *                         posée, elle **prime** sur la cascade (issue bornée
  *                         par la date de la note dans la fenêtre glissante).
+ * @param {number} [employee] employé sélectionné (ligne 4) — seul filtre envoyé
+ *                            à l'API (`employee_id`, lien par notes) ; borne les
+ *                            compteurs comme dans la Grande liste. `null` = tous.
  */
-export default function DashboardStatusCards({ source = '', year, month, week, day, range }) {
+export default function DashboardStatusCards({ source = '', year, month, week, day, range, employee = null }) {
   const { kpis, isLoading, isError } = useProspectKpis(undefined, {
-    filters: { source, year, month, week, day, range },
+    filters: { source, year, month, week, day, range, employee_id: employee || undefined },
   })
 
   if (isError) return null

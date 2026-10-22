@@ -32,6 +32,10 @@ export default function DashboardPage() {
     preset,
     applyPreset,
     resetPeriod,
+    enterprise,
+    employee,
+    setEnterprise,
+    setEmployee,
   } = useDashboard()
 
   const chart = <CallsChart data={callsByDay} caption={caption} />
@@ -74,6 +78,11 @@ export default function DashboardPage() {
           showSource={isAdmin}
           source={source}
           onSourceChange={setSource}
+          showEnterprise={isAdmin}
+          enterprise={enterprise}
+          employee={employee}
+          onEnterpriseChange={setEnterprise}
+          onEmployeeChange={setEmployee}
         />
       )}
 
@@ -100,6 +109,7 @@ export default function DashboardPage() {
               week={week}
               day={day}
               range={range}
+              employee={employee}
             />
           )}
 

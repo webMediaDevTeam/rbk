@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import Select from '@/components/ui/select'
 import Button from '@/components/ui/button.jsx'
 import { listClientSourcesApi } from '@/api/shared.api.js'
+import { useInteractionFilters } from '@/hooks/use-interaction-filters.js'
 import { MONTH_LABELS, countWeeks, daysInMonth, weekRange } from '../filters.js'
 
 /**
@@ -25,13 +26,18 @@ import { MONTH_LABELS, countWeeks, daysInMonth, weekRange } from '../filters.js'
  *    n'est proposée qu'une fois le mois choisi. Semaine et Jour sont les deux
  *    réglages fins du mois et s'excluent mutuellement (le jour gagne côté
  *    serveur comme dans l'UI).
- *  - **Rangée 3 — Origine** : **gestionnaires seulement** (`showSource`), les
- *    pastilles « Tous / Affaire / Anglais … » (`<SourceTabs>`, privilège
- *    `clients:filter-source`) sur leur rangée dédiée. La sélection est
- *    **partagée** (localStorage) avec la Grande liste : elle borne toutes les
- *    cartes liées aux clients d'ici **et** le périmètre trouvé en cliquant une
- *    tuile. « Réinitialiser » ne la touche **pas** : c'est une préférence
- *    mémorisée, pas un réglage de période.
+ *  - **Rangée 3 — Origine** : **gestionnaires seulement** (`showSource`), le
+ *    répertoire `sources` rendu en **menu déroulant** (« Toutes » + une origine).
+ *    La sélection est **partagée** (localStorage) avec la Grande liste : elle
+ *    borne toutes les cartes liées aux clients d'ici **et** le périmètre trouvé
+ *    en cliquant une tuile. « Réinitialiser » ne la touche **pas** : c'est une
+ *    préférence mémorisée, pas un réglage de période.
+ *  - **Rangée 4 — Entreprise / Employé** : **gestionnaires seulement**
+ *    (`showEnterprise`), **comme la Grande liste**. « Entreprise » ne borne que
+ *    la liste déroulante « Employé » (cascade jouée côté client, identifiant
+ *    jamais envoyé) ; seul « Employé » filtre réellement les compteurs, via
+ *    `employee_id` porté aux cartes (`clients/overview`, lien par notes). Les
+ *    options sont restreintes à l'origine active ; « Réinitialiser » vide les deux.
  */
 export default function DashboardFilterBar({
   years = [],
@@ -50,6 +56,11 @@ export default function DashboardFilterBar({
   showSource = false,
   source = '',
   onSourceChange,
+  showEnterprise = false,
+  enterprise = null,
+  employee = null,
+  onEnterpriseChange,
+  onEmployeeChange,
 }) {
   const weeks = month ? countWeeks(year, month) : 0
   const days = month ? daysInMonth(year, month) : 0
@@ -58,7 +69,9 @@ export default function DashboardFilterBar({
     month === null &&
     week === null &&
     day === null &&
-    year === new Date().getFullYear()
+    year === new Date().getFullYear() &&
+    !enterprise &&
+    !employee
 
   // Origines disponibles (répertoire `sources`) — chargées à la demande pour le
   // sélecteur « Origine » du gestionnaire (mêmes données que les pastilles de la
@@ -75,6 +88,15 @@ export default function DashboardFilterBar({
   // de la base) : gardée visible, sinon la sélection en cours disparaîtrait.
   const sourceOptions =
     source && !sources.includes(source) ? [...sources, source] : sources
+
+  // Options Entreprise / Employé (rangée 4), scopées par l'origine active —
+  // mêmes données et même cascade que la Grande liste (`useInteractionFilters`) :
+  // seules les entreprises / employés ayant interagi ≥ 1 fois avec un client de
+  // cette origine sont proposés. L'employé est restreint à l'entreprise choisie.
+  const { enterprises, employees } = useInteractionFilters(source)
+  const employeeOptions = enterprise
+    ? employees.filter((emp) => emp.enterprise_id === enterprise)
+    : employees
 
   return (
     <div className="rounded-2xl bg-card p-4 text-card-foreground shadow-sm">
@@ -223,6 +245,54 @@ export default function DashboardFilterBar({
                 </option>
               ))}
             </Select>
+          </div>
+        </div>
+      )}
+
+      {/* Rangée 4 — Entreprise / Employé (gestionnaires seulement), **comme la
+          Grande liste** : « Entreprise » borne uniquement le menu « Employé »
+          (cascade client, non envoyée) ; « Employé » (`employee_id`) filtre les
+          compteurs. Changer d'entreprise réinitialise l'employé choisi. */}
+      {showEnterprise && (
+        <div className="mt-2">
+          <span className="text-sm font-medium text-muted-foreground">
+            Entreprise / Employé
+          </span>
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="font-medium">Entreprise</span>
+              <Select
+                value={enterprise ?? ''}
+                onChange={(e) => onEnterpriseChange?.(e.target.value)}
+                className="w-52 shrink-0"
+                aria-label="Restreindre la liste des employés à une entreprise"
+              >
+                <option value="">Toutes</option>
+                {enterprises.map((en) => (
+                  <option key={en.id} value={en.id}>
+                    {en.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <label className="flex items-center gap-2 text-sm">
+              <span className="font-medium">Employé</span>
+              <Select
+                value={employee ?? ''}
+                onChange={(e) => onEmployeeChange?.(e.target.value)}
+                className="w-52 shrink-0"
+                aria-label="Filtrer les compteurs sur un employé"
+              >
+                <option value="">Tous</option>
+                {employeeOptions.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
           </div>
         </div>
       )}
