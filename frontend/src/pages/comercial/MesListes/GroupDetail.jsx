@@ -373,7 +373,10 @@ export default function GroupDetailPage() {
                     {statusCell(r)}
                     <div className="flex items-center gap-1">
                       <CallButton phone={r.client?.phone} name={r.client?.name} clientId={r.client?.id} />
-                      {r.client && !r.client.is_blacklisted && ['RESERVED', 'CONFIRMED', 'DOUBLE', 'INFO'].includes(r.client.status) && (
+                      {/* « Modifier la fiche » — **ouvert à tous** : la mise à
+                          jour d'une fiche n'est plus bornée ni par un rôle, ni
+                          par le statut / la blacklist de la ligne. */}
+                      {r.client && (
                         <button
                           type="button"
                           onClick={(event) => {

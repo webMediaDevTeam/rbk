@@ -70,7 +70,7 @@ class DashboardController extends Controller
         $week = $period['week'];
         $day = $period['day'];
 
-        [$start, $end, $granularity] = PeriodFilter::resolve($year, $month, $week, $day);
+        [$start, $end, $granularity] = PeriodFilter::resolveArray($period);
 
         // Origine active (`''` / absent = « Toutes ») — gestionnaires seulement.
         $rawSource = $isManager ? trim((string) $request->query('source', '')) : '';

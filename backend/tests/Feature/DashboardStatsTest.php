@@ -635,6 +635,57 @@ class DashboardStatsTest extends TestCase
     // ── Tableau de bord **simple** de l'`OPERATOR` ─────────────────────────
 
     /**
+     * Fenêtres **roulantes** (`?range=`) : `last3days` = les 3 jours calendaires
+     * ancrés sur aujourd'hui (granularité journalière), `last6months` = les 6
+     * mois calendaires entiers jusqu'au mois courant (granularité mensuelle).
+     * Elles **priment** sur la cascade Année / Mois / Semaine / Jour et bornent
+     * les cartes comme le graphique — un réglage sans équivalent calendaire.
+     */
+    public function test_rolling_range_presets_bound_cards_and_chart(): void
+    {
+        $admin = User::factory()->create(['role' => 'ADMIN', 'status' => 'ACTIVE']);
+        $client = $this->makeClient();
+
+        // « Aujourd'hui » figé au 15 février 2020 : `Carbon::today()` (et donc
+        // les bornes serveur) suit cette date tant que le voyage temporel tient.
+        $today = Carbon::create(2020, 2, 15, 12, 0);
+
+        // Fenêtre de 3 jours = {13, 14, 15} ; le 12 doit en être exclu.
+        $this->travelTo($today->copy()->setTime(9, 0));
+        $this->makeCallNote($client);
+        $this->travelTo($today->copy()->subDay()->setTime(9, 0));
+        $this->makeCallNote($client);
+        $this->travelTo($today->copy()->subDays(2)->setTime(9, 0));
+        $this->makeCallNote($client);
+        $this->travelTo($today->copy()->subDays(3)->setTime(9, 0));
+        $this->makeCallNote($client);
+
+        $this->travelTo($today);
+        Sanctum::actingAs($admin);
+
+        // Derniers 3 jours : 3 appels, 3 points journaliers (13, 14, 15).
+        $three = $this->getJson('/api/v1/dashboard/stats?range=last3days')
+            ->assertOk()
+            ->assertJsonPath('data.stats.period.calls', 3)
+            ->json('data.calls_by_day');
+        $this->assertCount(3, $three);
+        $this->assertSame('2020-02-13', $three[0]['date']);
+        $this->assertSame('2020-02-15', $three[2]['date']);
+
+        // Derniers 6 mois : les 4 appels (tous en février), un point par mois
+        // de sept. 2019 à févr. 2020 ; le paramètre prime sur un `year` posé.
+        $six = $this->getJson('/api/v1/dashboard/stats?range=last6months&year=1999')
+            ->assertOk()
+            ->assertJsonPath('data.stats.period.calls', 4)
+            ->json('data.calls_by_day');
+        $this->assertCount(6, $six);
+        $this->assertSame('2019-09', $six[0]['date']);
+        $this->assertSame('2020-02', $six[5]['date']);
+
+        $this->travelBack();
+    }
+
+    /**
      * Tuiles « saisies de téléphone » : une note `MISE_A_JOUR` dont le diff
      * mentionne le champ Téléphone ne compte **que** si elle est de lui, et les
      * trois fenêtres (aujourd'hui / 7 jours / 30 jours) sont des jours

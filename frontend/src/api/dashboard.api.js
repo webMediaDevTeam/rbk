@@ -13,12 +13,21 @@ import { api } from './client.js'
 // la **même** sélection, persistée dans `localStorage`, borne tous les
 // chiffres liés aux clients. `''` = « Toutes » (paramètre omis). Le serveur
 // l'ignore pour les autres rôles.
-export function getDashboardStatsApi({ year, month, week, day, source } = {}) {
+//
+// `range` (fenêtre **roulante**) : `last3days` / `last6months` — une fenêtre
+// glissante ancrée sur aujourd'hui, qui **prime** sur la cascade calendaire.
+// Posée, les réglages `year`/`month`/`week`/`day` sont omis (le serveur les
+// ignore de toute façon tant que `range` est présent).
+export function getDashboardStatsApi({ year, month, week, day, range, source } = {}) {
   const params = {}
-  if (year) params.year = year
-  if (month) params.month = month
-  if (week) params.week = week
-  if (day) params.day = day
+  if (range) {
+    params.range = range
+  } else {
+    if (year) params.year = year
+    if (month) params.month = month
+    if (week) params.week = week
+    if (day) params.day = day
+  }
   if (source) params.source = source
   return api.get('/dashboard/stats', { params })
 }

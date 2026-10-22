@@ -19,9 +19,22 @@ export const weekRange = (year, month, week) => {
   return [from, Math.min(week * 7, daysInMonth(year, month))]
 }
 
+// Libellé d'une fenêtre roulante (`range`), ou `null` si le réglage n'en est
+// pas une — miroir des tokens compris par le serveur (`last{N}days` /
+// `last{N}months`).
+export const rangeLabel = (range) => {
+  if (!range) return null
+  const m = /^last(\d+)(days|months)$/.exec(range)
+  if (!m) return null
+  return m[2] === 'days' ? `${m[1]} derniers jours` : `${m[1]} derniers mois`
+}
+
 // Libellé de la période effective (miroir des bornes serveur) — partagé par
-// les mentions des panneaux KPI : jour seul > mois+semaine > mois > année.
-export const periodLabel = ({ year, month, week, day }) => {
+// les mentions des panneaux KPI : fenêtre roulante > jour seul > mois+semaine
+// > mois > année.
+export const periodLabel = ({ year, month, week, day, range }) => {
+  const rolling = rangeLabel(range)
+  if (rolling) return rolling
   if (day) return `${MONTH_LABELS[month - 1]} ${year} — jour ${day}`
   if (month) return week
     ? `${MONTH_LABELS[month - 1]} ${year} — semaine ${week}`

@@ -20,6 +20,13 @@ use Illuminate\Support\Carbon;
  *    ignorée sans `month`, remise à « toutes » si hors plage ;
  *  - `day` (jour seul du mois choisi) : ignoré sans `month` ou hors plage ;
  *    quand il existe il **éclipse** `week` (un seul réglage fin à la fois).
+ *
+ * Fenêtres **roulantes** (`range`) : le paramètre `range` accepte
+ * `last{N}days` / `last{N}months` (ex. `last3days`, `last6months`) et pose une
+ * fenêtre glissante ancrée sur aujourd'hui, **indépendante** de la cascade
+ * Année / Mois / Semaine / Jour. Quand il est présent, il **prime** : les
+ * réglages calendaires sont ignorés et les bornes se lisent via
+ * `resolveArray()` / `bounds()`.
  */
 class PeriodFilter
 {
@@ -34,6 +41,18 @@ class PeriodFilter
      */
     public static function fromRequest(Request $request, bool $defaultToCurrentYear = true): ?array
     {
+        // Fenêtre roulante (`range`) : prime sur la cascade calendaire.
+        $range = self::rangeFromRequest($request);
+        if ($range !== null) {
+            return [
+                'year' => (int) Carbon::today()->format('Y'),
+                'month' => null,
+                'week' => null,
+                'day' => null,
+                'range' => $range,
+            ];
+        }
+
         $rawYear = (int) $request->query('year', 0);
         $rawMonth = (int) $request->query('month', 0);
         $rawWeek = (int) $request->query('week', 0);
@@ -67,7 +86,28 @@ class PeriodFilter
             $week = null;
         }
 
-        return ['year' => $year, 'month' => $month, 'week' => $week, 'day' => $day];
+        return ['year' => $year, 'month' => $month, 'week' => $week, 'day' => $day, 'range' => null];
+    }
+
+    /**
+     * Réglage `range` lu dans la requête : `['days' => N]` pour
+     * `last{N}days`, `['months' => N]` pour `last{N}months`, sinon `null`.
+     *
+     * @return array{days?: int, months?: int}|null
+     */
+    private static function rangeFromRequest(Request $request): ?array
+    {
+        $value = strtolower(trim((string) $request->query('range', '')));
+
+        if (preg_match('/^last(\d+)days$/', $value, $m) && (int) $m[1] > 0) {
+            return ['days' => (int) $m[1]];
+        }
+
+        if (preg_match('/^last(\d+)months$/', $value, $m) && (int) $m[1] > 0) {
+            return ['months' => (int) $m[1]];
+        }
+
+        return null;
     }
 
     /**
@@ -111,19 +151,60 @@ class PeriodFilter
     }
 
     /**
-     * Bornes `[début, fin)` seules — suffisantes pour borner des compteurs
-     * (le graphique a besoin de la granularité en plus, via `resolve()`).
+     * Bornes + granularité à partir du réglage normalisé complet — la fenêtre
+     * roulante (`range`) prime sur la cascade calendaire.
      *
-     * @return array{0: Carbon, 1: Carbon}
+     * @param  array{year: int, month: ?int, week: ?int, day: ?int, range?: ?array}  $period
+     * @return array{0: Carbon, 1: Carbon, 2: string} `[début, fin exclusive, granularité]`
      */
-    public static function bounds(array $period): array
+    public static function resolveArray(array $period): array
     {
-        [$start, $end] = self::resolve(
+        $range = $period['range'] ?? null;
+        if ($range !== null) {
+            return self::resolveRange($range);
+        }
+
+        return self::resolve(
             $period['year'],
             $period['month'],
             $period['week'],
             $period['day'],
         );
+    }
+
+    /**
+     * Fenêtre glissante ancrée sur aujourd'hui : `days` = les N derniers jours
+     * (jour courant inclus, granularité journalière), `months` = les N derniers
+     * mois calendaires entiers jusqu'au mois courant (granularité mensuelle).
+     *
+     * @param  array{days?: int, months?: int}  $range
+     * @return array{0: Carbon, 1: Carbon, 2: string}
+     */
+    private static function resolveRange(array $range): array
+    {
+        if (isset($range['days'])) {
+            $days = max((int) $range['days'], 1);
+            $start = Carbon::today()->subDays($days - 1)->startOfDay();
+
+            return [$start, Carbon::today()->addDay()->startOfDay(), 'day'];
+        }
+
+        $months = max((int) ($range['months'] ?? 1), 1);
+        $start = Carbon::today()->startOfMonth()->subMonths($months - 1);
+
+        return [$start, Carbon::today()->startOfMonth()->addMonth(), 'month'];
+    }
+
+    /**
+     * Bornes `[début, fin)` seules — suffisantes pour borner des compteurs
+     * (le graphique a besoin de la granularité en plus, via `resolve()`).
+     * Gère la cascade calendaire comme la fenêtre roulante (`resolveArray`).
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function bounds(array $period): array
+    {
+        [$start, $end] = self::resolveArray($period);
 
         return [$start, $end];
     }

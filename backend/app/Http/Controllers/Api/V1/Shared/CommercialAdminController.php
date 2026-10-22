@@ -611,8 +611,10 @@ class CommercialAdminController extends Controller
             'phone' => 'nullable|string|max:40',
         ]);
 
-        // OPERATOR : uniquement les fiches « Disponible sans téléphone ».
-        $client = $this->findClientForRequest($request, (string) $id);
+        // Mise à jour **sans restriction** : tout utilisateur authentifié (ADMIN,
+        // SUPER_ADMIN, OPERATOR, COMERCIAL) peut éditer n'importe quelle fiche ;
+        // le périmètre « sans téléphone » de l'opérateur ne borne plus l'écriture.
+        $client = Client::findOrFail((string) $id);
         $phone = Client::cleanPhone($validated['phone'] ?? null);
 
         // Saisie manuelle : la fiche devient « modifiée à la main » — l'import
@@ -644,8 +646,11 @@ class CommercialAdminController extends Controller
     }
 
     /**
-     * Mise à jour **complète** d'une fiche client — accès Admin / Super Admin
-     * (`PUT /commercials/clients/{id}`).
+     * Mise à jour **complète** d'une fiche client — `PUT /commercials/clients/{id}`.
+     *
+     * **Sans restriction d'appelant** : tout utilisateur authentifié peut éditer
+     * n'importe quelle fiche (le périmètre forcé de l'`OPERATOR` ne borne plus
+     * l'écriture — seul le rôle d'accès à la route fait foi).
      *
      * Portée sur les champs saisissables à la main (identité, contact,
      * adresse, licence, source) : le modale « Modifier le client » envoie le
@@ -659,9 +664,8 @@ class CommercialAdminController extends Controller
      */
     public function update(Request $request, string $id): JsonResponse
     {
-        // OPERATOR : uniquement les fiches « Disponible sans téléphone » ;
-        // hors périmètre → 404 (la fiche est introuvable pour ce rôle).
-        $client = $this->findClientForRequest($request, $id);
+        // Toute fiche, tout appelant authentifié : plus de périmètre opérateur.
+        $client = Client::findOrFail($id);
 
         $validated = $request->validate([
             'name' => 'nullable|string|max:255',
@@ -714,8 +718,14 @@ class CommercialAdminController extends Controller
     }
 
     /**
-     * Admin blacklist of a client.
+     * Mise en liste noire d'un client.
      * POST /commercials/clients/{id}/blacklist
+     *
+     * Accès `ADMIN` / `SUPER_ADMIN` (toute la base) **et** `OPERATOR`, mais
+     * uniquement en **blocage** : la fiche est bornée au périmètre de l'appelant
+     * (`findClientForRequest()` — l'opérateur ne voit que ses « Disponibles sans
+     * téléphone », 404 sinon). Le déblocage n'est pas de cette route (groupe
+     * gestionnaires), donc l'opérateur ne peut pas débloquer.
      */
     public function blacklist(Request $request, $id)
     {
@@ -723,7 +733,9 @@ class CommercialAdminController extends Controller
             'note' => 'nullable|string|max:5000',
         ]);
 
-        $client = Client::findOrFail($id);
+        // Périmètre de l'appelant : `OPERATOR` limité à sa Grande liste, gestionnaires
+        // accès entier.
+        $client = $this->findClientForRequest($request, (string) $id);
 
         return DB::transaction(function () use ($client, $request, $validated) {
             // Même chemin que le commercial : le service applique le statut

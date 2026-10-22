@@ -28,7 +28,9 @@ export default function DashboardPage() {
     setMonth,
     setWeek,
     setDay,
-    applyQuickPeriod,
+    range,
+    preset,
+    applyPreset,
     resetPeriod,
   } = useDashboard()
 
@@ -61,11 +63,13 @@ export default function DashboardPage() {
           month={month}
           week={week}
           day={day}
+          range={range}
+          preset={preset}
           onYearChange={setYear}
           onMonthChange={setMonth}
           onWeekChange={setWeek}
           onDayChange={setDay}
-          onPresetChange={applyQuickPeriod}
+          onPresetChange={applyPreset}
           onReset={resetPeriod}
           showSource={isAdmin}
           source={source}
@@ -95,6 +99,7 @@ export default function DashboardPage() {
               month={month}
               week={week}
               day={day}
+              range={range}
             />
           )}
 

@@ -11,9 +11,11 @@ import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx
 export default function ClientsHistoryPage() {
   // L'`OPERATOR` partage cette page, mais **sans aucun filtre** : l'API lui
   // rend d'office les « Disponibles sans téléphone » (`phone IS NULL`), et
-  // ignore tout paramètre. L'UI retire donc badges KPI, facettes et actions
-  // de gestion (liste noire, accès au détail) — il ne reste que recherche,
-  // lignes et modale « Modifier le client ».
+  // ignore tout paramètre. L'UI retire donc badges KPI, facettes et accès au
+  // détail — il reste recherche, lignes, modale « Modifier le client » et la
+  // **mise en liste noire**. Ce bouton n'est qu'un **blocage** pour lui :
+  // son périmètre ne contient jamais de fiche déjà blacklistée (donc jamais
+  // d'icône « débloquer »), et la route de déblocage lui est fermée serveur.
   const { role } = useAuth()
   const isOperator = role === 'OPERATOR'
 
@@ -105,8 +107,9 @@ export default function ClientsHistoryPage() {
         /* Ligne non cliquable (panel admin/super admin) : on ne navigue plus
            vers la fiche depuis la ligne ; la dernière colonne porte « Voir »
            et la bascule **liste noire / débloquer** (action directe, sans
-           modale de confirmation). Pour l'`OPERATOR` : ni « Voir » ni liste
-           noire — seule la modale « Modifier le client » reste. */
+           modale de confirmation). Pour l'`OPERATOR` : ni « Voir », et la
+           bascule ne peut que **bloquer** (aucune fiche blacklistée dans son
+           périmètre) — la modale « Modifier le client » reste aussi. */
         <ProspectTable
           clients={clients}
           startIndex={(currentPage - 1) * rowsPerPage}
@@ -115,7 +118,7 @@ export default function ClientsHistoryPage() {
           showViewButton={!isOperator}
           rowClickable={false}
           showPhone
-          onToggleBlacklist={isOperator ? undefined : toggleBlacklist}
+          onToggleBlacklist={toggleBlacklist}
           onEditPhone={openPhoneEdit}
           blacklistId={blacklistId}
         />
@@ -130,7 +133,7 @@ export default function ClientsHistoryPage() {
               showViewButton={!isOperator}
               rowClickable={false}
               showPhone
-              onToggleBlacklist={isOperator ? undefined : toggleBlacklist}
+              onToggleBlacklist={toggleBlacklist}
               onEditPhone={openPhoneEdit}
               blacklistId={blacklistId}
             />

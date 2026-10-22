@@ -44,6 +44,10 @@ export function useProspectKpis(counts = undefined, params = {}) {
   // Normalise le périmètre : uniquement les valeurs non vides, dans un ordre
   // stable pour la `queryKey`. `source` explicite écrase `filters.source`.
   const filters = params.filters ?? {}
+  // Fenêtre roulante (`range`) : elle **prime** sur la cascade calendaire —
+  // posée, on omet `year`/`month`/`week`/`day` (le serveur les ignore de toute
+  // façon, et les garder fausserait la `queryKey`).
+  const hasRange = Boolean(filters.range)
   const scoped = {
     search: params.search || filters.search || undefined,
     municipality: filters.municipality || undefined,
@@ -53,10 +57,11 @@ export function useProspectKpis(counts = undefined, params = {}) {
     source: params.source || filters.source || undefined,
     // Période du dashboard : chaque réglage change la `queryKey` → les tuiles
     // se recalculent **immédiatement** (nouvelle clé = pas de cache).
-    year: filters.year || undefined,
-    month: filters.month || undefined,
-    week: filters.week || undefined,
-    day: filters.day || undefined,
+    range: filters.range || undefined,
+    year: hasRange ? undefined : (filters.year || undefined),
+    month: hasRange ? undefined : (filters.month || undefined),
+    week: hasRange ? undefined : (filters.week || undefined),
+    day: hasRange ? undefined : (filters.day || undefined),
   }
   const active = Object.fromEntries(Object.entries(scoped).filter(([, value]) => value !== undefined))
   const hasScope = Object.keys(active).length > 0

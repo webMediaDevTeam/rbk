@@ -35,10 +35,13 @@ const LIST_HREF = '/clients-historique'
  * @param {number} [month] d'issue Oui → Blacklist se bornent aux notes de la
  * @param {number} [week]  fenêtre ; « Tous » / « Libre » / « Sans tel. »
  * @param {number} [day]   restent fixes (jour seul > semaine > mois > année).
+ * @param {string} [range] fenêtre roulante (`last3days` / `last6months`) —
+ *                         posée, elle **prime** sur la cascade (issue bornée
+ *                         par la date de la note dans la fenêtre glissante).
  */
-export default function DashboardStatusCards({ source = '', year, month, week, day }) {
+export default function DashboardStatusCards({ source = '', year, month, week, day, range }) {
   const { kpis, isLoading, isError } = useProspectKpis(undefined, {
-    filters: { source, year, month, week, day },
+    filters: { source, year, month, week, day, range },
   })
 
   if (isError) return null

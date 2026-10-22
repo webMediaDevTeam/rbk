@@ -137,16 +137,34 @@ class GrandeListeClientUpdateTest extends TestCase
             ->assertJsonValidationErrors(['email']);
     }
 
-    public function test_commercial_cannot_update_a_client(): void
+    public function test_commercial_can_update_a_client(): void
     {
+        // La mise à jour d'une fiche est **ouverte à tout utilisateur
+        // authentifié** : plus de restriction de rôle sur la route, plus de
+        // restriction de périmètre côté contrôleur.
         $client = $this->makeClient();
         $commercial = User::factory()->create(['role' => 'COMERCIAL', 'status' => 'ACTIVE']);
         Sanctum::actingAs($commercial);
 
         $this->putJson("/api/v1/commercials/clients/{$client->id}", ['name' => 'X'])
-            ->assertForbidden();
+            ->assertOk();
 
-        $this->assertSame('Ancien nom', $client->refresh()->name);
+        $this->assertSame('X', $client->refresh()->name);
+    }
+
+    public function test_operator_can_update_a_client_outside_his_scope(): void
+    {
+        // L'`OPERATOR` édite désormais **n'importe quelle** fiche (le périmètre
+        // « sans téléphone » ne borne plus l'écriture) — ici une fiche muni d'un
+        // numéro, hors de sa Grande liste.
+        $client = $this->makeClient(['phone' => '514-555-0100']);
+        $operator = User::factory()->create(['role' => 'OPERATOR', 'status' => 'ACTIVE']);
+        Sanctum::actingAs($operator);
+
+        $this->putJson("/api/v1/commercials/clients/{$client->id}", ['name' => 'Renommé par opérateur'])
+            ->assertOk();
+
+        $this->assertSame('Renommé par opérateur', $client->refresh()->name);
     }
 
     public function test_grande_liste_exposes_editable_fields(): void

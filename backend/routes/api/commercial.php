@@ -15,7 +15,6 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
     Route::get('clients', [ClientController::class, 'index']);
     Route::get('clients/mes', [ClientController::class, 'mine']);
     Route::get('clients/{id}', [ClientController::class, 'show']);
-    Route::patch('clients/{id}', [ClientController::class, 'update']);
     // Mise en liste noire : ouverte à **tous** les commerciaux (plus de
     // portail « Privilège de libération » sur cette action — le privilège
     // ne protège plus que la libération de la liste ci-dessous).
@@ -55,4 +54,13 @@ Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL'])->group(functi
 // Route hors groupe COMERCIAL pur pour que le contrôleur puisse autoriser un admin.
 Route::middleware(['auth:sanctum', CheckRole::class.':COMERCIAL,ADMIN,SUPER_ADMIN'])->group(function () {
     Route::patch('reservation-groups/{id}', [ReservationGroupController::class, 'update']);
+});
+
+// Mise à jour d'une fiche client (`PATCH clients/{id}`) : **ouverte à tout
+// utilisateur authentifié** — la restriction « réservation active du titulaire »
+// a été retirée du contrôleur, donc n'importe quel rôle édite n'importe quelle
+// fiche. Déclarée hors du groupe `COMERCIAL` pour que l'`ADMIN` / `OPERATOR` y
+// accède aussi ; le verbe `PATCH` ne heurte pas le `GET clients/{id}` commercial.
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::patch('clients/{id}', [ClientController::class, 'update']);
 });

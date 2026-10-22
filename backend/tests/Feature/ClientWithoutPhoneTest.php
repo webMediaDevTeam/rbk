@@ -188,17 +188,20 @@ class ClientWithoutPhoneTest extends TestCase
         $this->assertNull($client->fresh()->phone);
     }
 
-    public function test_phone_endpoint_is_forbidden_to_commercial(): void
+    public function test_commercial_can_update_a_client_phone_via_the_admin_endpoint(): void
     {
+        // La mise à jour d'une fiche (numéro inclus) est **ouverte à tout
+        // utilisateur authentifié** : le `COMERCIAL` n'est plus écarté de cette
+        // route.
         $client = $this->makeClient(['phone' => null]);
 
         Sanctum::actingAs($this->commercial);
 
         $this->patchJson("/api/v1/commercials/clients/{$client->id}/phone", [
             'phone' => '514 353 5820',
-        ])->assertStatus(403);
+        ])->assertOk()->assertJsonPath('data.client.phone', '514-353-5820');
 
-        $this->assertNull($client->fresh()->phone);
+        $this->assertSame('514-353-5820', $client->fresh()->phone);
     }
 
     // -------------------------------------------------------------- Enrichissement

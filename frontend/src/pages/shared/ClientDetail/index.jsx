@@ -104,21 +104,21 @@ export default function ClientDetailPage() {
             />
           )}
 
-      {/* « Modifier » en-tête de fiche — accès édition (admin, ou commercial
-          titulaire d'une réservation non blacklistée). Couleur **avertissement**
-          (ambre) pour signaler une action qui écrit sur la donnée ; ouvre la
-          modale d'édition complète (`ClientEditModal`), téléphone inclus. */}
-      {(isAdmin || (hasReservation && !client.is_blacklisted)) && (
-        <Button
-          variant="warning"
-          size="sm"
-          onClick={openClientEdit}
-          className="ml-auto shrink-0"
-        >
-          <SquarePen className="mr-1.5 h-4 w-4" />
-          Modifier
-        </Button>
-      )}
+      {/* « Modifier » en-tête de fiche — **ouvert à tous** : la mise à jour
+          d'une fiche client n'est plus conditionnée à un rôle ni à une
+          réservation (bouton toujours rendu ; l'API laisse désormais éditer
+          n'importe quelle fiche). Couleur **avertissement** (ambre) pour
+          signaler une action qui écrit sur la donnée ; ouvre la modale
+          d'édition complète (`ClientEditModal`), téléphone inclus. */}
+      <Button
+        variant="warning"
+        size="sm"
+        onClick={openClientEdit}
+        className="ml-auto shrink-0"
+      >
+        <SquarePen className="mr-1.5 h-4 w-4" />
+        Modifier
+      </Button>
     </div>
   </div>
 

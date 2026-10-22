@@ -13,7 +13,7 @@ import { getDashboardStatsApi } from '@/api/dashboard.api.js'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { useSourcePreference } from '@/hooks/use-source-preference.js'
 import { STATUS_PILLS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
-import { MONTH_LABELS, periodLabel } from './filters.js'
+import { MONTH_LABELS, periodLabel, rangeLabel } from './filters.js'
 
 /** Métadonnées d'un badge de statut (libellé, icône, teinte) par clé serveur. */
 const pill = (key) => STATUS_PILLS.find((p) => p.key === key)
@@ -48,18 +48,31 @@ export function useDashboard() {
   const [month, setMonthValue] = useState(null)
   const [week, setWeekValue] = useState(null)
   const [day, setDayValue] = useState(null)
+  // Fenêtre **roulante** (`last3days` / `last6months`) posée par un raccourci de
+  // la rangée « Période » ; `null` = réglage calendaire (cascade). Elle **prime**
+  // sur la cascade, côté serveur comme ici.
+  const [range, setRange] = useState(null)
+  // Raccourci de période actif (écho visuel de la rangée « Période ») ; `''`
+  // dès qu'on règle la période à la main (« Recherche spécifique »).
+  const [preset, setPreset] = useState('')
 
   const setWeek = (value) => {
+    setPreset('')
+    setRange(null)
     setWeekValue(value)
     setDayValue(null)
   }
 
   const setDay = (value) => {
+    setPreset('')
+    setRange(null)
     setDayValue(value)
     setWeekValue(null)
   }
 
   const setYear = (value) => {
+    setPreset('')
+    setRange(null)
     setYearValue(value)
     setMonthValue(null)
     setWeekValue(null)
@@ -67,20 +80,22 @@ export function useDashboard() {
   }
 
   const setMonth = (value) => {
+    setPreset('')
+    setRange(null)
     setMonthValue(value)
     setWeekValue(null)
     setDayValue(null)
   }
 
-  // Raccourcis « Ce jour / Cette semaine / Ce mois-ci / Cette année » : posent
-  // les sélecteurs d'un coup (les réglages en cascade sont court-circuités
-  // volontairement). La semaine suit le découpage serveur du mois courant :
-  // jours 1–7 = semaine 1, 8–14 = semaine 2…
-  const applyQuickPeriod = (preset) => {
+  // Raccouris calendaires « Ce jour / Cette semaine / Ce mois-ci / Cette
+  // année » : posent les sélecteurs d'un coup (les réglages en cascade sont
+  // court-circuités volontairement). La semaine suit le découpage serveur du
+  // mois courant : jours 1–7 = semaine 1, 8–14 = semaine 2…
+  const applyQuickPeriod = (token) => {
     const now = new Date()
     const currentYear = now.getFullYear()
 
-    if (preset === 'year') {
+    if (token === 'year') {
       setYearValue(currentYear)
       setMonthValue(null)
       setWeekValue(null)
@@ -91,29 +106,60 @@ export function useDashboard() {
     const currentMonth = now.getMonth() + 1
     setYearValue(currentYear)
 
-    if (preset === 'month') {
+    if (token === 'month') {
       setMonthValue(currentMonth)
       setWeekValue(null)
       setDayValue(null)
-    } else if (preset === 'week') {
+    } else if (token === 'week') {
       setMonthValue(currentMonth)
       setWeekValue(Math.ceil(now.getDate() / 7))
       setDayValue(null)
-    } else if (preset === 'today') {
+    } else if (token === 'today') {
       setMonthValue(currentMonth)
       setWeekValue(null)
       setDayValue(now.getDate())
     }
   }
 
+  // Rangée « Période » : les deux fenêtres roulantes (`last3days` /
+  // `last6months`) posent `range` et remettent la cascade à « année courante,
+  // tout le reste tous » ; les autres raccouris délèguent aux sélecteurs
+  // calendaires. `preset` mémorise le choix pour l'afficher dans le menu.
+  const applyPreset = (token) => {
+    setPreset(token)
+
+    if (token === 'last3days' || token === 'last6months') {
+      setRange(token)
+      setYearValue(new Date().getFullYear())
+      setMonthValue(null)
+      setWeekValue(null)
+      setDayValue(null)
+      return
+    }
+
+    setRange(null)
+    applyQuickPeriod(token)
+  }
+
   // Bouton « Réinitialiser » : retour au filtre par défaut (année courante,
-  // mois, semaine et jour « tous »).
-  const resetPeriod = () => applyQuickPeriod('year')
+  // mois, semaine et jour « tous », aucune fenêtre roulante).
+  const resetPeriod = () => {
+    setPreset('')
+    setRange(null)
+    applyQuickPeriod('year')
+  }
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['dashboard-stats', year, month, week, day, isAdmin ? source : ''],
+    queryKey: ['dashboard-stats', range ?? '', year, month, week, day, isAdmin ? source : ''],
     queryFn: () =>
-      getDashboardStatsApi({ year, month, week, day, source: isAdmin ? source : undefined }),
+      getDashboardStatsApi({
+        year,
+        month,
+        week,
+        day,
+        range: range ?? undefined,
+        source: isAdmin ? source : undefined,
+      }),
   })
 
   const payload = data?.data
@@ -144,12 +190,16 @@ export function useDashboard() {
   const availableYears = chart.years ?? [year]
 
   // Sous-titre du graphique : la granularité suit le filtre (jour, mois ou
-  // semaine choisis → par jour ; année seule → par mois).
-  const chartCaption = day
-    ? `${MONTH_LABELS[month - 1]} ${year} — jour ${day}`
-    : month
-      ? `${MONTH_LABELS[month - 1]} ${year}${week ? ` — semaine ${week}` : ''} — évolution par jour`
-      : `Année ${year} — évolution par mois`
+  // semaine choisis → par jour ; année seule → par mois). Une fenêtre roulante
+  // prend le dessus : `last6months` → par mois, `last3days` → par jour.
+  const rolling = rangeLabel(range)
+  const chartCaption = rolling
+    ? `${rolling} — évolution par ${range === 'last6months' ? 'mois' : 'jour'}`
+    : day
+      ? `${MONTH_LABELS[month - 1]} ${year} — jour ${day}`
+      : month
+        ? `${MONTH_LABELS[month - 1]} ${year}${week ? ` — semaine ${week}` : ''} — évolution par jour`
+        : `Année ${year} — évolution par mois`
 
   // ── Tuiles du tableau de bord ─────────────────────────────────────────
   // Côté **gestionnaire**, il n'y a plus de tuiles de période dédiées : les
@@ -282,7 +332,7 @@ export function useDashboard() {
         }
       : {
           title: 'Votre liste de travail',
-          caption: `Période ${periodLabel({ year, month, week, day })} — clients actifs de la fenêtre, à réserver, à reprendre, à rappeler`,
+          caption: `Période ${periodLabel({ year, month, week, day, range })} — clients actifs de la fenêtre, à réserver, à reprendre, à rappeler`,
           meter: { label: 'Contacts libres', ratio: share(workCounts.libre) },
         }
 
@@ -311,7 +361,11 @@ export function useDashboard() {
     setMonth,
     setWeek,
     setDay,
-    applyQuickPeriod,
+    // Fenêtre roulante active (`last3days` / `last6months` / `null`) + raccourci
+    // affiché + son application (rangée « Période »).
+    range,
+    preset,
+    applyPreset,
     resetPeriod,
   }
 }

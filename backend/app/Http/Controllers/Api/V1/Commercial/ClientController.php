@@ -215,15 +215,11 @@ class ClientController extends Controller
         ]);
 
         $client = Client::findOrFail($id);
-        $reservation = $this->latestReservationOf($client);
         $user = $request->user();
 
-        if (! in_array($client->status, Client::HELD_STATUSES, true)
-            || $reservation === null
-            || ! in_array($reservation->status, Reservation::ACTIVE_STATUSES, true)
-            || (string) $reservation->comercial_id !== (string) $user?->id) {
-            abort(403, 'Vous ne pouvez modifier que les clients de votre réservation active.');
-        }
+        // Mise à jour **sans restriction d'appelant** : n'importe quel
+        // utilisateur authentifié peut éditer n'importe quelle fiche (le
+        // contrôle « réservation active du titulaire » a été retiré).
 
         foreach ([
             'name', 'enterprise_name', 'email', 'representative_name', 'full_address',
