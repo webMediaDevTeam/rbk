@@ -49,7 +49,7 @@ export default function ProspectKpis({ statusFilters = [], onStatusFilterChange,
   if (isLoading || !kpis) {
     return (
       <div className="flex flex-wrap gap-1.5" aria-hidden="true">
-        {Array.from({ length: 10 }).map((_, i) => (
+        {Array.from({ length: 11 }).map((_, i) => (
           <div key={i} className="h-7 w-32 animate-pulse rounded-full border border-border/60 bg-card" />
         ))}
       </div>

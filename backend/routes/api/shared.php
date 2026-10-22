@@ -105,6 +105,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // les routes se lisent dans l'ordre de chargement des fichiers.
     Route::get('clients/overview', [ProspectOverviewController::class, 'overview']);
 
+    // Onglet « Numéros répétés » de la fiche client : les autres clients
+    // partageant le même `phone_normalized`. Route à deux segments, donc sans
+    // risque de collision avec `clients/{id}` (commercial.php).
+    Route::get('clients/{id}/duplicates', [ProspectOverviewController::class, 'duplicates']);
+
+    // « Marquer comme répété » : rattache une fiche à son doublon d'origine
+    // (`parent_client_id`) et bascule son statut sur `REPETE`.
+    Route::post('clients/{id}/mark-repete', [ProspectOverviewController::class, 'markRepete']);
+
+    // Variante en masse : rattache toutes les doublons non encore reliés d'un
+    // même `phone_normalized` à la fiche courante.
+    Route::post('clients/{id}/mark-repete-all', [ProspectOverviewController::class, 'markRepeteAll']);
+
     // ── RingCentral / Call Logs ──────────────────────────────────
 });
 

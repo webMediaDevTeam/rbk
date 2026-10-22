@@ -9,6 +9,13 @@ const variants = {
   success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
   warning: 'bg-amber-500/10 text-[var(--warning-fg)] border-amber-600/25',
   info: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  // « Liste noire » : pastille neutre sans couleur de statut — noir en mode
+  // clair, gris en mode sombre (mêmes variables `--status-badge*` que le badge
+  // `ClientStatus` et le bouton blacklist, pour garder la couleur cohérente).
+  blacklist: 'bg-[var(--status-badge)] text-[var(--status-badge-foreground)] border-transparent',
+  // Fiche « répétée » (doublon rattaché à son parent) : même teinte fuchsia
+  // que la pastille de filtre « num Répétés » de la Grande liste.
+  repeat: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/20',
 }
 
 export default function Badge({

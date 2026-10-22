@@ -22,6 +22,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *   BV                     boîte vocale
  *   CALL_BACK              à rappeler (issue injoignable)
  *   BLACKLISTED            mise en liste noire
+ *   REPETE                 rattachement manuel de la fiche à son doublon
+ *                          d'origine (« marquer comme répété », depuis la
+ *                          fiche du parent) ; pose aussi `status = REPETE`
  *   RETURNED_TO_AVAILABLE  déblocage admin ou réactivation automatique (cron)
  *   NOTE                   commentaire libre de l'employé
  *   MISE_A_JOUR            diff automatique d'édition de fiche (toute la
@@ -62,6 +65,9 @@ class Note extends Model
 
     public const TYPE_BLACKLISTED = 'BLACKLISTED';
 
+    /** Fiche rattachée à son doublon d'origine (`parent_client_id` posé). */
+    public const TYPE_REPETE = 'REPETE';
+
     public const TYPE_RETURNED_TO_AVAILABLE = 'RETURNED_TO_AVAILABLE';
 
     public const TYPE_NOTE = 'NOTE';
@@ -79,6 +85,7 @@ class Note extends Model
         self::TYPE_DOUBLE,
         self::TYPE_INFO,
         self::TYPE_BLACKLISTED,
+        self::TYPE_REPETE,
         self::TYPE_RETURNED_TO_AVAILABLE,
         self::TYPE_NOTE,
         self::TYPE_MISE_A_JOUR,

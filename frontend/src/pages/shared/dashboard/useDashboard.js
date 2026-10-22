@@ -43,13 +43,18 @@ export function useDashboard() {
   // source. Réservé au gestionnaire ; l'`OPERATOR` a un dashboard instantané.
   const [enterprise, setEnterpriseValue] = useState(null)
   const [employee, setEmployeeValue] = useState(null)
+  // Les identifiants sont des **UUID** (`Enterprise` / `User` en `HasUuids`) :
+  // ils circulent en chaînes, comme dans la Grande liste. Toute coercition
+  // numérique (`Number(uuid)`) produirait `NaN` — un `<select>` contrôlé ne
+  // retrouvant son option retombait sur « Toutes », et `employee_id` ne
+  // partait jamais à l'API.
   // Changer d'entreprise réinitialise l'employé : l'option choisie ne serait
   // plus dans la liste restreinte à la nouvelle entreprise.
   const setEnterprise = (value) => {
-    setEnterpriseValue(value ? Number(value) : null)
+    setEnterpriseValue(value || null)
     setEmployeeValue(null)
   }
-  const setEmployee = (value) => setEmployeeValue(value ? Number(value) : null)
+  const setEmployee = (value) => setEmployeeValue(value || null)
 
   // Filtre de période **global** du tableau de bord (graphique, réservations,
   // « Meilleurs employés » **et tuiles KPI**) : Année → Mois → Semaine → Jour.

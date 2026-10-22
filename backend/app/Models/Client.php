@@ -76,6 +76,13 @@ class Client extends Model
     public const STATUS_INFO = 'INFO';
 
     /**
+     * Issue « Doublon » : le prospect est reconnu comme **répété** (même
+     * téléphone normalisé qu'une fiche déjà présente). Statut **stocké** ; la
+     * fiche d'origine est pointée par `parent_client_id`.
+     */
+    public const STATUS_REPETE = 'REPETE';
+
+    /**
      * DÉRIVÉ — affichage et filtre uniquement, **jamais stocké** (même
      * régime que `IN_PROGRESS`) : le client n'a **aucun numéro** de
      * téléphone (`phone` NULL ou vide). Ce n'est pas un état du cycle de
@@ -93,6 +100,7 @@ class Client extends Model
         self::STATUS_CONFIRMED,
         self::STATUS_DOUBLE,
         self::STATUS_INFO,
+        self::STATUS_REPETE,
     ];
 
     /**
@@ -129,6 +137,10 @@ class Client extends Model
         // `syncCurrentReservation()` (jamais par un update applicatif).
         'current_reservation_id',
         'current_comercial_id',
+        // Doublon : fiche d'origine quand ce prospect est un répété (statut
+        // `REPETE`). Pointeur auto-référent `clients.id`, posé par la logique de
+        // détection de doublons ; `null` = fiche autonome.
+        'parent_client_id',
         'is_blacklisted',
         // Drapeau « fiche modifiée à la main » : positionné par l'interface
         // (saisie manuelle) et lu par l'import scraper / n8n, qui **ne
@@ -418,6 +430,21 @@ class Client extends Model
     public function currentComercial(): BelongsTo
     {
         return $this->belongsTo(User::class, 'current_comercial_id');
+    }
+
+    /**
+     * Fiche d'origine dont ce client est le **doublon** (`parent_client_id`,
+     * statut `REPETE`). `null` = fiche autonome (aucun parent).
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_client_id');
+    }
+
+    /** Doublons rattachés à cette fiche — l'inverse de `parent()`. */
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_client_id');
     }
 
     /**

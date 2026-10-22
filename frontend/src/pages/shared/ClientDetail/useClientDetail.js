@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCommercialProspect, useAdminClientDetail } from '@/pages/comercial/ProspectList/useCommercialProspectList.js'
 import { blacklistClientApi, adminBlacklistClientApi, adminUnblockClientApi } from '@/api/commercial.api.js'
+import { getClientDuplicatesApi } from '@/api/shared.api.js'
 import { useClientNotes } from './useNotes.js'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { copyText } from '@/lib/clipboard.js'
@@ -42,10 +43,22 @@ export function useClientDetail() {
   const { data: notesData } = useClientNotes(isAdmin ? null : id)
   const qc = useQueryClient()
 
+  // Compteur de l'onglet « Numéros répétés » : partage la **même** clé de
+  // requête que `ClientRepeatsTab` (une seule requête pour les deux) —
+  // `{ success, data: { count, … } }` après l'intercepteur axios.
+  const { data: duplicatesData } = useQuery({
+    queryKey: ['client-duplicates', id],
+    queryFn: () => getClientDuplicatesApi(id),
+    staleTime: 1000 * 30,
+    retry: false,
+  })
+  const repeatsCount = duplicatesData?.data?.count ?? 0
+
   const [actionOpen, setActionOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState(() => (
-    new URLSearchParams(location.search).get('tab') === 'history' ? 'history' : 'details'
-  ))
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = new URLSearchParams(location.search).get('tab')
+    return tab === 'history' || tab === 'repeats' ? tab : 'details'
+  })
   const [blacklistOpen, setBlacklistOpen] = useState(false)
   const [blacklistNote, setBlacklistNote] = useState('')
   const [blacklistError, setBlacklistError] = useState(null)
@@ -134,6 +147,7 @@ export function useClientDetail() {
     notes,
 
     historyCount,
+    repeatsCount,
     hasReservation,
     reservedByName,
     actionOpen,

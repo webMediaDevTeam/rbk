@@ -1,4 +1,4 @@
-import { Bookmark, FileText, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, RefreshCw, RotateCcw, ShieldAlert, Voicemail } from 'lucide-react'
+import { Bookmark, CopyCheck, FileText, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, RefreshCw, RotateCcw, ShieldAlert, Voicemail } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDeleteNote } from '../useNotes.js'
 
@@ -52,9 +52,18 @@ const NOTE_TYPE_CONFIG = {
   },
   BLACKLISTED: {
     icon: ShieldAlert,
-    label: 'Liste noire',
-    variant: 'default',
+    label: 'BlackList',
+    variant: 'blacklist',
     nodeClass: 'bg-zinc-800',
+  },
+  // Rattachement de la fiche à son doublon d'origine (« marquer comme
+  // répété », serveur = ProspectOverviewController) : même teinte fuchsia
+  // que la pastille de filtre « num Répétés ».
+  REPETE: {
+    icon: CopyCheck,
+    label: 'Num Répété',
+    variant: 'repeat',
+    nodeClass: 'bg-fuchsia-500',
   },
   RETURNED_TO_AVAILABLE: {
     icon: RotateCcw,

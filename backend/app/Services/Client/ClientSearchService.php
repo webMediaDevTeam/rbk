@@ -350,7 +350,7 @@ class ClientSearchService
     {
         $counts = [];
 
-        foreach ([Client::STATUS_AVAILABLE, Client::STATUS_BLACKLISTED, Client::STATUS_SANS_TELEPHONE] as $bucket) {
+        foreach ([Client::STATUS_AVAILABLE, Client::STATUS_BLACKLISTED, Client::STATUS_SANS_TELEPHONE, Client::STATUS_REPETE] as $bucket) {
             $counts[$bucket] = $this->filterByStatuses($base(), $bucket)->count();
         }
 
@@ -544,10 +544,16 @@ class ClientSearchService
      * comportement strict : ces clients sont exclus pour tout le monde, ils
      * ne sont donc **jamais** réservables une seconde fois.
      *
+     * `$includeRepete` (page Grande liste uniquement) : ajoute les fiches
+     * marquées comme **répétées** (`status = REPETE`) aux lignes visibles,
+     * pour que la pastille « num Répétés » rende ses lignes. Volontairement
+     * hors du chemin du lot réservé (`POST clients/reserver`, `false`) : un
+     * doublon rattaché n'est pas réservable.
+     *
      * @param  array<string, mixed>  $input  Paramètres de requête de la page.
      * @param  int|string|null  $heldByUserId  identifiant de l'employé connecté.
      */
-    public function applyFilters(Builder $query, array $input = [], int|string|null $heldByUserId = null): Builder
+    public function applyFilters(Builder $query, array $input = [], int|string|null $heldByUserId = null, bool $includeRepete = false): Builder
     {
         if ($municipality = $input['municipality'] ?? null) {
             $this->filterByMunicipalities($query, $municipality);
@@ -581,7 +587,7 @@ class ClientSearchService
         // donc jamais réservables une seconde fois.
         $query->where('is_blacklisted', false)
             ->withPhone()
-            ->where(function (Builder $nested) use ($heldByUserId) {
+            ->where(function (Builder $nested) use ($heldByUserId, $includeRepete) {
                 $nested
                     ->where(fn (Builder $available) => $available
                         ->available()
@@ -592,6 +598,13 @@ class ClientSearchService
                             ->orWhere(fn (Builder $mine) => $mine
                                 ->whereIn('status', [Client::STATUS_DOUBLE, Client::STATUS_INFO])
                                 ->where('current_comercial_id', $heldByUserId))
+                    )
+                    // Fiches « répétées » (doublons rattachés) : la Grande
+                    // liste commerciale seule les rend filtrables — pastille
+                    // « num Répétés ».
+                    ->when(
+                        $includeRepete,
+                        fn (Builder $repete) => $repete->orWhere('status', Client::STATUS_REPETE)
                     );
             });
 

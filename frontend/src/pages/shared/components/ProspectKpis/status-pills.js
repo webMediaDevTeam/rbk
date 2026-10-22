@@ -1,4 +1,4 @@
-import { Ban, CircleCheck, Copy, Info, PhoneCall, PhoneOff, ThumbsDown, ThumbsUp, Voicemail } from 'lucide-react'
+import { Ban, CircleCheck, Copy, CopyCheck, Info, PhoneCall, PhoneOff, ThumbsDown, ThumbsUp, Voicemail } from 'lucide-react'
 
 /**
  * Métadonnées des **10 badges de la colonne « Statut »** (docs/RULES.md §9) :
@@ -110,6 +110,19 @@ export const STATUS_PILLS = [
     title: 'Clients en liste noire (badge noir en clair, gris en sombre) — clique pour filtrer',
   },
   {
+    // Statut client posé par « Marquer comme répété » (onglet « Numéros
+    // répétés » de la fiche) : les fiches rattachées à un doublon d'origine
+    // (`parent_client_id`). Filtre sur `status`, comme Libre / Blacklist.
+    key: 'REPETE',
+    tone: 'fuchsia',
+    label: 'num Répétés',
+    icon: CopyCheck,
+    iconClass: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
+    activeClass: 'border border-transparent bg-fuchsia-600',
+    activeFg: 'text-white',
+    title: 'Fiches marquées comme répétées (doublon de numéro) — clique pour filtrer',
+  },
+  {
     // Seau **dérivé** (`phone` vide) : recoupe les autres (un prospect sans
     // numéro est aussi `AVAILABLE` ou blacklisté) — sélection unique dans
     // l'UI, donc le compteur = lignes rendues après clic reste exact.
@@ -126,7 +139,7 @@ export const STATUS_PILLS = [
 ]
 
 /** Badges servis par le paramètre `status` (les autres : `reservation_status`). */
-export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED', 'SANS_TELEPHONE']
+export const CLIENT_STATUS_KEYS = ['AVAILABLE', 'BLACKLISTED', 'SANS_TELEPHONE', 'REPETE']
 
 /**
  * Toutes les valeurs filtrables de la barre (clés « statut affiché ») : sert

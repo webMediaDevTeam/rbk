@@ -429,6 +429,9 @@ class DoubleInfoStatusTest extends TestCase
                 Client::STATUS_AVAILABLE => 1,
                 Client::STATUS_DOUBLE => 1,
                 Client::STATUS_INFO => 1,
+                // Pastille « num Répétés » de la barre commerciale : présente
+                // même à zéro (aucune fiche rattachée dans ce périmètre).
+                Client::STATUS_REPETE => 0,
             ],
             $badges['by_display_status'],
             'Un « Double » et un « Info » **tenu par lui**, le collègue reste hors périmètre.'

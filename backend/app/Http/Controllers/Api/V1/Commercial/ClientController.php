@@ -46,7 +46,10 @@ class ClientController extends Controller
         $perimeter = function () use ($request, $user): Builder {
             return $this->excludeDoubleForUnprivileged(
                 $this->search->applyCommercialSourceScope(
-                    $this->search->applyFilters(Client::query(), $request->all(), $user?->id),
+                    // `$includeRepete` : la pastille « num Répétés » de la
+                    // barre rend ses lignes ; le lot réservé (`reserver`)
+                    // passe par le même `applyFilters` **sans** ce drapeau.
+                    $this->search->applyFilters(Client::query(), $request->all(), $user?->id, includeRepete: true),
                     $user
                 ),
                 $user
@@ -76,15 +79,16 @@ class ClientController extends Controller
                     'per_page' => $clients->perPage(),
                     'total' => $clients->total(),
                 ],
-                // Barre de badges « Tous / Libre / Double / Info » de la page :
-                // même **forme** que `data` de `GET clients/overview` (le
-                // commercial n'en consomme que 3 clés).
+                // Barre de badges « Tous / Libre / Double / Info / num Répétés »
+                // de la page : même **forme** que `data` de `GET clients/overview`
+                // (le commercial n'en consomme que ces clés).
                 'badges' => [
                     'prospects' => ['system' => $perimeter()->count()],
                     'by_display_status' => [
                         Client::STATUS_AVAILABLE => $this->search->filterByStatuses($perimeter(), Client::STATUS_AVAILABLE)->count(),
                         Client::STATUS_DOUBLE => $this->search->filterByStatuses($perimeter(), Client::STATUS_DOUBLE)->count(),
                         Client::STATUS_INFO => $this->search->filterByStatuses($perimeter(), Client::STATUS_INFO)->count(),
+                        Client::STATUS_REPETE => $this->search->filterByStatuses($perimeter(), Client::STATUS_REPETE)->count(),
                     ],
                 ],
             ],
@@ -93,9 +97,9 @@ class ClientController extends Controller
 
     /**
      * Filtre de la barre de badges de la Grande liste **commerciale** :
-     * paramètre `status` ∈ { `AVAILABLE`, `DOUBLE`, `INFO` } — sélection
-     * unique ; absente ou inconnue, toute autre valeur laisse la liste
-     * inchangée. S'appuie sur le statut **client** : dans cette liste, un
+     * paramètre `status` ∈ { `AVAILABLE`, `DOUBLE`, `INFO`, `REPETE` } —
+     * sélection unique ; absente ou inconnue, toute autre valeur laisse la
+     * liste inchangée. S'appuie sur le statut **client** : dans cette liste, un
      * « Double » / « Info » affiché est toujours un prospect tenu par
      * l'employé connecté (`applyFilters()` branche `current_comercial_id`),
      * compteur et lignes rendues proviennent donc de la même colonne —
@@ -109,7 +113,7 @@ class ClientController extends Controller
     {
         $status = $request->input('status');
 
-        $allowed = [Client::STATUS_AVAILABLE, Client::STATUS_DOUBLE, Client::STATUS_INFO];
+        $allowed = [Client::STATUS_AVAILABLE, Client::STATUS_DOUBLE, Client::STATUS_INFO, Client::STATUS_REPETE];
 
         if (! is_string($status) || ! in_array($status, $allowed, true)) {
             return $query;
@@ -163,7 +167,7 @@ class ClientController extends Controller
 
     public function show(Request $request, string $id): JsonResponse
     {
-        $client = Client::with(['reservations.comercial', 'reservations.rappel', 'notes.sender'])
+        $client = Client::with(['reservations.comercial', 'reservations.rappel', 'notes.sender', 'parent'])
             ->find($id);
 
         if (! $client) {
@@ -337,6 +341,15 @@ class ClientController extends Controller
             ...($canSeePhone ? ['phone' => $client->phone] : []),
             'status' => $client->status,
             'display_status' => $client->displayStatus(),
+            // Rattachement doublon : la colonne est toujours lisible ; le résumé
+            // `parent` n'est rendu que si la relation est préchargée (fiche
+            // détaillée) — jamais en liste, pour éviter un N+1.
+            'parent_client_id' => $client->parent_client_id,
+            'parent' => $client->relationLoaded('parent') && $client->parent ? [
+                'id' => $client->parent->id,
+                'name' => $client->parent->name,
+                'phone' => $client->parent->phone,
+            ] : null,
             'is_blacklisted' => $client->is_blacklisted,
             'returned_at' => $client->returned_at,
             'municipality' => $client->municipality,

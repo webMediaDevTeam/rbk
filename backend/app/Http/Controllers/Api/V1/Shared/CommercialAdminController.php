@@ -516,7 +516,7 @@ class CommercialAdminController extends Controller
     public function client(Request $request, $id)
     {
         $client = $this->findClientForRequest($request, $id)
-            ->load(['reservations.comercial', 'notes.sender']);
+            ->load(['reservations.comercial', 'notes.sender', 'parent']);
 
         $activeReservation = $client->reservations->sortByDesc('created_at')->first();
         $assigned = $activeReservation?->comercial;
@@ -531,6 +531,14 @@ class CommercialAdminController extends Controller
                     'phone' => $client->phone,
                     'status' => $client->status,
                     'display_status' => $client->displayStatus(),
+                    // Rattachement doublon (onglet « Numéros répétés ») : la
+                    // fiche d'origine quand ce client est un répété.
+                    'parent_client_id' => $client->parent_client_id,
+                    'parent' => $client->parent ? [
+                        'id' => $client->parent->id,
+                        'name' => $client->parent->name,
+                        'phone' => $client->parent->phone,
+                    ] : null,
                     'is_blacklisted' => $client->is_blacklisted,
                     'returned_at' => $client->returned_at,
                     'municipality' => $client->municipality,

@@ -12,13 +12,14 @@ import {
 import { useActiveReservationsCount } from '@/pages/shared/ClientDetail/useOutcomes.js'
 
 /**
- * Valeurs filtrables par la barre « Tous / Libre / Double / Info » de la page
- * (`ProspectStatusPills`) : sert à valider le filtre **pré-appliqué par le
- * tableau de bord** (`/prospects?status=AVAILABLE`). Toute autre valeur est
- * ignorée — la liste commerciale ne connaît pas les autres statuts (les « Oui
- * » / « Non » / « Blacklist » ne sont jamais des lignes de cette liste).
+ * Valeurs filtrables par la barre « Libre / Double / Info / num
+ * Répétés » de la page (`ProspectStatusPills`) : sert à valider le filtre
+ * **pré-appliqué par le tableau de bord** (`/prospects?status=AVAILABLE`).
+ * Toute autre valeur est ignorée — la liste commerciale ne connaît pas les
+ * autres statuts (les « Oui » / « Non » / « Blacklist » ne sont jamais des
+ * lignes de cette liste).
  */
-const PROSPECT_STATUS_KEYS = ['AVAILABLE', 'DOUBLE', 'INFO']
+const PROSPECT_STATUS_KEYS = ['AVAILABLE', 'DOUBLE', 'INFO', 'REPETE']
 
 export function useCommercialProspectList() {
   const navigate = useNavigate()

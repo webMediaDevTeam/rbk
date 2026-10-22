@@ -1,12 +1,16 @@
-import { CircleCheck, Copy, Info, Users } from 'lucide-react'
+import { CircleCheck, Copy, CopyCheck, Info } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 
 /**
- * Barre de filtres « Tous / Libre / Double / Info » de la Grande liste
- * **commerciale** — 4 pastilles en sélection unique, même vocabulaire de
+ * Barre de filtres « Libre / Double / Info / num Répétés » de la Grande
+ * liste **commerciale** — 4 pastilles en sélection unique, même vocabulaire de
  * couleurs que la barre admin (`ProspectKpis`) et les tuiles du tableau de
- * bord : *Tous* violet, *Libre* bleu, *Double* couleur primaire de l'app,
- * *Info* bleu ciel.
+ * bord : *Libre* bleu, *Double* couleur primaire de l'app,
+ * *Info* bleu ciel, *num Répétés* fuchsia.
+ *
+ * Pas de pastille « Tous » : l'absence de filtre (aucune pastille active)
+ * rend déjà toutes les lignes de la liste ; re-cliquer la pastille active la
+ * retire.
  *
  * Les compteurs viennent de `data.badges` de `GET clients` : le **périmètre de
  * l'employé** (sa source, les prospects qu'il détient, son privilège §7.1),
@@ -14,11 +18,13 @@ import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/
  * pastille vaut donc le nombre de lignes rendues après son clic (invariant
  * « compteur = lignes », docs/RULES.md §9).
  *
- * La liste commerciale ne contient que ces trois sortes de lignes : un prospect
- * libre à réserver, et les « Double » / « Info » que l'employé a **détenus**
- * (issues qui le gardent tenu, §3). Les autres statuts (Oui / Non / BV /
- * À rappeler / Blacklist / Sans téléphone) n'y ont pas leur place — ils sont
- * déjà filtrables côté admin et dans « Mes listes ».
+ * La liste commerciale ne contient que ces sortes de lignes : un prospect
+ * libre à réserver, les « Double » / « Info » que l'employé a **détenus**
+ * (issues qui le gardent tenu, §3), et les fiches marquées comme **répétées**
+ * (doublons rattachés à un original, statut `REPETE`) — filtrables pour les
+ * repérer sous le même angle que la pastille admin. Les autres statuts (Oui /
+ * Non / BV / À rappeler / Blacklist / Sans téléphone) n'y ont pas leur place —
+ * ils sont déjà filtrables côté admin et dans « Mes listes ».
  *
  * Sans le privilège de libération, les « Double » sortent de la liste : la
  * pastille affiche 0 et le clic ne rend rien — fidèle à ce que voit l'employé.
@@ -33,7 +39,7 @@ export default function ProspectStatusPills({ badges, statusFilter, onStatusFilt
   if (!badges) {
     return (
       <div className="flex flex-wrap gap-1.5" aria-hidden="true">
-        {Array.from({ length: 4 }).map((_, i) => (
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="h-7 w-28 animate-pulse rounded-full border border-border/60 bg-card" />
         ))}
       </div>
@@ -42,17 +48,10 @@ export default function ProspectStatusPills({ badges, statusFilter, onStatusFilt
 
   const counts = badges.by_display_status ?? {}
 
-  // `key` = valeur du paramètre serveur `status` ; `null` = aucun filtre.
+  // `key` = valeur du paramètre serveur `status` ; la valeur « aucun filtre »
+  // (Tous) n'a plus de pastille dédiée — retirer le filtre = re-cliquer la
+  // pastille active (ou les autres écrans qui remettent `statusFilter` à null).
   const pills = [
-    {
-      key: null,
-      label: 'Tous',
-      value: badges.prospects?.system ?? 0,
-      icon: Users,
-      iconClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-      activeClass: 'border border-transparent bg-violet-600',
-      title: 'Toutes les lignes de votre liste — cliquez pour retirer le filtre',
-    },
     {
       key: 'AVAILABLE',
       label: 'Libre',
@@ -79,6 +78,18 @@ export default function ProspectStatusPills({ badges, statusFilter, onStatusFilt
       iconClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
       activeClass: 'border border-transparent bg-sky-600',
       title: 'Prospects « Info » (renseigné, pas d’offre) que vous détenez — cliquez pour filtrer',
+    },
+    {
+      // Fiches rattachées à un doublon d'origine (« marquer comme répété »,
+      // onglet « Numéros répétés » de la fiche) — même teinte fuchsia que la
+      // pastille admin « num Répétés ».
+      key: 'REPETE',
+      label: 'num Répétés',
+      value: counts.REPETE ?? 0,
+      icon: CopyCheck,
+      iconClass: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400',
+      activeClass: 'border border-transparent bg-fuchsia-600',
+      title: 'Fiches marquées comme répétées (doublon de numéro) — cliquez pour filtrer',
     },
   ]
 

@@ -234,6 +234,7 @@ class CurrentReservationStatusBadgesTest extends TestCase
                 Client::STATUS_AVAILABLE,
                 Client::STATUS_BLACKLISTED,
                 Client::STATUS_SANS_TELEPHONE,
+                Client::STATUS_REPETE,
                 Reservation::STATUS_YES,
                 Reservation::STATUS_NO,
                 Reservation::STATUS_BV_VOICEMAIL,
@@ -243,7 +244,7 @@ class CurrentReservationStatusBadgesTest extends TestCase
                 Reservation::STATUS_PENDING,
             ],
             array_keys($badges ?? []),
-            'Les 10 badges de la colonne « Statut » sont renvoyés.'
+            'Les 11 badges de la colonne « Statut » sont renvoyés.'
         );
 
         // Chaque compteur est produit **par le scope qui pilote le filtre** :

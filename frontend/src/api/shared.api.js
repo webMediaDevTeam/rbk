@@ -69,6 +69,28 @@ export function listClientSourcesApi() {
   return api.get('/clients/sources')
 }
 
+// Onglet « Numéros répétés » de la fiche client : les **autres** clients
+// partageant exactement le même `phone_normalized` (détection de doublons par
+// le numéro, insensible au formatage). La fiche courante est exclue serveur.
+// Réponse : `{success, data: {phone_normalized, count, duplicates: [{id, name,
+// enterprise_name, phone, municipality, administrative_region, source,
+// status, display_status, is_blacklisted, created_at}]}}`.
+export function getClientDuplicatesApi(id) {
+  return api.get(`/clients/${id}/duplicates`)
+}
+
+// « Marquer comme répété » : rattache la fiche `id` à son doublon d'origine
+// (`parentId`) et bascule son statut sur REPETE côté serveur.
+export function markClientRepeteApi(id, parentId) {
+  return api.post(`/clients/${id}/mark-repete`, { parent_client_id: parentId })
+}
+
+// Variante en masse : rattache tous les doublons non encore reliés du même
+// numéro à la fiche `id` (le parent).
+export function markAllClientRepeteApi(id) {
+  return api.post(`/clients/${id}/mark-repete-all`)
+}
+
 // RingCentral — appareils de l'account + numéros assignés (consultation
 // seule, ADMIN + SUPER_ADMIN) : sert au select « Appareil / numéro source »
 // des modales employé.

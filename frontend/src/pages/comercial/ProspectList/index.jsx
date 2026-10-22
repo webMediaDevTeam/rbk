@@ -67,10 +67,10 @@ export default function ProspectListPage() {
         </div>
       </div>
 
-      {/* Barre de filtres « Tous / Libre / Double / Info » (§9) : la liste
-          commerciale ne contient que ces lignes — les compteurs viennent du
-          serveur (`data.badges` de `GET clients`) et le clic rend exactement
-          le chiffre affiché. */}
+      {/* Barre de filtres « Libre / Double / Info / num Répétés » (§9) : sans
+          pastille active la liste rend toutes les lignes (pas de « Tous »).
+          Les compteurs viennent du serveur (`data.badges` de `GET clients`)
+          et le clic rend exactement le chiffre affiché. */}
       <ProspectStatusPills
         badges={badges}
         statusFilter={statusFilter}

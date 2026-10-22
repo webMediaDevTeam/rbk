@@ -25,12 +25,16 @@ const formatPercent = (pct) =>
  *                                  filigrane pivoté à 45° dans le coin supérieur droit).
  * @param {string|number}    value  valeur déjà formatée.
  * @param {string}           label  libellé sous le chiffre.
+ * @param {string}           [secondary] ligne discrète sous le libellé (ex.
+ *                                      « sur 53 149 ») — une tuile qui en porte
+ *                                      une affiche un second compteur sans
+ *                                      prendre de place supplémentaire.
  * @param {number}           [ratio] part 0→1 affichée en pourcentage + jauge.
  * @param {string}           [to]   destination (route + query).
  * @param {Function}         [onClick] alternative sans navigation.
  * @param {string}           [title] infobulle (destination de la tuile).
  */
-export default function StatTile({ tone = 'violet', icon: Icon, value, label, ratio, to, onClick, title }) {
+export default function StatTile({ tone = 'violet', icon: Icon, value, label, secondary, ratio, to, onClick, title }) {
   const palette = TILE_TONES[tone] ?? TILE_TONES.violet
   // Part affichée : la valeur brute est rendue telle quelle (une liste peut
   // dépasser son dénominateur, ex. « OUI » d'une période) ; seule la jauge est
@@ -69,6 +73,9 @@ export default function StatTile({ tone = 'violet', icon: Icon, value, label, ra
           <span className="text-xs font-semibold tabular-nums text-muted-foreground">{`${formatPercent(pct)} %`}</span>
         ) : null}
       </div>
+      {secondary ? (
+        <div className="relative z-10 text-xs text-muted-foreground">{secondary}</div>
+      ) : null}
       {pct !== null ? (
         <div className="relative z-10 mt-auto pt-4">
           <div

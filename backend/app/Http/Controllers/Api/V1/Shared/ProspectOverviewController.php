@@ -11,6 +11,7 @@ use App\Support\PeriodFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProspectOverviewController extends Controller
 {
@@ -183,6 +184,9 @@ class ProspectOverviewController extends Controller
             Client::STATUS_AVAILABLE,
             Client::STATUS_BLACKLISTED,
             Client::STATUS_SANS_TELEPHONE,
+            // « Numéros répétés » : statut client posé par « Marquer comme
+            // répété » (dimension client, instantané fixe — hors période).
+            Client::STATUS_REPETE,
         ];
         $reservationBuckets = [
             Reservation::STATUS_YES,
@@ -241,6 +245,197 @@ class ProspectOverviewController extends Controller
                 'by_display_status' => $displayCounts,
             ],
         ]);
+    }
+
+    /**
+     * GET /clients/{id}/duplicates — les **autres** clients partageant exactement
+     * le même `phone_normalized` que la fiche donnée (clé de chiffres nationaux,
+     * insensible au formatage). Alimente l'onglet « Numéros répétés » de la fiche
+     * client.
+     *
+     * Une fiche sans numéro normalisé (`phone_normalized` NULL / vide) renvoie
+     * une liste vide. La fiche courante est exclue (`whereKeyNot`). Lecture seule,
+     * ouverte à tout utilisateur authentifié (route du groupe `auth:sanctum`).
+     */
+    public function duplicates(string $id): JsonResponse
+    {
+        $client = Client::query()->findOrFail($id);
+
+        $normalized = $client->phone_normalized;
+
+        if ($normalized === null || $normalized === '') {
+            return response()->json([
+                'success' => true,
+                'data' => ['phone_normalized' => null, 'count' => 0, 'duplicates' => []],
+            ]);
+        }
+
+        $duplicates = Client::query()
+            ->where('phone_normalized', $normalized)
+            ->whereKeyNot($client->getKey())
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        // Une seule recharge groupée des dernières réservations : `displayStatus()`
+        // ne ferait sinon une requête par ligne réservée / confirmée.
+        Client::loadLatestReservations($duplicates);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'phone_normalized' => $normalized,
+                'count' => $duplicates->count(),
+                'duplicates' => $duplicates->map(fn (Client $c): array => [
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'enterprise_name' => $c->enterprise_name,
+                    // Le tableau « Numéros répétés » affiche répondants et
+                    // représentant (qui parle au téléphone) plutôt qu'une
+                    // énième colonne entreprise.
+                    'respondents' => $c->respondents,
+                    'representative_name' => $c->representative_name,
+                    'phone' => $c->phone,
+                    'municipality' => $c->municipality,
+                    'administrative_region' => $c->administrative_region,
+                    'source' => $c->source,
+                    'status' => $c->status,
+                    'display_status' => $c->displayStatus(),
+                    'is_blacklisted' => $c->is_blacklisted,
+                    // Le pointeur de doublon permet à l'UI de désactiver
+                    // « Marquer comme répété » sur une fiche déjà reliée.
+                    'parent_client_id' => $c->parent_client_id,
+                    'created_at' => $c->created_at,
+                ])->all(),
+            ],
+        ]);
+    }
+
+    /**
+     * POST /clients/{id}/mark-repete — marque la fiche `{id}` comme **doublon**
+     * de `parent_client_id` : pose `parent_client_id` et bascule `status` sur
+     * `REPETE` (`Client::STATUS_REPETE`). Action ouverte à tout utilisateur
+     * authentifié (comme la mise à jour d'une fiche).
+     *
+     * Garde-fou : une fiche ne peut être son propre doublon. Le parent doit
+     * exister (`exists:clients,id`). L'événement est journalisé dans `notes`
+     * (type `REPETE`, émetteur = l'auteur du clic) pour l'historique de la
+     * fiche enfant — comme toute autre transition de statut.
+     */
+    public function markRepete(Request $request, string $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'parent_client_id' => ['required', 'string', 'exists:clients,id'],
+        ]);
+
+        $client = Client::query()->findOrFail($id);
+        $parentId = $validated['parent_client_id'];
+
+        if ((string) $client->id === (string) $parentId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Impossible de marquer une fiche comme son propre doublon.',
+            ], 422);
+        }
+
+        $description = 'Client marqué comme répété de '
+            .$this->repeteParentLabel(Client::query()->findOrFail($parentId)).'.';
+
+        DB::transaction(function () use ($client, $parentId, $request, $description) {
+            $client->parent_client_id = $parentId;
+            $client->status = Client::STATUS_REPETE;
+            $client->save();
+
+            Note::create([
+                'client_id' => $client->id,
+                'sender_id' => $request->user()->id,
+                'type' => Note::TYPE_REPETE,
+                'description' => $description,
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $client->id,
+                'status' => $client->status,
+                'display_status' => $client->displayStatus(),
+                'parent_client_id' => $client->parent_client_id,
+            ],
+        ]);
+    }
+
+    /**
+     * POST /clients/{id}/mark-repete-all — « Marquer comme répété » en
+     * masse : rattache à `{id}` toutes les **autres** fiches partageant son
+     * `phone_normalized` et **pas encore rattachées** (`parent_client_id` NULL),
+     * en basculant chacune sur `REPETE`. La fiche courante (le parent) est
+     * exclue ; une fiche déjà reliée à un autre parent n'est **jamais**
+     * re-pointée. Chaque enfant marqué reçoit sa note `REPETE` (émetteur =
+     * l'auteur du clic), le tout dans une seule transaction.
+     */
+    public function markRepeteAll(Request $request, string $id): JsonResponse
+    {
+        $client = Client::query()->findOrFail($id);
+
+        $normalized = $client->phone_normalized;
+
+        if ($normalized === null || $normalized === '') {
+            return response()->json([
+                'success' => true,
+                'data' => ['phone_normalized' => null, 'marked' => 0],
+            ]);
+        }
+
+        // Les enfants à rattacher d'abord (l'`update()` groupée ne déclenche
+        // aucun modèle : les notes se posent explicitement, une par enfant).
+        $childIds = Client::query()
+            ->where('phone_normalized', $normalized)
+            ->whereKeyNot($client->getKey())
+            ->whereNull('parent_client_id')
+            ->pluck('id');
+
+        $description = 'Client marqué comme répété de '.$this->repeteParentLabel($client).'.';
+
+        $marked = DB::transaction(function () use ($childIds, $client, $request, $description) {
+            $count = Client::query()
+                ->whereIn('id', $childIds)
+                ->update([
+                    'parent_client_id' => $client->getKey(),
+                    'status' => Client::STATUS_REPETE,
+                ]);
+
+            foreach ($childIds as $childId) {
+                Note::create([
+                    'client_id' => $childId,
+                    'sender_id' => $request->user()->id,
+                    'type' => Note::TYPE_REPETE,
+                    'description' => $description,
+                ]);
+            }
+
+            return $count;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'phone_normalized' => $normalized,
+                'marked' => $marked,
+            ],
+        ]);
+    }
+
+    /**
+     * Libellé du parent dans la description de la note `REPETE` : nom, puis
+     * téléphone entre parenthèses s'il est connu — miroir du bandeau
+     * d'en-tête de la fiche enfant.
+     */
+    private function repeteParentLabel(Client $parent): string
+    {
+        $name = $parent->name ?? 'le client d’origine';
+
+        return $parent->phone ? $name.' ('.$parent->phone.')' : $name;
     }
 
     /**

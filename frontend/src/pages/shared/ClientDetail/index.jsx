@@ -1,8 +1,10 @@
-import { Copy, ArrowLeft, Phone, Ban, Loader2, AlertCircle, SquarePen, X, Unlock, Mail } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Copy, ArrowLeft, Phone, Ban, Loader2, AlertCircle, SquarePen, X, Unlock, Mail, CopyCheck } from 'lucide-react'
 import Button from '@/components/ui/button.jsx'
 import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
 import ReservationStatusBadge from '@/pages/comercial/ProspectList/components/ReservationStatusBadge.jsx'
 import ClientDetailsTab from './components/ClientDetailsTab.jsx'
+import ClientRepeatsTab from './components/ClientRepeatsTab.jsx'
 import NoteTimeline from './components/NoteTimeline.jsx'
 import ActionModal from './components/ActionModal.jsx'
 import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
@@ -18,6 +20,7 @@ export default function ClientDetailPage() {
     client,
     notes,
     historyCount,
+    repeatsCount,
     hasReservation,
     reservedByName,
     actionOpen,
@@ -120,6 +123,22 @@ export default function ClientDetailPage() {
         Modifier
       </Button>
     </div>
+
+    {/* Client marqué comme **répété** : `parent_client_id` posé → bandeau
+        d'en-tête renvoyant vers le client d'origine (le parent), avec son
+        nom et son téléphone. Visible quel que soit l'onglet actif. */}
+    {client.parent?.id && (
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+        <CopyCheck className="h-4 w-4 shrink-0" />
+        <span>
+          Ce client est marqué comme <strong>répété</strong> de{' '}
+          <Link to={`/prospects/${client.parent.id}`} className="font-medium underline">
+            {client.parent.name ?? 'le client d’origine'}
+          </Link>
+          {client.parent.phone ? ` (${client.parent.phone})` : ''}.
+        </span>
+      </div>
+    )}
   </div>
 
   {/* Underlined tabs and call actions */}
@@ -157,6 +176,22 @@ export default function ClientDetailPage() {
       >
         Historique ({historyCount})
       </button>
+      <button
+        id="client-repeats-tab"
+        type="button"
+        role="tab"
+        aria-controls="client-repeats-panel"
+        aria-selected={activeTab === 'repeats'}
+        onClick={() => setActiveTab('repeats')}
+        className={cn(
+          'border-b-2 px-1 py-3 text-sm transition-colors',
+          activeTab === 'repeats'
+            ? 'border-primary font-semibold text-primary'
+            : 'border-transparent font-medium text-muted-foreground hover:border-border hover:text-foreground',
+        )}
+      >
+        Numéros répétés ({repeatsCount})
+      </button>
     </nav>
 
   <div className="flex justify-end gap-3 pb-3 sm:pb-2">
@@ -187,6 +222,11 @@ export default function ClientDetailPage() {
             <h2 id="client-details-heading" className="mb-4 text-sm font-semibold text-foreground">Détails</h2>
             <ClientDetailsTab client={client} />
           </section>
+          ) : activeTab === 'repeats' ? (
+          <section id="client-repeats-panel" role="tabpanel" aria-labelledby="client-repeats-tab" className="rounded-xl bg-card text-card-foreground shadow-sm p-6">
+            <h2 id="client-repeats-heading" className="mb-4 text-sm font-semibold text-foreground">Numéros répétés</h2>
+            <ClientRepeatsTab clientId={id} />
+          </section>
           ) : (
           <section id="client-history-panel" role="tabpanel" aria-labelledby="client-history-tab" className="rounded-xl bg-card text-card-foreground shadow-sm p-6">
             <h2 id="client-history-heading" className="mb-4 text-sm font-semibold text-foreground">
@@ -196,10 +236,13 @@ export default function ClientDetailPage() {
           </section>
           )}
 
+          {/* Action liste noire / déblocage — **restée dans la fiche** mais
+              masquée sur l'onglet « Numéros répétés » (tableau informatif) :
+              visible uniquement sur « Détails » et « Historique ». */}
+          {activeTab !== 'repeats' && (
           <div className="flex justify-end gap-2">
-            {/* Le bouton « Modifier » (édition complète) est désormais dans
-                l'en-tête de la fiche ; cette rangée ne porte plus que les
-                actions de liste noire / déblocage. */}
+            {/* Le bouton « Modifier » (édition complète) est dans l'en-tête de la
+                fiche ; cette rangée ne porte que liste noire / déblocage. */}
             {isAdmin ? (
               client.is_blacklisted ? (
                 <Button
@@ -225,6 +268,7 @@ export default function ClientDetailPage() {
               )
             )}
           </div>
+          )}
         </>
       )}
 

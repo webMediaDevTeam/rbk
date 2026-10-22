@@ -1,4 +1,3 @@
-import { Users } from 'lucide-react'
 import { STATUS_PILLS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
 import { formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 import { useProspectKpis } from '@/pages/shared/components/ProspectKpis/useProspectKpis.js'
@@ -8,10 +7,14 @@ const LIST_HREF = '/clients-historique'
 
 /**
  * Panneau « Grande liste » du tableau de bord gestionnaire : les **mêmes
- * compteurs que les 10 badges de statut de la liste** (`Tous` + `Libre` →
- * `Sans tel.`, docs/RULES.md §9), lus sur `GET clients/overview` sous
- * l'origine active (`?source=`) **et la période du dashboard**
- * (`?year=&month=&week=&day=`).
+ * compteurs que les 10 badges de statut de la liste** (`Libre` → `Sans tel.`,
+ * docs/RULES.md §9), lus sur `GET clients/overview` sous l'origine active
+ * (`?source=`) **et la période du dashboard** (`?year=&month=&week=&day=`).
+ *
+ * Le compteur « Tous » (total de la liste) n'a **pas de carte dédiée** : il
+ * absorbe la tuile « Libre » en sous-ligne « sur {Tous} », ce qui ramène le
+ * panneau à 10 tuiles (et non 11) tout en gardant le total lisible — il sert
+ * aussi de dénominateur aux parts et à la jauge de pied.
  *
  * Sous période, seules les tuiles d'issue **Oui → Blacklist** se bornent à la
  * fenêtre, sur la **date de la note** du client (note d'issue du type créé
@@ -54,26 +57,23 @@ export default function DashboardStatusCards({ source = '', year, month, week, d
   const countOf = (key) => kpis?.by_display_status?.[key] ?? 0
 
   const tiles = kpis
-    ? [
-        {
-          key: 'all',
-          label: 'Tous',
-          count: total,
-          icon: Users,
-          tone: 'violet',
-          to: LIST_HREF,
-          title: 'Ouvre la Grande liste sans filtre de statut',
-        },
-        ...STATUS_PILLS.map((pill) => ({
+    ? STATUS_PILLS.map((pill) => {
+        // « Libre » absorbe le total « Tous » (plus de carte dédiée) : le
+        // nombre de prospects de la liste se lit en sous-ligne « sur {Tous} ».
+        const isLibre = pill.key === 'AVAILABLE'
+        return {
           key: pill.key,
           label: pill.tileLabel ?? pill.label,
           count: countOf(pill.key),
           icon: pill.icon,
           tone: pill.tone,
           to: `${LIST_HREF}?status=${pill.key}`,
-          title: `${pill.label} — ouvre la Grande liste filtrée${source ? ` (origine « ${source} »)` : ''}`,
-        })),
-      ].map((tile) => ({
+          secondary: isLibre ? `sur ${formatCount(total)}` : undefined,
+          title: `${pill.label} — ouvre la Grande liste filtrée${source ? ` (origine « ${source} »)` : ''}${
+            isLibre ? ` · ${formatCount(total)} prospects au total` : ''
+          }`,
+        }
+      }).map((tile) => ({
         ...tile,
         value: formatCount(tile.count),
         ratio: total > 0 ? tile.count / total : 0,
