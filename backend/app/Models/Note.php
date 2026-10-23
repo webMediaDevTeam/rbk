@@ -63,6 +63,13 @@ class Note extends Model
 
     public const TYPE_INFO = 'INFO';
 
+    /**
+     * Issue « Autre » : comme `DOUBLE` / `INFO`, l'appel a eu lieu et le
+     * prospect reste **tenu** par l'employé (régime `RESERVED`) — seule la
+     * raison diffère, portée par la note libre de l'employé.
+     */
+    public const TYPE_AUTRE = 'AUTRE';
+
     public const TYPE_BLACKLISTED = 'BLACKLISTED';
 
     /** Fiche rattachée à son doublon d'origine (`parent_client_id` posé). */
@@ -84,6 +91,7 @@ class Note extends Model
         self::TYPE_CALL_BACK,
         self::TYPE_DOUBLE,
         self::TYPE_INFO,
+        self::TYPE_AUTRE,
         self::TYPE_BLACKLISTED,
         self::TYPE_REPETE,
         self::TYPE_RETURNED_TO_AVAILABLE,
@@ -107,6 +115,7 @@ class Note extends Model
         self::TYPE_CALL_BACK,
         self::TYPE_DOUBLE,
         self::TYPE_INFO,
+        self::TYPE_AUTRE,
     ];
 
     protected $fillable = [

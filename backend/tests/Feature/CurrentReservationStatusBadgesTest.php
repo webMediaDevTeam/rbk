@@ -241,10 +241,11 @@ class CurrentReservationStatusBadgesTest extends TestCase
                 Reservation::STATUS_CALL_BACK,
                 Reservation::STATUS_DOUBLE,
                 Reservation::STATUS_INFO,
+                Reservation::STATUS_AUTRE,
                 Reservation::STATUS_PENDING,
             ],
             array_keys($badges ?? []),
-            'Les 11 badges de la colonne « Statut » sont renvoyés.'
+            'Les 12 badges de la colonne « Statut » sont renvoyés.'
         );
 
         // Chaque compteur est produit **par le scope qui pilote le filtre** :

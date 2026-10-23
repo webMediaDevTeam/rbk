@@ -19,7 +19,7 @@ import { useActiveReservationsCount } from '@/pages/shared/ClientDetail/useOutco
  * autres statuts (les « Oui » / « Non » / « Blacklist » ne sont jamais des
  * lignes de cette liste).
  */
-const PROSPECT_STATUS_KEYS = ['AVAILABLE', 'DOUBLE', 'INFO', 'REPETE']
+const PROSPECT_STATUS_KEYS = ['AVAILABLE', 'DOUBLE', 'INFO', 'AUTRE', 'REPETE']
 
 export function useCommercialProspectList() {
   const navigate = useNavigate()

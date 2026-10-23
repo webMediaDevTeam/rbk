@@ -14,6 +14,7 @@ export default function ReservationStatusBadge({ status }) {
     CALL_BACK: 'warning',
     DOUBLE: 'primary',
     INFO: 'info',
+    AUTRE: 'secondary',
     REALIZED: 'success',
   }
 
@@ -26,6 +27,7 @@ export default function ReservationStatusBadge({ status }) {
     CALL_BACK: 'À rapp..',
     DOUBLE: 'Double',
     INFO: 'Info',
+    AUTRE: 'Autre',
     REALIZED: 'Réalisé',
   }
 

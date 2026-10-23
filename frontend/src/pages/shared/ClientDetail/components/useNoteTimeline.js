@@ -50,6 +50,12 @@ const NOTE_TYPE_CONFIG = {
     variant: 'info',
     nodeClass: 'bg-sky-500',
   },
+  AUTRE: {
+    icon: FileText,
+    label: 'Autre',
+    variant: 'info',
+    nodeClass: 'bg-violet-500',
+  },
   BLACKLISTED: {
     icon: ShieldAlert,
     label: 'BlackList',

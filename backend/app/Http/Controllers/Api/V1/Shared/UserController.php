@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\User;
 use App\Support\AccountVerificationLinks;
+use App\Support\EmployeeProfile;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -131,8 +132,6 @@ class UserController extends Controller
 
     protected function formatUser(User $user): array
     {
-        $base = request()->getSchemeAndHttpHost();
-
         return [
             'id' => $user->id,
             'email' => $user->email,
@@ -145,49 +144,22 @@ class UserController extends Controller
             'has_permission' => (bool) $user->has_permission,
             // Colonne « Connexion hors zones » (page Employés) — dérogation
             // au géorepérage de connexion (`GeofenceService`, rôles contraints
-            // uniquement : COMERCIAL / OPERATOR).
-            'gps_bypass' => (bool) $user->gps_bypass,
+            // uniquement : COMERCIAL / OPERATOR), **limitée à 24 h** : l'état
+            // renvoyé est l'état *effectif* (expire le `gps_bypass_expires_at`),
+            // pour que le switch montre ce que le serveur acceptera vraiment.
+            'gps_bypass' => $user->isGpsBypassActive(),
+            'gps_bypass_expires_at' => $user->gps_bypass_expires_at?->toIso8601String(),
             'avatar' => $user->avatar,
-            'avatar_url' => $user->avatar
-                ? "{$base}/storage/avatars/{$user->avatar}"
-                : null,
+            'avatar_url' => EmployeeProfile::avatarUrl($user->avatar),
             'first_name' => $user->first_name,
             'last_name' => $user->last_name,
             'phone' => $user->phone,
             'created_at' => $user->created_at,
             'profil' => match ($user->role) {
-                'COMERCIAL' => $user->employee ? [
-                    'id' => $user->employee->id,
-                    'prenom' => $user->employee->first_name,
-                    'nom' => $user->employee->last_name,
-                    'telephone' => $user->employee->phone,
-                    'entreprise_id' => $user->employee->enterprise_id,
-                    'entreprise_name' => $user->employee->enterprise?->name,
-                    'image_dp' => $user->employee->image_dp,
-                    'image_dp_url' => $user->employee->image_dp
-                        ? "{$base}/storage/avatars/{$user->employee->image_dp}"
-                        : null,
-                    'info_supp' => $user->employee->additional_info,
-                    // Source d'appel RingCentral choisie à la création/édition.
-                    'ringcentral_device_id' => $user->employee->ringcentral_device_id,
-                    'ringcentral_extension_id' => $user->employee->ringcentral_extension_id,
-                    'ringcentral_from_number' => $user->employee->ringcentral_from_number,
-                    'entreprise' => $user->employee->enterprise ? [
-                        'name' => $user->employee->enterprise->name,
-                        'email' => $user->employee->enterprise->email,
-                        'tax_number' => $user->employee->enterprise->tax_number,
-                        'phone' => $user->employee->enterprise->phone,
-                        'address' => $user->employee->enterprise->address,
-                        'status' => $user->employee->enterprise->status,
-                        // Source de l'entreprise (répertoire `sources`, lu par
-                        // `GET /api/v1/sources`) — affichée en badge dans la
-                        // liste des employés.
-                        'source' => $user->employee->enterprise->source,
-                        'logo_url' => $user->employee->enterprise->logo
-                            ? "{$base}/storage/logos/{$user->employee->enterprise->logo}"
-                            : null,
-                    ] : null,
-                ] : null,
+                // Fiche employé — forme **partagée** avec la fiche d'un employé
+                // (`CommercialAdminController::show()`), seule la modale à
+                // produire : les deux réponses pré-remplissent `CommercialUpdateModal`.
+                'COMERCIAL' => EmployeeProfile::forCommercial($user->employee),
                 default => [
                     'prenom' => $user->first_name,
                     'nom' => $user->last_name,
@@ -377,6 +349,9 @@ class UserController extends Controller
                 // Switch « Privilège commercial » (ex-« Privilège de
                 // libération ») de la modale — colonne `users.has_permission`.
                 'has_permission' => 'sometimes|boolean',
+                // Switch « Connexion hors zones » (dérogation GPS,
+                // `users.gps_bypass`) de la modale.
+                'gps_bypass' => 'sometimes|boolean',
                 // Source d'appel RingCentral choisie dans le select d'appareils.
                 'ringcentral_device_id' => 'nullable|string|max:64',
                 'ringcentral_extension_id' => 'nullable|string|max:64',
@@ -411,6 +386,8 @@ class UserController extends Controller
                 // Privilège de libération : absent du payload → false
                 // (identique au défaut de colonne 0).
                 'has_permission' => (bool) ($profile['has_permission'] ?? false),
+                // La dérogation GPS n'est **pas** ici : elle passe par
+                // `setGpsBypass()` après la création (échéance de 24 h).
             ];
 
             if (! empty($base['mot_de_passe'])) {
@@ -419,6 +396,14 @@ class UserController extends Controller
             }
 
             $user = User::create($data);
+
+            // Switch « Connexion hors zones » de la modale Créer : dérogation
+            // **limitée à 24 h**, donc posée par `setGpsBypass()` (seul portail
+            // qui écrit drapeau + échéance ensemble). Absente du payload → rien
+            // n'est touché (défaut de colonne `false`).
+            if (array_key_exists('gps_bypass', $profile)) {
+                $user->setGpsBypass((bool) $profile['gps_bypass']);
+            }
 
             if (empty($base['mot_de_passe'])) {
                 $verificationLinks->send($user, $this->verificationDisplayName($profile, $user), $request);
@@ -511,6 +496,10 @@ class UserController extends Controller
             // libération ») de la modale — colonne `users.has_permission`
             // (jamais `employees`).
             'has_permission' => 'sometimes|boolean',
+            // Switch « Connexion hors zones » (dérogation GPS,
+            // `users.gps_bypass`) de la modale — colonne `users`, réglée à
+            // `setGpsBypass()` (24 h) et donc sortie de `$data` plus bas.
+            'gps_bypass' => 'sometimes|boolean',
             'first_name' => 'sometimes|nullable|string|max:255',
             'last_name' => 'sometimes|nullable|string|max:255',
             'phone' => 'sometimes|nullable|string|max:255',
@@ -533,6 +522,12 @@ class UserController extends Controller
         // Portés par `employees` (1:1 COMERCIAL), jamais par `users`.
         unset($data['ringcentral_device_id'], $data['ringcentral_extension_id'], $data['ringcentral_from_number']);
 
+        // Dérogation GPS : sortie de `$data` — elle ne s'écrit que par
+        // `setGpsBypass()`, qui repose une échéance de 24 h **même si** le
+        // drapeau est déjà `true` mais expiré (réactivation depuis la modale).
+        $gpsBypass = array_key_exists('gps_bypass', $data) ? (bool) $data['gps_bypass'] : null;
+        unset($data['gps_bypass']);
+
         if (isset($data['role']) && $data['role'] !== $target->role) {
             $actorRank = self::ROLE_HIERARCHY[$request->user()->role] ?? 99;
             $targetRank = self::ROLE_HIERARCHY[$data['role']] ?? 99;
@@ -542,6 +537,10 @@ class UserController extends Controller
         }
 
         $target->update($data);
+
+        if ($gpsBypass !== null) {
+            $target->setGpsBypass($gpsBypass);
+        }
 
         if ($target->role === 'COMERCIAL' && $target->employee) {
             $target->employee->update($request->only([
@@ -631,6 +630,11 @@ class UserController extends Controller
     | (`config/geofence.enforced_roles`) peuvent être réglés : un gestionnaire
     | n'est jamais bloqué, sa valeur n'a donc aucun sens.
     |
+    | L'activation est **limitée à 24 h** (`User::setGpsBypass()` : échéance
+    | `gps_bypass_expires_at` reposée à chaque clic) ; le cron
+    | `gps:expire-bypass` remet ensuite le drapeau à `false`, mais le refus est
+    | immédiat côté serveur dès l'échéance (`User::isGpsBypassActive()`).
+    |
     */
 
     public function updateGpsBypass(Request $request, string $id): JsonResponse
@@ -656,11 +660,67 @@ class UserController extends Controller
             'gps_bypass' => 'required|boolean',
         ]);
 
-        $target->update(['gps_bypass' => (bool) $validated['gps_bypass']]);
+        $active = (bool) $validated['gps_bypass'];
+        // Un seul portail pour le drapeau + son échéance de 24 h (réactiver
+        // repose une échéance fraîche, même après expiration).
+        $target->setGpsBypass($active);
+        $target->refresh();
 
         return $this->respondOk(
             ['utilisateur' => $this->formatUser($target->fresh(['employee.enterprise']))],
-            $target->gps_bypass ? 'Connexion hors zones autorisée.' : 'Connexion hors zones refusée.',
+            $active
+                ? sprintf(
+                    'Connexion hors zones autorisée 24 h (expire le %s).',
+                    $target->gps_bypass_expires_at?->format('d/m/Y H:i') ?? ''
+                )
+                : 'Connexion hors zones refusée.',
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | updatePrivilege
+    |--------------------------------------------------------------------------
+    |
+    | PATCH /users/{id}/privilege
+    | Body: { "has_permission": true | false }
+    |
+    | Bascule du « Privilège commercial » (colonne `users.has_permission`,
+    | page Employés) — §7.1 : ne protège **que** la libération de la liste
+    | (`POST reservations/release-pending`, middleware `CheckPermission`).
+    | Sans effet sur la visibilité des « Double », visibles par tous. Le
+    | drapeau n'a de sens que pour un COMERCIAL : un gestionnaire passe
+    | toujours (hiérarchie), un OPÉRATEUR n'a rien à libérer — refus 422.
+    |
+    */
+
+    public function updatePrivilege(Request $request, string $id): JsonResponse
+    {
+        $target = User::find($id);
+        if (! $target) {
+            return $this->notFound();
+        }
+
+        if (! $this->canAct($request->user(), $target, 'update')) {
+            return $this->forbidden();
+        }
+
+        if ($target->role !== 'COMERCIAL') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Seul un commercial peut recevoir le privilège de libération.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'has_permission' => 'required|boolean',
+        ]);
+
+        $target->update(['has_permission' => (bool) $validated['has_permission']]);
+
+        return $this->respondOk(
+            ['utilisateur' => $this->formatUser($target->fresh(['employee.enterprise']))],
+            $target->has_permission ? 'Privilège de libération accordé.' : 'Privilège de libération retiré.',
         );
     }
 
@@ -716,7 +776,9 @@ class UserController extends Controller
             }
         }
 
-        $url = request()->getSchemeAndHttpHost()."/storage/{$directory}/{$filename}";
+        // Chemin relatif : l'image est relue sur l'origine du navigateur (proxy
+        // Vite en dev, nginx en prod), pas sur le port de l'API.
+        $url = "/storage/{$directory}/{$filename}";
 
         return $this->respondOk(
             [

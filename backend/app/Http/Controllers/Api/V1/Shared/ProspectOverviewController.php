@@ -115,6 +115,7 @@ class ProspectOverviewController extends Controller
             Reservation::STATUS_CALL_BACK => Note::TYPE_CALL_BACK,
             Reservation::STATUS_DOUBLE => Note::TYPE_DOUBLE,
             Reservation::STATUS_INFO => Note::TYPE_INFO,
+            Reservation::STATUS_AUTRE => Note::TYPE_AUTRE,
             Client::STATUS_BLACKLISTED => Note::TYPE_BLACKLISTED,
         ];
         $withinPeriod = function (Builder $query, string $bucket) use ($period, $start, $end, $issueNoteTypes): Builder {
@@ -195,6 +196,7 @@ class ProspectOverviewController extends Controller
             Reservation::STATUS_CALL_BACK,
             Reservation::STATUS_DOUBLE,
             Reservation::STATUS_INFO,
+            Reservation::STATUS_AUTRE,
             Reservation::STATUS_PENDING,
         ];
 

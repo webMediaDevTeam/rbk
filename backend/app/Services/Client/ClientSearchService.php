@@ -361,6 +361,7 @@ class ClientSearchService
             Reservation::STATUS_CALL_BACK,
             Reservation::STATUS_DOUBLE,
             Reservation::STATUS_INFO,
+            Reservation::STATUS_AUTRE,
             Reservation::STATUS_PENDING,
         ] as $bucket) {
             $counts[$bucket] = $this->filterByReservationStatuses($base(), $bucket)->count();
@@ -596,7 +597,7 @@ class ClientSearchService
                         $heldByUserId !== null,
                         fn (Builder $held) => $held
                             ->orWhere(fn (Builder $mine) => $mine
-                                ->whereIn('status', [Client::STATUS_DOUBLE, Client::STATUS_INFO])
+                                ->whereIn('status', [Client::STATUS_DOUBLE, Client::STATUS_INFO, Client::STATUS_AUTRE])
                                 ->where('current_comercial_id', $heldByUserId))
                     )
                     // Fiches « répétées » (doublons rattachés) : la Grande

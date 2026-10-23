@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import { respondentsText } from './prospectFormat'
 
 /**
@@ -14,6 +15,9 @@ import { respondentsText } from './prospectFormat'
  * leur cellule sont tronqués (`truncate`) et restent accessibles au survol via
  * l'attribut `title` — c'est ce qui évite de réintroduire un `overflow-x`.
  *
+ * @param {boolean} [showViewButton=true]  affiche le bouton « Voir » **et** le
+ *   lien de la colonne nom (même destination) : l'`OPERATOR`, qui n'a pas accès
+ *   à la fiche, reste sur texte simple.
  * @param {boolean} [rowClickable=true]  `false` : la ligne ne navigue plus
  *   (Grande liste admin, `/clients-historique`) — l'accès au détail reste
  *   possible via le bouton « Voir ».
@@ -96,7 +100,19 @@ export default function ProspectTable({
                   >
                     <UserAvatar user={c} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate">{c.enterprise_name || c.name || '—'}</p>
+                      {/* Le nom porte la même cible que l'œil « Voir » : un vrai
+                          lien, donc ouvrable en autre onglet. */}
+                      {showViewButton ? (
+                        <RowLink
+                          to={`/prospects/${c.id}`}
+                          title={`Voir la fiche de ${c.enterprise_name || c.name || 'ce prospect'}`}
+                          className="block truncate"
+                        >
+                          {c.enterprise_name || c.name || '—'}
+                        </RowLink>
+                      ) : (
+                        <p className="truncate">{c.enterprise_name || c.name || '—'}</p>
+                      )}
                       <small className="text-muted-foreground">
                         {c.email  || '—'}
                       </small>

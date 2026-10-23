@@ -33,6 +33,7 @@ export default function ComercialListPage() {
     handleSort,
     handleToggleStatus,
     handleToggleGpsBypass,
+    handleTogglePrivilege,
     handleDelete,
     avatarTarget,
     setAvatarTarget,
@@ -87,6 +88,7 @@ export default function ComercialListPage() {
           canDelete={canUpdate}
           onToggleStatus={handleToggleStatus}
           onToggleGpsBypass={handleToggleGpsBypass}
+          onTogglePrivilege={handleTogglePrivilege}
           onDelete={handleDelete}
           onAvatarClick={setAvatarTarget}
           onEdit={setEditTarget}
@@ -94,7 +96,7 @@ export default function ComercialListPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {commerciaux.map((c) => (
-            <ComercialCard key={c.id} comercial={c} statsById={statsById} duplicateRingCentralNumbers={duplicateRingCentralNumbers} onAvatarClick={setAvatarTarget} onEdit={setEditTarget} onToggleStatus={handleToggleStatus} onToggleGpsBypass={handleToggleGpsBypass} onDelete={handleDelete} canDelete={canUpdate} />
+            <ComercialCard key={c.id} comercial={c} statsById={statsById} duplicateRingCentralNumbers={duplicateRingCentralNumbers} onAvatarClick={setAvatarTarget} onEdit={setEditTarget} onToggleStatus={handleToggleStatus} onToggleGpsBypass={handleToggleGpsBypass} onTogglePrivilege={handleTogglePrivilege} onDelete={handleDelete} canDelete={canUpdate} />
           ))}
         </div>
       )}

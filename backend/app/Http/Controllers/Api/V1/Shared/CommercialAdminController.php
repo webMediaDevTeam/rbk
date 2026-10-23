@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Services\CallWorkflowService;
 use App\Services\Client\ClientSearchService;
 use App\Services\ClientUpdateNote;
+use App\Support\EmployeeProfile;
+use App\Support\PeriodFilter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,7 +110,6 @@ class CommercialAdminController extends Controller
     public function show(Request $request, $id)
     {
         $user = User::where('role', 'COMERCIAL')->with('employee.enterprise')->findOrFail($id);
-        $base = request()->getSchemeAndHttpHost();
         $ent = $user->employee?->enterprise;
 
         $groups = ReservationGroup::where('comercial_id', $id)->count();
@@ -121,13 +122,34 @@ class CommercialAdminController extends Controller
         $perPage = min((int) $request->input('per_page', 10), 300);
         $page = max((int) $request->input('page', 1), 1);
 
+        // Période de l'historique (`?year=&month=&week=&day=`, ou la fenêtre
+        // roulante `?range=last3days` / `last6months`) — mêmes règles que le
+        // tableau de bord (`PeriodFilter`). **Absente = instantané complet**,
+        // comportement inchangé. Posée, elle borne le périmètre sur la **date
+        // de la note d'appel de cet employé** : « les clients qu'il a traités
+        // dans la fenêtre ».
+        //
+        // La borne entre dans `historyBase()`, la base **unique** de la liste
+        // et des badges : l'invariant §9 « compteur du badge = lignes rendues »
+        // tient donc **sous période** ici aussi (contrairement aux tuiles du
+        // tableau de bord, dont « Tous » / « Libre » / « Sans tel. » restent
+        // instantanés).
+        $period = PeriodFilter::fromRequest($request, defaultToCurrentYear: false);
+        [$start, $end] = $period !== null ? PeriodFilter::bounds($period) : [null, null];
+
         // Périmètre de l'historique : les clients que **cet employé** a déjà
-        // appelés (+ recherche texte). Reconstruit à chaque besoin pour que
-        // les compteurs des badges partagent **exactement** la même base que
-        // le tableau.
-        $historyBase = function () use ($id, $request) {
+        // appelés (+ recherche texte, + fenêtre de période quand elle est
+        // posée). Reconstruit à chaque besoin pour que les compteurs des badges
+        // partagent **exactement** la même base que le tableau.
+        $historyBase = function () use ($id, $request, $start, $end) {
             $query = Client::query()
-                ->whereHas('notes', fn ($q) => $q->where('sender_id', $id)->calls());
+                ->whereHas('notes', function ($q) use ($id, $start, $end) {
+                    $q->where('sender_id', $id)->calls();
+
+                    if ($start !== null) {
+                        $q->where('created_at', '>=', $start)->where('created_at', '<', $end);
+                    }
+                });
 
             if ($search = $request->input('search')) {
                 // Même recherche « toutes colonnes » + téléphone normalisé
@@ -138,8 +160,15 @@ class CommercialAdminController extends Controller
             return $query;
         };
 
+        // Notes chargées pour la ligne (`last_call`) : restreintes à la même
+        // fenêtre, sinon le « dernier appel » affiché sortirait de la période
+        // choisie et contredirait le filtre.
+        $window = fn ($q) => $start === null
+            ? $q
+            : $q->where('created_at', '>=', $start)->where('created_at', '<', $end);
+
         $historyQuery = $historyBase()->with([
-            'notes' => fn ($q) => $q->where('sender_id', $id)->with('sender:id,first_name,last_name,email')->orderByDesc('created_at'),
+            'notes' => fn ($q) => $window($q->where('sender_id', $id))->with('sender:id,first_name,last_name,email')->orderByDesc('created_at'),
             'currentReservation:id,status',
         ]);
 
@@ -158,6 +187,14 @@ class CommercialAdminController extends Controller
             'prospects' => ['system' => $historyBase()->count()],
             'by_display_status' => $this->displayStatusCounts($historyBase),
         ];
+
+        // Années du menu « Année » : celles où **cet employé** a appelé, lues
+        // **hors période** (le menu ne se rétrécit pas quand un filtre est déjà
+        // posé).
+        $years = PeriodFilter::yearsBetween(
+            Note::where('sender_id', $id)->calls()->min('created_at'),
+            Note::where('sender_id', $id)->calls()->max('created_at'),
+        );
 
         // Statut affiché : dernière réservation de chaque client en 1 requête.
         Client::loadLatestReservations($clientsPage->getCollection());
@@ -191,7 +228,43 @@ class CommercialAdminController extends Controller
         });
 
         return response()->json([
-            'user' => $user,
+            /*
+            | Identité du compte — projection **explicite** (le modèle brut
+            | exposerait `verification_token` / `verification_sent_at`, et son
+            | `gps_bypass` serait la colonne brute : drapeau posé mais échu).
+            | On rend donc les champs utiles à la fiche, l'**état effectif** de
+            | la dérogation GPS (ce que le serveur acceptera vraiment), et
+            | `profil` à la forme des lignes de la page « Employés »
+            | (`EmployeeProfile::forCommercial()`) : la fiche employé et la
+            | liste pré-remplissent **la même** modale « Modifier ».
+            */
+            'user' => [
+                'id' => $user->id,
+                'email' => $user->email,
+                // Nom d'utilisateur (identifiant court) — null pour les comptes
+                // créés avant la colonne `users.username`.
+                'username' => $user->username,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'phone' => $user->phone,
+                'role' => $user->role,
+                'status' => $user->status,
+                // Privilège commercial (`users.has_permission`) : libération de
+                // liste seulement (docs/RULES.md §7.1).
+                'has_permission' => (bool) $user->has_permission,
+                'gps_bypass' => $user->isGpsBypassActive(),
+                'gps_bypass_expires_at' => $user->gps_bypass_expires_at?->toIso8601String(),
+                'avatar' => $user->avatar,
+                'avatar_url' => EmployeeProfile::avatarUrl($user->avatar),
+                'created_at' => $user->created_at,
+                'email_verified_at' => $user->email_verified_at,
+                // Date du dernier e-mail d'activation envoyé (`Mail/UserAccountVerificationMail`)
+                // : dit à l'admin si le compte est encore en attente de son mot
+                // de passe. **Le jeton lui-même reste privé** — seul l'horodatage
+                // sort, alors que le modèle ne le cache pas.
+                'verification_sent_at' => $user->verification_sent_at,
+                'profil' => EmployeeProfile::forCommercial($user->employee),
+            ],
             'analytics' => [
                 'groups' => $groups,
                 'reservations' => $reservations,
@@ -205,13 +278,26 @@ class CommercialAdminController extends Controller
                 'nom' => $user->employee?->last_name ?? $user->last_name,
                 'telephone' => $user->employee?->phone ?? $user->phone,
                 'image_dp' => $user->employee?->image_dp,
-                'image_dp_url' => $user->employee?->image_dp
-                    ? "{$base}/storage/avatars/{$user->employee->image_dp}" : null,
+                'image_dp_url' => EmployeeProfile::employeePhotoUrl($user->employee?->image_dp),
                 'email' => $user->email,
                 'role' => $user->role,
                 'status' => $user->status,
                 'additional_info' => $user->employee?->additional_info,
                 'cree_le' => $user->created_at,
+                /*
+                | Téléphonie **complète** de la fiche : `profil` porte ce que la
+                | modale « Modifier » sait écrire (appareil / poste / numéro
+                | source), ces colonnes-ci sont en lecture seule — le numéro
+                | d'extension résolu par la synchro et la liste de tous les
+                | numéros assignés au poste.
+                */
+                'entreprise_id' => $user->employee?->enterprise_id,
+                'ringcentral_device_id' => $user->employee?->ringcentral_device_id,
+                'ringcentral_extension_id' => $user->employee?->ringcentral_extension_id,
+                'ringcentral_extension_number' => $user->employee?->ringcentral_extension_number,
+                'ringcentral_from_number' => $user->employee?->ringcentral_from_number,
+                'ringcentral_phone_numbers' => $user->employee->ringcentral_phone_numbers ?? [],
+                'ringcentral_synced_at' => $user->employee?->ringcentral_synced_at,
             ],
             'entreprise' => $ent ? [
                 'id' => $ent->id,
@@ -221,13 +307,17 @@ class CommercialAdminController extends Controller
                 'phone' => $ent->phone,
                 'address' => $ent->address,
                 'status' => $ent->status,
-                'logo_url' => $ent->logo ? "{$base}/storage/logos/{$ent->logo}" : null,
+                // Source de l'entreprise (répertoire `sources`) — périmètre de
+                // l'employé, affiché en badge dans la liste des employés.
+                'source' => $ent->source,
+                'logo_url' => EmployeeProfile::logoUrl($ent->logo),
             ] : null,
             'historique' => [
                 'clients' => $historique,
                 // Compteurs des 10 badges de statut, sur le périmètre de cet
                 // employé (alimente `<ProspectKpis>` de l'onglet Historique).
                 'badges' => $badges,
+                'years' => $years,
                 'pagination' => [
                     'current_page' => $clientsPage->currentPage(),
                     'last_page' => $clientsPage->lastPage(),

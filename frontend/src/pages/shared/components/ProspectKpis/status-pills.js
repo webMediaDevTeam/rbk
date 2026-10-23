@@ -1,4 +1,4 @@
-import { Ban, CircleCheck, Copy, CopyCheck, Info, PhoneCall, PhoneOff, ThumbsDown, ThumbsUp, Voicemail } from 'lucide-react'
+import { Ban, CircleCheck, Copy, CopyCheck, Info, PhoneCall, PhoneOff, Tag, ThumbsDown, ThumbsUp, Voicemail } from 'lucide-react'
 
 /**
  * Métadonnées des **10 badges de la colonne « Statut »** (docs/RULES.md §9) :
@@ -98,6 +98,19 @@ export const STATUS_PILLS = [
     activeClass: 'border border-transparent bg-sky-600',
     activeFg: 'text-white',
     title: 'Réservation courante « Info » — clique pour filtrer',
+  },
+  {
+    // Issue « Autre » : prospect toujours **tenu** par l'employé (régime
+    // « Réservé »), la raison est portée par sa note libre — filtre sur la
+    // réservation courante, comme Double / Info. Teinte violet distincte.
+    key: 'AUTRE',
+    tone: 'violet',
+    label: 'Autre',
+    icon: Tag,
+    iconClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+    activeClass: 'border border-transparent bg-violet-600',
+    activeFg: 'text-white',
+    title: 'Réservation courante « Autre » — clique pour filtrer',
   },
   {
     key: 'BLACKLISTED',

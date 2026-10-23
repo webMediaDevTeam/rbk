@@ -93,7 +93,7 @@ services:
       # Origines CORS acceptées par backend/config/cors.php (sans slash final)
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:8000,http://51.255.192.50}
       REDIS_CLIENT: predis
-    command: sh -c "cd /var/www/html/public && php -S 0.0.0.0:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
+    command: sh -c "php artisan storage:link --force && cd /var/www/html/public && php -S 0.0.0.0:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
     ports:
       - "8000:8000"
     networks:
@@ -153,6 +153,12 @@ services:
       - "5173:5173"
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      # Cible du proxy Vite pour `/storage` (avatars, logos téléversés). Résolue
+      # **depuis le conteneur** `frontend`, donc le nom de service docker :
+      # `VITE_API_URL` vise le navigateur (`localhost`) et ne fonctionnerait pas
+      # ici. Sans ce proxy, `/storage/...` demandé sur :5173 retombe sur le
+      # repli SPA de Vite (du HTML, donc une image cassée).
+      VITE_STORAGE_PROXY_TARGET: ${VITE_STORAGE_PROXY_TARGET:-http://backend-dev:8000}
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
     networks:
       - rbqbot-network

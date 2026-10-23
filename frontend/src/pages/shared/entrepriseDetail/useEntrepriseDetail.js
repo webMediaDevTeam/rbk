@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { getEntrepriseStatsApi } from '@/api/admin.api.js'
 import { CLIENT_STATUS_KEYS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
+import { usePeriodFilters } from '@/pages/shared/components/PeriodFilterBar/usePeriodFilters.js'
 
 // Même structure d'onglets que le détail d'un employé (composants partagés),
 // moins l'onglet « Appels » (journal RingCentral propre à un employé).
@@ -18,10 +19,15 @@ const TABS = [
  * `GET entreprises/{id}/stats` — analytics agrégés de l'entreprise, tableau
  * des employés et historique **commun** (tous les employés) paginé avec les
  * 10 badges de la colonne « Statut ».
+ *
+ * `period` (objet `year` / `month` / `week` / `day` / `range`, ou `{}`) borne
+ * l'historique et ses badges sur la date de la note d'appel des employés —
+ * `{}` = tout l'historique, `analytics` et chiffres par employé restant des
+ * totaux quel que soit le réglage.
  */
-export function useEntrepriseStats(id, { page = 1, search, status, reservationStatus, rowsPerPage } = {}) {
+export function useEntrepriseStats(id, { page = 1, search, status, reservationStatus, rowsPerPage, period = {} } = {}) {
   return useQuery({
-    queryKey: ['entreprise-stats', id, page, search, status, reservationStatus, rowsPerPage],
+    queryKey: ['entreprise-stats', id, page, search, status, reservationStatus, rowsPerPage, period],
     queryFn: () => getEntrepriseStatsApi(id, {
       params: {
         page,
@@ -30,6 +36,7 @@ export function useEntrepriseStats(id, { page = 1, search, status, reservationSt
         // Mêmes deux paramètres que la grande liste admin (RULES §9).
         status,
         reservation_status: reservationStatus,
+        ...period,
       },
     }),
     enabled: !!id,
@@ -44,6 +51,10 @@ export function useEntrepriseDetailPage() {
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [search, setSearch] = useState('')
+  // Période de l'onglet Historique (même barre et mêmes règles que la fiche
+  // d'un employé) : borne la liste **et** ses badges ; les `analytics` et les
+  // chiffres par employé restent des totaux. Chaque réglage ramène p. 1.
+  const period = usePeriodFilters({ onChange: () => setPage(1) })
   // Barre de badges (onglet Historique) : **sélection unique** —
   // `null` = « Tous », sinon une seule valeur active à la fois.
   const [statusFilter, setStatusFilter] = useState(null)
@@ -62,6 +73,7 @@ export function useEntrepriseDetailPage() {
     status: statusParam,
     reservationStatus: reservationStatusParam,
     rowsPerPage,
+    period: period.params,
   })
 
   // Enveloppe du serveur : `EnterpriseController::stats()` répond
@@ -79,6 +91,8 @@ export function useEntrepriseDetailPage() {
   // Compteurs des 10 badges, sur le périmètre des appels de l'entreprise.
   const badges = historique?.badges ?? null
   const statusFilters = statusFilter ? [statusFilter] : []
+  // Années d'activité des employés de l'entreprise (menu « Année »).
+  const periodYears = historique?.years ?? [new Date().getFullYear()]
 
   const name = entreprise?.name ?? 'Chargement…'
   const companyName = entreprise?.name ?? '—'
@@ -121,6 +135,8 @@ export function useEntrepriseDetailPage() {
     statusFilters,
     handleStatusToggle,
     badges,
+    period,
+    periodYears,
     entreprise,
     analytics,
     employees,

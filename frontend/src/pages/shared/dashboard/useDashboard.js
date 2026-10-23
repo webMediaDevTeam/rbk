@@ -196,6 +196,7 @@ export function useDashboard() {
     libre: stats?.libre ?? 0,
     double: stats?.double ?? 0,
     info: stats?.info ?? 0,
+    autre: stats?.autre ?? 0,
     bv: stats?.bv ?? 0,
     rappel: stats?.rappel ?? 0,
   }
@@ -261,6 +262,7 @@ export function useDashboard() {
     listTile('AVAILABLE', workCounts.libre, "Prospects libres à réserver — ouvre votre liste filtrée « Libre »"),
     listTile('DOUBLE', workCounts.double, 'Prospects « Double » que vous détenez encore — ouvre votre liste filtrée « Double »'),
     listTile('INFO', workCounts.info, 'Prospects « Info » que vous détenez encore — ouvre votre liste filtrée « Info »'),
+    listTile('AUTRE', workCounts.autre, 'Prospects « Autre » que vous détenez encore — ouvre votre liste filtrée « Autre »'),
     {
       label: 'BV',
       value: formatCount(workCounts.bv),

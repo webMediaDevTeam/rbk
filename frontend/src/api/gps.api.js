@@ -35,3 +35,10 @@ export function updateGpsSettingsApi(geofenceEnabled) {
 export function toggleGpsBypassApi(id, gpsBypass) {
   return api.patch(`/users/${id}/gps-bypass`, { gps_bypass: gpsBypass })
 }
+
+// Switch inline « Privilège commercial » (`users.has_permission`) de la page
+// Employés — §7.1 : ne protège que la libération de la liste ; seul un
+// COMERCIAL peut le recevoir (le serveur refuse les autres rôles).
+export function togglePrivilegeApi(id, hasPermission) {
+  return api.patch(`/users/${id}/privilege`, { has_permission: hasPermission })
+}

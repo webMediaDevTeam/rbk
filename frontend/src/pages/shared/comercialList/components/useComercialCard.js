@@ -1,6 +1,6 @@
-import { normalizeRcNumber } from '../useComercialList.js'
+import { normalizeRcNumber, gpsBypassHint } from '../useComercialList.js'
 
-export function useComercialCard({ comercial, statsById = {}, onAvatarClick, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onEdit, duplicateRingCentralNumbers = new Set() }) {
+export function useComercialCard({ comercial, statsById = {}, onAvatarClick, onToggleStatus, onToggleGpsBypass, onTogglePrivilege, onDelete, canDelete, onEdit, duplicateRingCentralNumbers = new Set() }) {
   const profil = comercial.profil
   const name = profil ? `${profil.prenom ?? ''} ${profil.nom ?? ''}`.trim() || comercial.email : (comercial.first_name ? `${comercial.first_name} ${comercial.last_name ?? ''}`.trim() : comercial.email)
   const enterpriseName = profil?.entreprise_name ?? '—'
@@ -10,8 +10,14 @@ export function useComercialCard({ comercial, statsById = {}, onAvatarClick, onT
   const rcKey = normalizeRcNumber(rcNumber)
   const rcDuplicate = rcKey !== '' && duplicateRingCentralNumbers.has(rcKey)
   const toggleLabel = comercial.status === 'ACTIVE' ? 'Désactiver' : 'Activer'
-  // Dérogation GPS (`users.gps_bypass`, bool serveur) : connexion hors zones.
+  // Dérogation GPS (`users.gps_bypass`, bool serveur) : connexion hors zones,
+  // **limitée à 24 h** — le libellé indique le temps restant avant retrait.
   const gpsBypass = Boolean(comercial.gps_bypass)
+  const bypassHint = gpsBypassHint(gpsBypass, comercial.gps_bypass_expires_at ?? null)
+  // Privilège commercial (`users.has_permission`) — switch inline comme la
+  // carte « Hors zones » ; réservé au COMERCIAL (§7.1 : ne protège que la
+  // libération de la liste).
+  const hasPermission = Number(comercial.has_permission) === 1
   // Opérateur : pas de fiche employé ni de page de détail commerciale.
   const isOperator = comercial.role === 'OPERATOR'
   // Compteurs d'activité (puces Clients / BV / Rappel / Oui) — carte
@@ -28,6 +34,7 @@ export function useComercialCard({ comercial, statsById = {}, onAvatarClick, onT
     closeMenu()
   }
   const handleToggleGpsBypass = (value) => onToggleGpsBypass?.(comercial.id, value)
+  const handleTogglePrivilege = (value) => onTogglePrivilege?.(comercial.id, value)
   const handleDelete = (closeMenu) => {
     onDelete?.(comercial.id)
     closeMenu()
@@ -41,6 +48,8 @@ export function useComercialCard({ comercial, statsById = {}, onAvatarClick, onT
     rcNumber,
     rcDuplicate,
     gpsBypass,
+    gpsBypassHint: bypassHint,
+    hasPermission,
     isOperator,
     stats,
     toggleLabel,
@@ -49,6 +58,7 @@ export function useComercialCard({ comercial, statsById = {}, onAvatarClick, onT
     handleEdit,
     handleToggleStatus,
     handleToggleGpsBypass,
+    handleTogglePrivilege,
     handleDelete,
   }
 }

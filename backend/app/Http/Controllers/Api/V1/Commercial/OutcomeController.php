@@ -16,7 +16,7 @@ class OutcomeController extends Controller
     public function store(Request $request, string $clientId): JsonResponse
     {
         $validated = $request->validate([
-            // Issues d'appel du modèle : YES / NO / BV / CALL_BACK / DOUBLE / INFO.
+            // Issues d'appel du modèle : YES / NO / BV / CALL_BACK / DOUBLE / INFO / AUTRE.
             'outcome' => 'required|in:'.implode(',', self::outcomes()),
             'note' => 'nullable|string|max:5000',
             // CALL_BACK : rappel à la date/heure choisie par l'employé.
@@ -50,6 +50,7 @@ class OutcomeController extends Controller
             Note::TYPE_CALL_BACK,
             Note::TYPE_DOUBLE,
             Note::TYPE_INFO,
+            Note::TYPE_AUTRE,
         ], true) && ! $reservation) {
             return response()->json([
                 'success' => false,
@@ -91,6 +92,7 @@ class OutcomeController extends Controller
             Note::TYPE_CALL_BACK,
             Note::TYPE_DOUBLE,
             Note::TYPE_INFO,
+            Note::TYPE_AUTRE,
         ];
     }
 }

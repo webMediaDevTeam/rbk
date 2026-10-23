@@ -23,7 +23,9 @@ export function useAvatarUpdateModal(props) {
       return uploadUserAvatarApi(user.id, formData)
     },
     onSuccess: () => {
-      toast.success('Photo mise à jour.')
+      // Le bouton d'entrée de la modale parle de « logo » côté entreprise et de
+      // « photo » côté employé : le message de succès suit le même vocabulaire.
+      toast.success(props.logoOnly ? 'Logo mis à jour.' : 'Photo mise à jour.')
       if (queryKey) qc.invalidateQueries({ queryKey })
       onClose()
     },

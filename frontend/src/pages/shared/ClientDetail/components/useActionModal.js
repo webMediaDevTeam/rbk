@@ -11,6 +11,7 @@ const OUTCOMES = [
   // reste tenu par l'employé et n'apparaît que dans SA Grande liste.
   { value: 'DOUBLE', label: 'Double', recall: 'none' },
   { value: 'INFO', label: 'Info', recall: 'none' },
+  { value: 'AUTRE', label: 'Autre', recall: 'none' },
 ]
 
 /** Valeur locale au format `datetime-local` (sans fuseau). */

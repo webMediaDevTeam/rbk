@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import Badge from '@/components/ui/badge.jsx'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import { respondentsText } from '@/pages/comercial/ProspectList/components/prospectFormat'
@@ -71,7 +72,19 @@ export default function ReminderTable({
                     >
                       <UserAvatar user={{ name: r.client_name, email: r.client_email }} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate">{r.enterprise_name || r.client_name || '—'}</p>
+                        {/* Nom = historique du client, même cible que l'œil « Voir » ;
+                            la ligne **obsolète** n'a pas de destination → texte seul. */}
+                        {viewable ? (
+                          <RowLink
+                            to={`/prospects/${r.client_id}?tab=history`}
+                            title={`Voir l'historique de ${r.enterprise_name || r.client_name || 'ce client'}`}
+                            className="block truncate"
+                          >
+                            {r.enterprise_name || r.client_name || '—'}
+                          </RowLink>
+                        ) : (
+                          <p className="truncate">{r.enterprise_name || r.client_name || '—'}</p>
+                        )}
                         <small className="text-muted-foreground">{r.client_email || '—'}</small>
                       </div>
                     </div>

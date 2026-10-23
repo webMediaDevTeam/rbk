@@ -48,6 +48,9 @@ class Reservation extends Model
     /** Issue « Info » — le prospect reste tenu par l'employé. */
     public const STATUS_INFO = 'INFO';
 
+    /** Issue « Autre » — le prospect reste tenu par l'employé (comme Double / Info). */
+    public const STATUS_AUTRE = 'AUTRE';
+
     /**
      * Valeur réservée du modèle (affaire réalisée) — **non émise** par le
      * workflow actuel, conservée pour l'évolution du cycle de vie.
@@ -63,6 +66,7 @@ class Reservation extends Model
         self::STATUS_CALL_BACK,
         self::STATUS_DOUBLE,
         self::STATUS_INFO,
+        self::STATUS_AUTRE,
         self::STATUS_REALIZED,
     ];
 
@@ -74,6 +78,7 @@ class Reservation extends Model
         self::STATUS_CALL_BACK,
         self::STATUS_DOUBLE,
         self::STATUS_INFO,
+        self::STATUS_AUTRE,
     ];
 
     /** Statuts comptés comme « traités » dans les listes (tout sauf PENDING). */
@@ -84,6 +89,7 @@ class Reservation extends Model
         self::STATUS_CALL_BACK,
         self::STATUS_DOUBLE,
         self::STATUS_INFO,
+        self::STATUS_AUTRE,
     ];
 
     protected $fillable = [

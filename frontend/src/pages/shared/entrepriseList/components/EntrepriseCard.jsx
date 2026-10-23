@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
-import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
+import { Eye, ImagePlus, Pencil, Power, Trash2 } from 'lucide-react'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import { useEntrepriseCard } from './useEntrepriseCard.js'
 
 export default function EntrepriseCard(props) {
@@ -32,6 +33,18 @@ export default function EntrepriseCard(props) {
               >
                 <Pencil className="h-3.5 w-3.5" /> Modifier
               </button>
+              {/* Téléversement du logo : la modale est déjà branchée sur la page
+                  (`avatarTarget` + `uploadEnterpriseLogoApi`) et le logo reste le
+                  raccourci direct. */}
+              <button
+                onClick={() => {
+                  handleAvatarClick()
+                  closeMenu()
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+              >
+                <ImagePlus className="h-3.5 w-3.5" /> Modifier le logo
+              </button>
               <button
                 onClick={() => handleToggleStatus(closeMenu)}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
@@ -54,13 +67,15 @@ export default function EntrepriseCard(props) {
       <div className="flex items-center gap-3 mb-4">
         <UserAvatar user={entreprise} size="md" onEdit={handleAvatarClick} />
         <div className="min-w-0 flex-1">
-          <Link
+          {/* Nom = fiche entreprise, même convention que dans le tableau
+              (`RowLink` : soulignement permanent + vraie URL). */}
+          <RowLink
             to={`/entreprises/${entreprise.id}`}
-            className="text-sm font-semibold truncate hover:underline transition-colors"
-            title="Voir le détail de l'entreprise"
+            title={`Voir le détail de ${name}`}
+            className="text-sm font-semibold truncate"
           >
             {name}
-          </Link>
+          </RowLink>
           <p className="text-xs text-muted-foreground truncate">{email}</p>
         </div>
       </div>

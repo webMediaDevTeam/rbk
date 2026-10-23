@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
-import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
+import { Eye, ImagePlus, Pencil, Power, Trash2 } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import StatusBadge from './StatusBadge'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
 import SortHeader from '@/pages/shared/components/SortHeader/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import { useEntrepriseTable } from './useEntrepriseTable.js'
 
 export default function EntrepriseTable(props) {
@@ -35,13 +36,15 @@ export default function EntrepriseTable(props) {
               <TableCell>
                 <div className="flex items-center gap-2.5">
                   <UserAvatar user={row.ent} size="sm" onEdit={row.handleAvatarClick} />
-                  <Link
+                  {/* Nom = fiche entreprise, même cible que l'œil « Voir » —
+                      `RowLink` : une vraie URL, ouvrable en autre onglet. */}
+                  <RowLink
                     to={`/entreprises/${row.ent.id}`}
-                    className="font-medium hover:text-foreground hover:underline transition-colors"
-                    title="Voir le détail de l'entreprise"
+                    title={`Voir le détail de ${row.name}`}
+                    className="font-medium"
                   >
                     {row.name}
-                  </Link>
+                  </RowLink>
                 </div>
               </TableCell>
               <TableCell className="text-muted-foreground">{row.email}</TableCell>
@@ -66,6 +69,18 @@ export default function EntrepriseTable(props) {
                           className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
                         >
                           <Pencil className="h-3.5 w-3.5" /> Modifier
+                        </button>
+                        {/* Téléversement du logo : la modale est déjà branchée sur la
+                            page (`avatarTarget` + `uploadEnterpriseLogoApi`) et le
+                            logo reste le raccourci direct. */}
+                        <button
+                          onClick={() => {
+                            row.handleAvatarClick()
+                            closeMenu()
+                          }}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+                        >
+                          <ImagePlus className="h-3.5 w-3.5" /> Modifier le logo
                         </button>
                         <button
                           onClick={() => row.handleToggleStatus(closeMenu)}

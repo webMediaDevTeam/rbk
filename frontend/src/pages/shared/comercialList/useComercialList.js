@@ -14,7 +14,7 @@ import {
   commercialsStatsApi,
 } from '@/api/entreprise.api.js'
 import { syncRingCentralEmployeesApi } from '@/api/shared.api.js'
-import { toggleGpsBypassApi } from '@/api/gps.api.js'
+import { toggleGpsBypassApi, togglePrivilegeApi } from '@/api/gps.api.js'
 
 /**
  * Phase « Lier les employés à leurs numéros RingCentral » :
@@ -115,12 +115,49 @@ export function useToggleCommercialStatus() {
 /**
  * Dérogation « Connexion hors zones » (`users.gps_bypass`) — seul un rôle
  * contraint (COMERCIAL / OPERATOR) peut la recevoir ; le serveur refuse les
- * autres rôles (`UserController::updateGpsBypass`).
+ * autres rôles (`UserController::updateGpsBypass`). L'activation est **limitée
+ * à 24 h** : le serveur repose `gps_bypass_expires_at` à chaque clic.
  */
 export function useToggleGpsBypass() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, gpsBypass }) => toggleGpsBypassApi(id, gpsBypass),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['commerciaux'] }),
+  })
+}
+
+/**
+ * Libellé du switch « Hors zones » : rappel du délai de 24 h accordé.
+ * `gps_bypass_expires_at` vient de `formatUser` (état **effectif** côté
+ * serveur : une échéance passée = dérogation refusée, switch éteint rendu).
+ *
+ * @param {boolean} active  dérogation effective (`comercial.gps_bypass`)
+ * @param {string|null} expiresAt échéance ISO ou `null` (sans date de fin)
+ * @returns {string|null} libellé court, `null` quand rien n'afficher
+ */
+export function gpsBypassHint(active, expiresAt) {
+  if (!active) return null
+  if (!expiresAt) return 'Sans date de fin — réactiver repart pour 24 h'
+
+  const remaining = new Date(expiresAt).getTime() - Date.now()
+  if (!Number.isFinite(remaining) || remaining <= 0) return 'Expirée'
+
+  const hours = Math.floor(remaining / 3_600_000)
+  const minutes = Math.floor((remaining % 3_600_000) / 60_000)
+
+  return `Encore ${hours} h ${String(minutes).padStart(2, '0')} min`
+}
+
+/**
+ * Switch inline « Privilège commercial » (`users.has_permission`) — seul un
+ * COMERCIAL peut le recevoir ; le serveur refuse les autres rôles
+ * (`UserController::updatePrivilege`). §7.1 : ne protège que la libération de
+ * la liste — aucun effet sur la visibilité des « Double ».
+ */
+export function useTogglePrivilege() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, hasPermission }) => togglePrivilegeApi(id, hasPermission),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['commerciaux'] }),
   })
 }
@@ -176,6 +213,7 @@ export function useComercialListPage() {
   const deleteMut = useDeleteCommercial()
   const toggleMut = useToggleCommercialStatus()
   const gpsBypassMut = useToggleGpsBypass()
+  const privilegeMut = useTogglePrivilege()
   const ringCentralSync = useSyncRingCentral()
   const { data: statsData } = useCommercialsStats()
 
@@ -209,7 +247,22 @@ export function useComercialListPage() {
       { id, gpsBypass },
       {
         onSuccess: () =>
-          toast.success(gpsBypass ? 'Connexion hors zones autorisée.' : 'Connexion hors zones refusée.'),
+          toast.success(
+            gpsBypass
+              ? 'Connexion hors zones autorisée pour 24 h (retirée automatiquement ensuite).'
+              : 'Connexion hors zones refusée.'
+          ),
+        onError: (error) =>
+          toast.error(error?.response?.data?.message ?? 'Modification impossible.'),
+      },
+    )
+
+  const handleTogglePrivilege = (id, hasPermission) =>
+    privilegeMut.mutate(
+      { id, hasPermission },
+      {
+        onSuccess: () =>
+          toast.success(hasPermission ? 'Privilège de libération accordé.' : 'Privilège de libération retiré.'),
         onError: (error) =>
           toast.error(error?.response?.data?.message ?? 'Modification impossible.'),
       },
@@ -254,6 +307,7 @@ export function useComercialListPage() {
     handleSort,
     handleToggleStatus,
     handleToggleGpsBypass,
+    handleTogglePrivilege,
     handleDelete,
     avatarTarget,
     setAvatarTarget,

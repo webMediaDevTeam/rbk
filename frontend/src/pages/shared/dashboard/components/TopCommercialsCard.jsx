@@ -1,4 +1,5 @@
 import Badge from '@/components/ui/badge.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import { useTopCommercialsCard } from './useTopCommercialsCard.js'
 
 export default function TopCommercialsCard({ commercials = [] }) {
@@ -20,7 +21,17 @@ export default function TopCommercialsCard({ commercials = [] }) {
                   {commercial.initials}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{commercial.name}</p>
+                  {/* Le nom mène à la fiche employé — la carte n'a pas de bouton
+                      « Voir » : sans lien, il faudrait revenir à la page « Employés »
+                      pour ouvrir une fiche. Rendue seulement pour les gestionnaires
+                      (rôle de `/comercialDetail/:id`). */}
+                  <RowLink
+                    to={`/comercialDetail/${commercial.id}`}
+                    title={`Voir la fiche de ${commercial.name ?? 'cet employé'}`}
+                    className="block truncate text-sm font-medium"
+                  >
+                    {commercial.name}
+                  </RowLink>
                   <p className="truncate text-xs text-muted-foreground">{commercial.email}</p>
                 </div>
                 <Badge variant="success">{commercial.oui} OUI</Badge>

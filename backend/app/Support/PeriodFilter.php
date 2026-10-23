@@ -31,6 +31,12 @@ use Illuminate\Support\Carbon;
 class PeriodFilter
 {
     /**
+     * Nombre maximal d'années remontées par un menu de période (voir
+     * `yearsBetween()`).
+     */
+    public const MAX_YEAR_SPAN = 12;
+
+    /**
      * Réglages normalisés lus dans la requête.
      *
      * @return array{year: int, month: ?int, week: ?int, day: ?int}|null
@@ -215,5 +221,41 @@ class PeriodFilter
         $days = (int) Carbon::createFromDate($year, $month, 1)->endOfMonth()->format('j');
 
         return (int) ceil($days / 7);
+    }
+
+    /**
+     * Années couvertes par une plage d'activité, **descendantes** (de la plus
+     * récente à la plus ancienne) — de quoi alimenter un menu « Année » sans
+     * proposer d'années vides.
+     *
+     * Utilisé par les fiches employé / entreprise : le menu n'offre que les
+     * années où le périmètre a réellement appelé quelqu'un. Les bornes sont lues
+     * avec `min()` / `max()` sur la colonne de date — portables sur MySQL comme
+     * sur SQLite, contrairement à `YEAR()` / `strftime()`.
+     *
+     * Sans activité (`from` et `to` nuls) ou dates illisibles : l'année courante
+     * seule. La plage est bornée à `MAX_YEAR_SPAN` années pour éviter un menu
+     * démesuré sur une base ancienne.
+     *
+     * @return list<int>
+     */
+    public static function yearsBetween(mixed $from, mixed $to): array
+    {
+        $current = (int) Carbon::today()->format('Y');
+
+        try {
+            $startYear = $from !== null ? (int) Carbon::parse((string) $from)->format('Y') : $current;
+            $endYear = $to !== null ? (int) Carbon::parse((string) $to)->format('Y') : $current;
+        } catch (\Throwable) {
+            return [$current];
+        }
+
+        if ($startYear > $endYear) {
+            [$startYear, $endYear] = [$endYear, $startYear];
+        }
+
+        $startYear = max($startYear, $endYear - self::MAX_YEAR_SPAN + 1);
+
+        return range($endYear, $startYear);
     }
 }

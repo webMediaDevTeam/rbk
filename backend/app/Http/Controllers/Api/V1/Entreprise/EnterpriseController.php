@@ -11,6 +11,8 @@ use App\Models\ReservationGroup;
 use App\Models\User;
 use App\Services\Client\ClientSearchService;
 use App\Services\RingCentralService;
+use App\Support\EmployeeProfile;
+use App\Support\PeriodFilter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -48,8 +50,6 @@ class EnterpriseController extends Controller
 
     protected function formatEnterprise(Enterprise $enterprise): array
     {
-        $base = request()->getSchemeAndHttpHost();
-
         return [
             'id' => $enterprise->id,
             'name' => $enterprise->name,
@@ -58,9 +58,7 @@ class EnterpriseController extends Controller
             'tax_number' => $enterprise->tax_number,
             'address' => $enterprise->address,
             'logo' => $enterprise->logo,
-            'logo_url' => $enterprise->logo
-                ? "{$base}/storage/logos/{$enterprise->logo}"
-                : null,
+            'logo_url' => EmployeeProfile::logoUrl($enterprise->logo),
             'status' => $enterprise->status ?? 'ACTIVE',
             'employees_count' => $enterprise->employees_count ?? 0,
             // La réponse générale garde secret/JWT masqués. Leur lecture
@@ -589,8 +587,10 @@ class EnterpriseController extends Controller
 
         $enterprise->update(['logo' => $filename]);
 
-        $base = request()->getSchemeAndHttpHost();
-        $url = "{$base}/storage/logos/{$filename}";
+        // URL **relative**, comme partout où une image est exposée : le
+        // navigateur la reprend sur sa propre origine (proxy Vite en dev, nginx
+        // en prod) au lieu du port de l'API.
+        $url = EmployeeProfile::logoUrl($filename);
 
         return response()->json([
             'success' => true,
@@ -620,6 +620,12 @@ class EnterpriseController extends Controller
      * L'association client → entreprise n'existe plus en base
      * (`clients.enterprise_id` supprimé) : le périmètre est donc celui des
      * **employés** de l'entreprise (réservations + appels).
+     *
+     * Période de l'historique (`?year=&month=&week=&day=`, ou `?range=` =
+     * fenêtre roulante) : **absente = instantané complet**. Posée, elle borne
+     * `historique` **et** ses `badges` sur la date de la note d'appel des
+     * employés — l'invariant §9 tient donc sous période. Les `analytics` et les
+     * chiffres par employé restent des totaux de toute l'histoire.
      */
     public function stats(Request $request, string $id): JsonResponse
     {
@@ -715,9 +721,7 @@ class EnterpriseController extends Controller
                     'email' => $u->email,
                     'phone' => $employee?->phone ?? $u->phone,
                     'status' => $u->status,
-                    'avatar_url' => $employee?->image_dp
-                        ? request()->getSchemeAndHttpHost()."/storage/avatars/{$employee->image_dp}"
-                        : null,
+                    'avatar_url' => EmployeeProfile::employeePhotoUrl($employee?->image_dp),
                     'groups' => (int) ($groupsByUser[$u->id] ?? 0),
                     'reservations' => (int) ($reservationsByUser[$u->id] ?? 0),
                     'pending' => (int) ($pendingByUser[$u->id] ?? 0),
@@ -734,9 +738,22 @@ class EnterpriseController extends Controller
         $perPage = min((int) $request->input('per_page', 10), 300);
         $page = max((int) $request->input('page', 1), 1);
 
-        $historyBase = function () use ($userIds, $request) {
+        // Période (`PeriodFilter`) : absente = instantané, posée = bornes sur
+        // la **date de la note d'appel** des employés de l'entreprise. La base
+        // `historyBase()` alimente la liste **et** les badges → « compteur du
+        // badge = lignes rendues » (§9) continue de tenir sous période.
+        $period = PeriodFilter::fromRequest($request, defaultToCurrentYear: false);
+        [$start, $end] = $period !== null ? PeriodFilter::bounds($period) : [null, null];
+
+        $historyBase = function () use ($userIds, $request, $start, $end) {
             $query = Client::query()
-                ->whereHas('notes', fn ($q) => $q->whereIn('sender_id', $userIds)->calls());
+                ->whereHas('notes', function ($q) use ($userIds, $start, $end) {
+                    $q->whereIn('sender_id', $userIds)->calls();
+
+                    if ($start !== null) {
+                        $q->where('created_at', '>=', $start)->where('created_at', '<', $end);
+                    }
+                });
 
             if ($search = $request->input('search')) {
                 $this->search->search($query, $search);
@@ -745,8 +762,13 @@ class EnterpriseController extends Controller
             return $query;
         };
 
+        // « Dernier appel » affiché par ligne : même fenêtre que le périmètre.
+        $window = fn ($q) => $start === null
+            ? $q
+            : $q->where('created_at', '>=', $start)->where('created_at', '<', $end);
+
         $historyQuery = $historyBase()->with([
-            'notes' => fn ($q) => $q->whereIn('sender_id', $userIds)
+            'notes' => fn ($q) => $window($q->whereIn('sender_id', $userIds))
                 ->with('sender:id,first_name,last_name,email')
                 ->orderByDesc('created_at'),
             'currentReservation:id,status',
@@ -764,6 +786,14 @@ class EnterpriseController extends Controller
             'prospects' => ['system' => $historyBase()->count()],
             'by_display_status' => $this->search->displayStatusCounts($historyBase),
         ];
+
+        // Années du menu « Année » : celles où les employés de l'entreprise ont
+        // appelé, lues **hors période** (le menu ne se rétrécit pas quand un
+        // filtre est déjà posé).
+        $years = PeriodFilter::yearsBetween(
+            Note::whereIn('sender_id', $userIds)->calls()->min('created_at'),
+            Note::whereIn('sender_id', $userIds)->calls()->max('created_at'),
+        );
 
         Client::loadLatestReservations($clientsPage->getCollection());
 
@@ -802,6 +832,7 @@ class EnterpriseController extends Controller
                 'historique' => [
                     'clients' => $historique,
                     'badges' => $badges,
+                    'years' => $years,
                     'pagination' => [
                         'current_page' => $clientsPage->currentPage(),
                         'last_page' => $clientsPage->lastPage(),

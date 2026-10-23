@@ -29,6 +29,8 @@ use Illuminate\Support\Facades\DB;
  *                   prospect reste **tenu** par l'employé (régime RESERVED).
  *  - INFO        -> client INFO, réservation INFO, rappel annulé — même
  *                   régime que DOUBLE.
+ *  - AUTRE       -> client AUTRE, réservation AUTRE, rappel annulé — même
+ *                   régime que DOUBLE / INFO (la note libre porte la raison).
  *  - BLACKLISTED -> client BLACKLISTED.
  *
  * Chaque issue est journalisée dans `notes` (type = événement, description =
@@ -95,6 +97,7 @@ class CallWorkflowService
             Note::TYPE_CALL_BACK,
             Note::TYPE_DOUBLE,
             Note::TYPE_INFO,
+            Note::TYPE_AUTRE,
             Note::TYPE_BLACKLISTED,
         ];
 
@@ -151,6 +154,15 @@ class CallWorkflowService
                     Client::STATUS_INFO,
                     Reservation::STATUS_INFO,
                     'Client marqué « Info ». Réservation maintenue.'
+                ),
+                // Autre : le prospect reste tenu (régime RESERVED) — la note
+                // libre de l'employé porte la raison de l'issue.
+                Note::TYPE_AUTRE => $this->handleHeldOutcome(
+                    $client,
+                    $reservation,
+                    Client::STATUS_AUTRE,
+                    Reservation::STATUS_AUTRE,
+                    'Client marqué « Autre ». Réservation maintenue.'
                 ),
                 Note::TYPE_BLACKLISTED => $this->handleBlacklist($client),
                 default => throw new \InvalidArgumentException("Evénement non géré : {$event}"),

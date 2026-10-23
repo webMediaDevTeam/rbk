@@ -1,9 +1,9 @@
-import { Link } from 'react-router-dom'
 import { Loader2, CheckCheck } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { getClientDuplicatesApi, markAllClientRepeteApi } from '@/api/shared.api.js'
 import ClientStatus from '@/pages/shared/components/ClientStatus/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import Button from '@/components/ui/button'
 
 /**
@@ -136,12 +136,15 @@ export default function ClientRepeatsTab({ clientId }) {
             {duplicates.map((d) => (
               <tr key={d.id} className="hover:bg-muted/40">
                 <td className="px-3 py-2">
-                  <Link
+                  {/* Doublon : le nom porte la fiche cible, même convention que
+                      les tableaux de liste (`RowLink`). */}
+                  <RowLink
                     to={`/prospects/${d.id}`}
-                    className="font-medium text-primary hover:underline"
+                    title={`Voir la fiche de ${d.name ?? 'ce client'}`}
+                    className="font-medium"
                   >
                     {d.name ?? '—'}
-                  </Link>
+                  </RowLink>
                 </td>
                 <td className="px-3 py-2">
                   {(Array.isArray(d.respondents) ? d.respondents : [])

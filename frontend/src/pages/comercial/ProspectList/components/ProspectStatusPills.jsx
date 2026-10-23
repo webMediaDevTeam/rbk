@@ -1,4 +1,4 @@
-import { CircleCheck, Copy, CopyCheck, Info } from 'lucide-react'
+import { CircleCheck, Copy, CopyCheck, Info, Tag } from 'lucide-react'
 import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/index.jsx'
 
 /**
@@ -13,7 +13,9 @@ import KpiPill, { KpiBar, formatCount } from '@/pages/shared/components/KpiPill/
  * retire.
  *
  * Les compteurs viennent de `data.badges` de `GET clients` : le **périmètre de
- * l'employé** (sa source, les prospects qu'il détient, son privilège §7.1),
+ * l'employé** (sa source, les prospects qu'il détient — « Double » inclus,
+ * quel que soit son privilège §7.1 qui ne porte plus que sur la libération de
+ * la liste),
  * filtres de recherche inclus et sélection de badge ignorée — le chiffre d'une
  * pastille vaut donc le nombre de lignes rendues après son clic (invariant
  * « compteur = lignes », docs/RULES.md §9).
@@ -39,7 +41,7 @@ export default function ProspectStatusPills({ badges, statusFilter, onStatusFilt
   if (!badges) {
     return (
       <div className="flex flex-wrap gap-1.5" aria-hidden="true">
-        {Array.from({ length: 5 }).map((_, i) => (
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-7 w-28 animate-pulse rounded-full border border-border/60 bg-card" />
         ))}
       </div>
@@ -78,6 +80,18 @@ export default function ProspectStatusPills({ badges, statusFilter, onStatusFilt
       iconClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
       activeClass: 'border border-transparent bg-sky-600',
       title: 'Prospects « Info » (renseigné, pas d’offre) que vous détenez — cliquez pour filtrer',
+    },
+    {
+      // Issue « Autre » : prospect tenu par l'employé (régime Réservé), la
+      // raison est portée par sa note libre — même teinte violet que la
+      // tuile homologue du tableau de bord.
+      key: 'AUTRE',
+      label: 'Autre',
+      value: counts.AUTRE ?? 0,
+      icon: Tag,
+      iconClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+      activeClass: 'border border-transparent bg-violet-600',
+      title: 'Prospects « Autre » que vous détenez — cliquez pour filtrer',
     },
     {
       // Fiches rattachées à un doublon d'origine (« marquer comme répété »,

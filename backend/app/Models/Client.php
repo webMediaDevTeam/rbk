@@ -76,6 +76,13 @@ class Client extends Model
     public const STATUS_INFO = 'INFO';
 
     /**
+     * Issue « Autre » : même régime que `DOUBLE` / `INFO` / `RESERVED` — le
+     * prospect reste tenu par l'employé, hors du pool partagé (réservation
+     * active, visible **que par son titulaire** dans la Grande liste).
+     */
+    public const STATUS_AUTRE = 'AUTRE';
+
+    /**
      * Issue « Doublon » : le prospect est reconnu comme **répété** (même
      * téléphone normalisé qu'une fiche déjà présente). Statut **stocké** ; la
      * fiche d'origine est pointée par `parent_client_id`.
@@ -100,6 +107,7 @@ class Client extends Model
         self::STATUS_CONFIRMED,
         self::STATUS_DOUBLE,
         self::STATUS_INFO,
+        self::STATUS_AUTRE,
         self::STATUS_REPETE,
     ];
 
@@ -114,6 +122,7 @@ class Client extends Model
         self::STATUS_CONFIRMED,
         self::STATUS_DOUBLE,
         self::STATUS_INFO,
+        self::STATUS_AUTRE,
     ];
 
     // ------------------------------------------------------------------

@@ -20,6 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Réactivation des UNAVAILABLE_TEMP (returned_at atteint) -> AVAILABLE pour tous
         $schedule->command('clients:reactivate')->hourly();
+
+        // Dérogations GPS « Connexion hors zones » : le refus est immédiat
+        // dès l'échéance (`User::isGpsBypassActive()`), ce cron range le
+        // drapeau à `false` pour que la page Employés affiche un switch éteint.
+        $schedule->command('gps:expire-bypass')->everyFifteenMinutes();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

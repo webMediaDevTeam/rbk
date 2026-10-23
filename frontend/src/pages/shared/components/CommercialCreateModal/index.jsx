@@ -133,20 +133,39 @@ export default function CommercialCreateModal({ open, onClose, queryKey }) {
           </div>
 
           {/* Privilège commercial (ex-« Privilège de libération ») —
-              `users.has_permission` : ouvre la liste noire et la libération
-              de liste au COMERCIAL (403 sans, middleware CheckPermission,
-              docs/RULES.md §7.1). */}
+              `users.has_permission` : ouvre **seulement** la libération de
+              liste au COMERCIAL (403 sans, middleware CheckPermission,
+              docs/RULES.md §7.1). La mise en liste noire est ouverte à tous. */}
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-3">
             <div>
               <p className="text-sm font-bold">Privilège commercial</p>
               <p className="text-xs text-muted-foreground">
-                Autorise ce commercial à mettre en liste noire un client et à libérer ses réservations.
+                Autorise ce commercial à libérer la liste de ses réservations en attente.
               </p>
             </div>
             <Switch
               checked={form.has_permission}
               onCheckedChange={(checked) => set('has_permission', checked)}
               aria-label="Privilège commercial"
+            />
+          </div>
+
+          {/* Dérogation GPS — `users.gps_bypass` : ce compte peut se connecter
+              **hors** de toute zone de géorepérage, **pendant 24 h** uniquement
+              (échéance `gps_bypass_expires_at` reposée à chaque activation,
+              même switch que la colonne « Hors zones » de la page Employés,
+              contrôle serveur `GeofenceService`). */}
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-3">
+            <div>
+              <p className="text-sm font-bold">Connexion hors zones (24 h)</p>
+              <p className="text-xs text-muted-foreground">
+                Autorise ce commercial à se connecter en dehors des zones GPS ; la dérogation est retirée automatiquement 24 h après l&#39;enregistrement.
+              </p>
+            </div>
+            <Switch
+              checked={form.gps_bypass}
+              onCheckedChange={(checked) => set('gps_bypass', checked)}
+              aria-label="Connexion hors zones"
             />
           </div>
             </>

@@ -183,18 +183,16 @@ class DashboardController extends Controller
 
         // « Grande liste » du commercial = **les lignes de `GET clients`**
         // actives sur la période : mêmes filtres partagés (`applyFilters`),
-        // même périmètre « source » d'entreprise, mêmes exclusions de
-        // privilège (§7.1) — plus la borne `activeBetween` (fiche créée,
-        // réservation posée ou trace d'appel émise dans `[start, end)`), qui
-        // fait réagir les tuiles au filtre Année / Mois / Semaine / Jour.
-        // L'invariant « carte = lignes rendues » (§9) vaut donc **par
-        // période** : la liste elle-même reste un instantané, la carte indique
-        // ce que la période a touché.
-        $perimeter = fn (): Builder => $this->excludeDoubleForUnprivileged(
-            $this->search->applyCommercialSourceScope(
-                $this->search->applyFilters(Client::query()->activeBetween($start, $end), [], $id),
-                $user,
-            ),
+        // même périmètre « source » d'entreprise — plus la borne
+        // `activeBetween` (fiche créée, réservation posée ou trace d'appel
+        // émise dans `[start, end)`), qui fait réagir les tuiles au filtre
+        // Année / Mois / Semaine / Jour. L'invariant « carte = lignes rendues »
+        // (§9) vaut donc **par période** : la liste elle-même reste un
+        // instantané, la carte indique ce que la période a touchée. Le « Double »
+        // est compté pour **tous** les commerciaux (le privilège §7.1 ne porte
+        // plus que sur la libération de la liste).
+        $perimeter = fn (): Builder => $this->search->applyCommercialSourceScope(
+            $this->search->applyFilters(Client::query()->activeBetween($start, $end), [], $id),
             $user,
         );
 
@@ -232,6 +230,7 @@ class DashboardController extends Controller
                     'libre' => $this->search->filterByStatuses($perimeter(), Client::STATUS_AVAILABLE)->count(),
                     'double' => $this->search->filterByStatuses($perimeter(), Client::STATUS_DOUBLE)->count(),
                     'info' => $this->search->filterByStatuses($perimeter(), Client::STATUS_INFO)->count(),
+                    'autre' => $this->search->filterByStatuses($perimeter(), Client::STATUS_AUTRE)->count(),
                     'bv' => $recallCount(Reservation::STATUS_BV_VOICEMAIL),
                     'rappel' => $recallCount(Reservation::STATUS_CALL_BACK),
                 ],
@@ -243,24 +242,8 @@ class DashboardController extends Controller
     }
 
     /**
-     * §7.1 — un COMERCIAL **sans** privilège de libération ne voit plus les
-     * « Double » qu'il détient : même exclusion que `GET clients`, pour que le
-     * compteur de la carte égale les lignes rendues.
-     *
-     * @param  Builder<Client>  $query
-     * @return Builder<Client>
+     * Nombre de lignes créées dans la fenêtre `[start, end)`.
      */
-    private function excludeDoubleForUnprivileged(Builder $query, User $user): Builder
-    {
-        if ($user->role === 'COMERCIAL' && ! $user->has_permission) {
-            return $query->where(fn (Builder $q) => $q
-                ->whereNull('status')
-                ->orWhere('status', '!=', Client::STATUS_DOUBLE));
-        }
-
-        return $query;
-    }
-
     private function countIn(Builder $query, Carbon $start, Carbon $end): int
     {
         return $query->where('created_at', '>=', $start)->where('created_at', '<', $end)->count();

@@ -5,11 +5,11 @@ import { useGroupDetail } from './useGroupDetail.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import Input from '@/components/ui/input.jsx'
 import Button from '@/components/ui/button.jsx'
 import CallButton from '@/pages/shared/components/CallButton/index.jsx'
 import ClientEditModal from '@/pages/shared/components/ClientEditModal/index.jsx'
-import { useAuth } from '@/context/AuthContext.jsx'
 
 function GroupNameEditor({ group, renameMutation }) {
   const [editing, setEditing] = useState(false)
@@ -89,11 +89,9 @@ export default function GroupDetailPage() {
   // « Grande liste »** (ProspectKpis) : `Tous` en 1er, puis les statuts
   // dans l'ordre du workflow (`En attente` en 2e), sélection unique, couleur
   // pleine à la sélection et **tous les compteurs affichés, même à 0**.
-  // Privilège commercial (docs/RULES.md §7.1) : sans `has_permission`, le
-  // badge « Double » n'existe pas pour ce connecté (aucune ligne DOUBLE ne
-  // lui est de toute façon rendue — voir `useGroupDetail`).
-  const { user } = useAuth()
-  const canSeeDouble = user?.role !== 'COMERCIAL' || Boolean(user?.has_permission)
+  // Privilège commercial (docs/RULES.md §7.1) : ne porte **que** sur la
+  // libération de la liste — le badge « Double » existe pour **tous** les
+  // commerciaux, y compris sans `has_permission`.
 
   const STATUS_PILLS = ([
     {
@@ -159,7 +157,7 @@ export default function GroupDetailPage() {
       activeFg: 'text-white',
       title: 'Réservations au statut INFO — clique pour filtrer',
     },
-  ]).filter((pill) => canSeeDouble || pill.key !== 'DOUBLE')
+  ])
 
   // Compteurs des badges calculés sur **toutes** les lignes de la liste
   // (`reservations`), pas sur la sélection de statut : le badge dit toujours
@@ -281,7 +279,19 @@ export default function GroupDetailPage() {
                         <div className="flex items-center gap-2.5">
                           <UserAvatar user={r.client} size="sm" />
                           <div>
-                            <span className="font-medium">{r.client?.name ?? '—'}</span>
+                            {/* Nom = fiche client (même cible que l'œil « Voir ») ;
+                                une réservation sans client reste sur texte seul. */}
+                            {r.client ? (
+                              <RowLink
+                                to={`/prospects/${r.client.id}`}
+                                title={`Voir la fiche de ${r.client.name ?? 'ce prospect'}`}
+                                className="font-medium"
+                              >
+                                {r.client.name ?? '—'}
+                              </RowLink>
+                            ) : (
+                              <span className="font-medium">—</span>
+                            )}
                             <p className="text-xs text-muted-foreground">{r.client?.email ?? ''}</p>
                           </div>
                         </div>
@@ -301,7 +311,7 @@ export default function GroupDetailPage() {
                             (résolu par l'API), `to` = numéro du client. */}
                         <div className="flex items-center justify-end gap-1">
                           <CallButton phone={r.client?.phone} name={r.client?.name} clientId={r.client?.id} />
-                          {r.client && !r.client.is_blacklisted && ['RESERVED', 'CONFIRMED', 'DOUBLE', 'INFO'].includes(r.client.status) && (
+                          {r.client && !r.client.is_blacklisted && ['RESERVED', 'CONFIRMED', 'DOUBLE', 'INFO', 'AUTRE'].includes(r.client.status) && (
                             <button
                               type="button"
                               onClick={(event) => {

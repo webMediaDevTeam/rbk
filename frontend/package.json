@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "check:structure": "node scripts/verify-empty-react-app.mjs",
     "test:guard": "node scripts/test-protected-route.mjs",
+    "test:avatar": "node scripts/test-avatar-display.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

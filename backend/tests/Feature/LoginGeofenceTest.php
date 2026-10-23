@@ -146,6 +146,33 @@ class LoginGeofenceTest extends TestCase
         ]))->assertOk();
     }
 
+    /**
+     * Dérogation **limitée à 24 h** : posée par le switch (`setGpsBypass()`),
+     * elle ouvre la connexion hors zone tant qu'elle court, puis le refus
+     * reprend **immédiatement** à l'échéance — sans attendre le cron
+     * `gps:expire-bypass` qui ne fait que ranger le drapeau.
+     */
+    public function test_expired_bypass_no_longer_allows_login_outside_a_zone(): void
+    {
+        $this->zone();
+        $user = $this->makeUser();
+        $user->setGpsBypass(true);
+
+        $far = ['lat' => 36.8065, 'lng' => 10.1815, 'accuracy' => 30];
+
+        // Dans les 24 h : la dérogation passe.
+        $this->postJson('/api/v1/auth/login', $this->loginPayload($user, $far))->assertOk();
+
+        // 24 h + 1 : plus de dérogation, la position doit tomber dans une zone.
+        $this->travel(User::GPS_BYPASS_TTL_HOURS + 1)->hours();
+
+        $this->postJson('/api/v1/auth/login', $this->loginPayload($user, $far))
+            ->assertForbidden()
+            ->assertJsonPath('code', 'OUTSIDE_GEOFENCE');
+
+        $this->travelBack();
+    }
+
     public function test_operator_is_enforced_too(): void
     {
         $this->zone();

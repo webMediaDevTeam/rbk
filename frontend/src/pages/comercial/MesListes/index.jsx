@@ -1,6 +1,7 @@
 import { Eye } from 'lucide-react'
 import { useMesListes } from './useMesListes.js'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import Pagination from '@/pages/shared/components/Pagination/index.jsx'
 
 /**
@@ -76,7 +77,15 @@ export default function MesListesPage() {
                 >
                   {/* Nom dynamique : employé + date de création. */}
                   <TableCell>
-                    <span className="font-medium">{g.employe || '—'}</span>
+                    {/* Nom = ouverture de la liste, même cible que l'œil « Voir » : la
+                        date de création reste en lecture seule sous le lien. */}
+                    <RowLink
+                      to={`/mes-listes/${g.id}`}
+                      title="Ouvrir cette liste"
+                      className="font-medium"
+                    >
+                      {g.employe || '—'}
+                    </RowLink>
                     <span className="block text-xs text-muted-foreground mt-0.5">
                       {formatDateTime(g.created_at)}
                     </span>

@@ -6,6 +6,7 @@ import Tabs from '@/pages/shared/comercialDetail/components/Tabs.jsx'
 import HistoryList from '@/pages/shared/comercialDetail/components/HistoryList.jsx'
 import HistoryToolbar from '@/pages/shared/comercialDetail/components/HistoryToolbar.jsx'
 import ProspectKpis from '@/pages/shared/components/ProspectKpis/index.jsx'
+import PeriodFilterBar from '@/pages/shared/components/PeriodFilterBar/index.jsx'
 import EnterpriseInfoCard from './components/EnterpriseInfoCard.jsx'
 import EmployeesCard from './components/EmployeesCard.jsx'
 import RingCentralTab from './components/RingCentralTab.jsx'
@@ -35,6 +36,8 @@ export default function EntrepriseDetailPage() {
     statusFilters,
     handleStatusToggle,
     badges,
+    period,
+    periodYears,
     entreprise,
     analytics,
     employees,
@@ -93,6 +96,27 @@ export default function EntrepriseDetailPage() {
 
           {activeTab === 'historique' && (
             <div className="space-y-6">
+              {/* Période de l'historique : borne la liste **et** les badges sur
+                  la date de la note d'appel des employés de l'entreprise. Sans
+                  fenêtre posée = tout l'historique ; les cartes `StatCards` et
+                  les chiffres par employé restent des totaux. */}
+              <PeriodFilterBar
+                years={periodYears}
+                year={period.year}
+                month={period.month}
+                week={period.week}
+                day={period.day}
+                range={period.range}
+                preset={period.preset}
+                isDefault={period.isDefault}
+                scope="la liste et les badges de l'entreprise"
+                onYearChange={period.setYear}
+                onMonthChange={period.setMonth}
+                onWeekChange={period.setWeek}
+                onDayChange={period.setDay}
+                onPresetChange={period.applyPreset}
+                onReset={period.resetPeriod}
+              />
               {/* Badges de la colonne « Statut » = filtre (sélection unique),
                   compteurs limités aux appels des employés de l'entreprise. */}
               <ProspectKpis

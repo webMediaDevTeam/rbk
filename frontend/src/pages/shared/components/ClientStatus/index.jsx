@@ -51,6 +51,8 @@ const STYLES = {
   // le badge homologue de la barre de filtres.
   DOUBLE: { label: 'Double', variant: 'primary' },
   INFO: { label: 'Info', variant: 'info' },
+  // Issue « Autre » : prospect tenu (régime Réservé), raison portée par la note.
+  AUTRE: { label: 'Autre', variant: 'secondary' },
   // Statut affiché dérivé de la réservation en cours (jamais stocké) :
   IN_PROGRESS: { label: 'En traitement', variant: 'warning' },
   // Anciennes valeurs conservées pour données historiques non migrées :

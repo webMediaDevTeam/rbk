@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Briefcase, Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import Badge from '@/components/ui/badge.jsx'
 
 const fmt = (n) => new Intl.NumberFormat('fr-FR').format(n ?? 0)
@@ -63,7 +64,14 @@ export default function EmployeesCard({ employees = [], companyName }) {
                 <div className="flex items-center gap-2.5 min-w-0">
                   <UserAvatar user={e} size="sm" />
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{e.name}</p>
+                    {/* Nom = fiche employé, même cible que l'œil « Voir ». */}
+                    <RowLink
+                      to={`/comercialDetail/${e.id}`}
+                      title={`Voir la fiche de ${e.name ?? 'cet employé'}`}
+                      className="block truncate font-medium"
+                    >
+                      {e.name}
+                    </RowLink>
                     <Badge variant={e.status === 'ACTIVE' ? 'success' : 'secondary'} className="mt-0.5">
                       {e.status === 'ACTIVE' ? 'Actif' : e.status}
                     </Badge>

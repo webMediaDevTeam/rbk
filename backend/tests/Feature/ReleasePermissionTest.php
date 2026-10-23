@@ -15,10 +15,13 @@ use Tests\TestCase;
 
 /**
  * « Privilège de libération » — colonne `users.has_permission`
- * (migration 2026_10_07_140018, docs/RULES.md §7.1).
+ * (migration 2026_10_07_140018, docs/RULES.md §7.1) et son pendant GPS
+ * `users.gps_bypass` (migration 2026_10_20_000002).
  *
- *  - l'admin crée / édite un COMERCIAL avec le switch « Privilège de
- *    libération » (`POST/PUT users` → `sometimes|boolean`) ;
+ *  - l'admin pose les deux switches (`Privilège` + `Connexion hors zones`)
+ *    dans les modales créer / éditer (`POST/PUT users` → `sometimes|boolean`),
+ *    et peut basculer le privilège en un clic depuis le tableau Employés
+ *    (`PATCH users/{id}/privilege`, même principe que `users/{id}/gps-bypass`) ;
  *  - le drapeau protège **la libération de la liste**
  *    (`reservations/release-pending`) : un COMERCIAL **sans** drapeau
  *    reçoit 403, avec le drapeau →200 ;
@@ -243,5 +246,91 @@ class ReleasePermissionTest extends TestCase
             'Accès refusé : privilège de libération requis.',
             json_decode($denied->getContent(), true)['message']
         );
+    }
+
+    // ---------------------------------- switch inline de la page Employés
+
+    /**
+     * `PATCH users/{id}/privilege` — le switch inline « Privilège » du
+     * tableau des employés (même portail que « Hors zones ») bascule le
+     * drapeau dans les deux sens, sans toucher aux autres champs.
+     */
+    public function test_privilege_endpoint_toggles_the_flag_both_ways(): void
+    {
+        $commercial = $this->makeCommercial();
+        Sanctum::actingAs($this->admin);
+
+        $this->patchJson("/api/v1/users/{$commercial->id}/privilege", ['has_permission' => true])
+            ->assertOk()
+            ->assertJsonPath('data.utilisateur.has_permission', true);
+        $this->assertTrue($commercial->fresh()->has_permission);
+
+        $this->patchJson("/api/v1/users/{$commercial->id}/privilege", ['has_permission' => false])
+            ->assertOk()
+            ->assertJsonPath('data.utilisateur.has_permission', false);
+        $this->assertFalse($commercial->fresh()->has_permission);
+    }
+
+    /**
+     * Le privilège n'a de sens que pour un COMERCIAL : un OPÉRATEUR (qui
+     * n'a rien à libérer) est refusé 422, la valeur reste à `false`.
+     */
+    public function test_privilege_endpoint_refuses_a_non_commercial_role(): void
+    {
+        $operator = User::factory()->create(['role' => 'OPERATOR', 'status' => 'ACTIVE']);
+        Sanctum::actingAs($this->admin);
+
+        $this->patchJson("/api/v1/users/{$operator->id}/privilege", ['has_permission' => true])
+            ->assertStatus(422);
+        $this->assertFalse((bool) $operator->fresh()->has_permission);
+    }
+
+    public function test_privilege_endpoint_requires_a_boolean(): void
+    {
+        $commercial = $this->makeCommercial();
+        Sanctum::actingAs($this->admin);
+
+        $this->patchJson("/api/v1/users/{$commercial->id}/privilege", ['has_permission' => 'oui'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['has_permission']);
+    }
+
+    // ------------------------------ switch « Connexion hors zones » des modales
+
+    /**
+     * La modale **création** porte désormais les deux switches : le switch
+     * GPS (`users.gps_bypass`) est persisté comme le privilège.
+     */
+    public function test_admin_can_create_a_commercial_with_the_gps_bypass(): void
+    {
+        Sanctum::actingAs($this->admin);
+
+        $this->postJson('/api/v1/users', $this->createPayload(['gps_bypass' => true]))
+            ->assertCreated()
+            ->assertJsonPath('data.utilisateur.gps_bypass', true);
+
+        $this->assertTrue(
+            User::where('email', 'privililege@demo.test')->first()->gps_bypass
+        );
+    }
+
+    /**
+     * La modale **édition** envoie `gps_bypass` (PUT) : la dérogation est
+     * mise à jour sur `users`, jamais sur `employees`.
+     */
+    public function test_admin_can_update_the_gps_bypass_from_the_modal(): void
+    {
+        $commercial = $this->makeCommercial();
+        Sanctum::actingAs($this->admin);
+
+        $this->putJson("/api/v1/users/{$commercial->id}", ['gps_bypass' => true])
+            ->assertOk()
+            ->assertJsonPath('data.utilisateur.gps_bypass', true);
+        $this->assertTrue($commercial->fresh()->gps_bypass);
+
+        $this->putJson("/api/v1/users/{$commercial->id}", ['gps_bypass' => false])
+            ->assertOk()
+            ->assertJsonPath('data.utilisateur.gps_bypass', false);
+        $this->assertFalse($commercial->fresh()->gps_bypass);
     }
 }

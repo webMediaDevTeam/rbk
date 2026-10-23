@@ -88,8 +88,15 @@ export function ProfileDropdown() {
   const displayName = user?.first_name && user?.last_name
     ? `${user.first_name} ${user.last_name}`
     : user?.email?.split("@")[0] ?? "User";
-  const BACKEND_URL = typeof window !== 'undefined' ? (window.location.origin.includes(':5173') ? 'http://localhost:8000' : window.location.origin) : 'http://localhost:8000';
-  const avatarUrl = user?.avatar_url || (user?.avatar ? `${BACKEND_URL}/storage/avatars/${user.avatar}` : null) || user?.profil?.image_dp_url || null;
+  // `avatar_url` arrive déjà de l'API comme chemin relatif (`/storage/…`) servi
+  // par la propre origine du navigateur ; le repli sur `avatar` (profil chargé
+  // avant la projection) reste relatif pour la même raison. Il n'y a donc plus
+  // de port backend à reconstituer ici.
+  const avatarUrl =
+    user?.avatar_url ||
+    (user?.avatar ? `/storage/avatars/${user.avatar}` : null) ||
+    user?.profil?.image_dp_url ||
+    null;
   const initials = getAvatarInitials(user);
 
   return (

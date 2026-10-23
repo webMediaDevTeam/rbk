@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
-import { AlertTriangle, Eye, Pencil, Power, Trash2 } from 'lucide-react'
+import { AlertTriangle, Eye, ImagePlus, Pencil, Power, Trash2 } from 'lucide-react'
 import Badge from '@/components/ui/badge'
 import Switch from '@/components/ui/switch.jsx'
 import StatusBadge from './StatusBadge'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
 import RowMenu from '@/pages/shared/components/RowMenu/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import ComercialStatsChips from './ComercialStatsChips.jsx'
 import { useComercialCard } from './useComercialCard.js'
 
@@ -16,6 +17,8 @@ export default function ComercialCard(props) {
     rcNumber,
     rcDuplicate,
     gpsBypass,
+    gpsBypassHint: bypassHint,
+    hasPermission,
     isOperator,
     stats,
     toggleLabel,
@@ -24,6 +27,7 @@ export default function ComercialCard(props) {
     handleEdit,
     handleToggleStatus,
     handleToggleGpsBypass,
+    handleTogglePrivilege,
     handleDelete,
   } = useComercialCard(props)
 
@@ -38,6 +42,17 @@ export default function ComercialCard(props) {
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
               >
                 <Pencil className="h-3.5 w-3.5" /> Modifier
+              </button>
+              {/* Envoi de la photo : la modale est déjà branchée sur la page
+                  (`avatarTarget`) et l'avatar reste le raccourci direct. */}
+              <button
+                onClick={() => {
+                  handleAvatarClick()
+                  closeMenu()
+                }}
+                className="flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors"
+              >
+                <ImagePlus className="h-3.5 w-3.5" /> Modifier la photo
               </button>
               <button
                 onClick={() => handleToggleStatus(closeMenu)}
@@ -62,7 +77,17 @@ export default function ComercialCard(props) {
         <UserAvatar user={comercial} size="md" onEdit={handleAvatarClick} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate flex items-center gap-1.5">
-            {name}
+            {/* Nom = fiche employé, comme dans le tableau : l'opérateur n'a pas de
+                fiche et reste sur texte seul. */}
+            {isOperator ? name : (
+              <RowLink
+                to={`/comercialDetail/${comercial.id}`}
+                title={`Voir la fiche de ${name}`}
+                className="truncate"
+              >
+                {name}
+              </RowLink>
+            )}
             {/* Rôle — « Opérateur » badgeé pour le distinguer d'un commercial. */}
             {isOperator && (
               <Badge variant="info" className="uppercase">Opérateur</Badge>
@@ -104,7 +129,39 @@ export default function ComercialCard(props) {
           </div>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-muted-foreground text-xs" title="Autoriser la connexion en dehors des zones GPS">Connexion hors zones</span>
+          {/* Privilège commercial : même switch inline que « Connexion hors
+              zones » ; réservé au COMERCIAL (§7.1 — ne protège que la
+              libération de la liste). */}
+          <span className="text-muted-foreground text-xs" title="Privilège de libération (§7.1) — autorise ce commercial à libérer ses réservations en attente">Privilège de libération</span>
+          {comercial.role === 'COMERCIAL' ? (
+            <Switch
+              checked={hasPermission}
+              disabled={!canDelete}
+              onCheckedChange={(value) => handleTogglePrivilege(value)}
+              aria-label={`Privilège de libération pour ${name}`}
+            />
+          ) : (
+            <span className="text-muted-foreground text-xs">—</span>
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          {/* Dérogation GPS : accord **limité à 24 h**, le libellé indique le
+              temps restant avant le retrait automatique. */}
+          <div className="flex flex-col">
+            <span className="text-muted-foreground text-xs" title="Autoriser la connexion en dehors des zones GPS — 24 h après activation, puis retrait automatique">Connexion hors zones (24 h)</span>
+            {bypassHint && (
+              <span
+                className="text-xs text-muted-foreground"
+                title={
+                  comercial.gps_bypass_expires_at
+                    ? `Retrait automatique à : ${new Date(comercial.gps_bypass_expires_at).toLocaleString('fr-CA')}`
+                    : 'Dérogation sans date de fin'
+                }
+              >
+                {bypassHint}
+              </span>
+            )}
+          </div>
           <Switch
             checked={gpsBypass}
             disabled={!canDelete}

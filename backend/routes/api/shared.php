@@ -211,5 +211,8 @@ Route::middleware(['auth:sanctum', CheckRole::class.':ADMIN,SUPER_ADMIN'])->grou
     // Dérogation GPS (colonne « Connexion hors zones » de la page Employés) —
     // rôles contraints uniquement ; voir `UserController::updateGpsBypass()`.
     Route::patch('users/{id}/gps-bypass', [UserController::class, 'updateGpsBypass']);
+    // Switch inline « Privilège commercial » (`users.has_permission`) de la
+    // page Employés — §7.1 : ne protège que la libération de la liste.
+    Route::patch('users/{id}/privilege', [UserController::class, 'updatePrivilege']);
     Route::delete('users/{id}', [UserController::class, 'destroy']);
 });

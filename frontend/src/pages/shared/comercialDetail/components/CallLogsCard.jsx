@@ -62,7 +62,10 @@ export default function CallLogsCard({ id }) {
   const busy = isSyncing || isSyncingAll
 
   return (
-    <Card>
+    // `border-0` : l'onglet est posé dans la continuité de la fiche « Détails
+    // employé », rendue sans liseré — la carte garde son ombre, seule la
+    // bordure colorée du `Card` partagé disparaît.
+    <Card className="border-0">
       <CardHeader>
         <CardTitle className="text-base">Appels</CardTitle>
         <CardDescription>

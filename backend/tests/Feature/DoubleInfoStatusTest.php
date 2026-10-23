@@ -105,9 +105,11 @@ class DoubleInfoStatusTest extends TestCase
      */
     private function heldClientFor(User $commercial, string $clientStatus = Client::STATUS_DOUBLE): array
     {
-        $reservationStatus = $clientStatus === Client::STATUS_INFO
-            ? Reservation::STATUS_INFO
-            : Reservation::STATUS_DOUBLE;
+        $reservationStatus = match ($clientStatus) {
+            Client::STATUS_INFO => Reservation::STATUS_INFO,
+            Client::STATUS_AUTRE => Reservation::STATUS_AUTRE,
+            default => Reservation::STATUS_DOUBLE,
+        };
 
         $client = $this->makeClient(['status' => Client::STATUS_RESERVED]);
         $reservation = $this->makeReservation($client, $commercial, ['status' => $reservationStatus]);
@@ -133,6 +135,7 @@ class DoubleInfoStatusTest extends TestCase
         return [
             'double' => [Note::TYPE_DOUBLE, Client::STATUS_DOUBLE, Reservation::STATUS_DOUBLE],
             'info' => [Note::TYPE_INFO, Client::STATUS_INFO, Reservation::STATUS_INFO],
+            'autre' => [Note::TYPE_AUTRE, Client::STATUS_AUTRE, Reservation::STATUS_AUTRE],
         ];
     }
 
@@ -141,6 +144,7 @@ class DoubleInfoStatusTest extends TestCase
         return [
             'double' => [Note::TYPE_DOUBLE],
             'info' => [Note::TYPE_INFO],
+            'autre' => [Note::TYPE_AUTRE],
         ];
     }
 
@@ -241,10 +245,12 @@ class DoubleInfoStatusTest extends TestCase
 
     public function test_double_client_is_visible_in_the_grande_list_only_to_its_holder(): void
     {
-        // Le privilège commercial (§7.1) est requis : sans `has_permission`,
-        // les « Double » sortent de la liste **même pour leur titulaire**.
-        $holder = $this->makeCommercial(['has_permission' => true]);
-        $colleague = $this->makeCommercial(['has_permission' => true]);
+        // La visibilité « Double » ne dépend **plus** du privilège (§7.1 ne
+        // porte que sur la libération de la liste) : un titulaire **sans**
+        // `has_permission` voit bien son « Double » ; le privilège ne change
+        // rien à la visibilité.
+        $holder = $this->makeCommercial();
+        $colleague = $this->makeCommercial();
         [$client] = $this->heldClientFor($holder);
 
         $holderIds = $this->listIds('/api/v1/clients', $holder);
@@ -429,6 +435,9 @@ class DoubleInfoStatusTest extends TestCase
                 Client::STATUS_AVAILABLE => 1,
                 Client::STATUS_DOUBLE => 1,
                 Client::STATUS_INFO => 1,
+                // Pastille « Autre » de la barre commerciale : présente même à
+                // zéro (le titulaire n'a aucun « Autre » dans ce périmètre).
+                Client::STATUS_AUTRE => 0,
                 // Pastille « num Répétés » de la barre commerciale : présente
                 // même à zéro (aucune fiche rattachée dans ce périmètre).
                 Client::STATUS_REPETE => 0,
@@ -457,22 +466,81 @@ class DoubleInfoStatusTest extends TestCase
     }
 
     /**
-     * Sans le privilège commercial (§7.1), les « Double » disparaissent de la
-     * liste : le badge tombe à 0 comme les lignes (l'employé ne peut pas
-     * cliquer sur une ligne qu'il ne voit pas).
+     * Le privilège (§7.1) ne porte **que** sur la libération de la liste : un
+     * commercial **sans** `has_permission` voit désormais ses « Double » —
+     * badge et lignes rendus comme pour un titulaire privilégié.
      */
-    public function test_commercial_badge_double_is_zero_without_the_privilege(): void
+    public function test_commercial_badge_double_is_visible_without_the_privilege(): void
     {
         $holder = $this->makeCommercial();
-        $this->heldClientFor($holder);
+        [$double] = $this->heldClientFor($holder);
         $this->makeClient(['name' => 'Libre inc.']);
 
         Sanctum::actingAs($holder);
         $payload = $this->getJson('/api/v1/clients')->assertOk()->json('data');
 
-        $this->assertSame(0, $payload['badges']['by_display_status'][Client::STATUS_DOUBLE]);
-        $this->assertSame(1, $payload['badges']['prospects']['system'], 'Ne reste que le prospect libre.');
-        $this->assertCount(1, $payload['clients'], 'Une seule ligne rendue : le badge dit juste.');
-        $this->assertSame([], $this->listIds('/api/v1/clients?status=DOUBLE', $holder), 'Clic « Double » : rien.');
+        $this->assertSame(1, $payload['badges']['by_display_status'][Client::STATUS_DOUBLE], 'Le « Double » détenu est compté.');
+        $this->assertSame(2, $payload['badges']['prospects']['system'], 'Le « Double » tenu + le prospect libre.');
+        $this->assertCount(2, $payload['clients'], 'Deux lignes rendues : le badge dit juste.');
+        $this->assertSame([$double->id], $this->listIds('/api/v1/clients?status=DOUBLE', $holder), 'Clic « Double » : sa ligne.');
+    }
+
+    // ----------------------------------------------------------------- Autre
+
+    /**
+     * Issue « Autre » (régime tenu, comme Double / Info) : la note est
+     * **facultative** et portée dans `notes`, le client reste tenu par son
+     * titulaire, et le badge de la Grande liste (admin + commerciale) compte
+     * et filtre exactement ses lignes.
+     */
+    public function test_autre_outcome_is_held_counted_and_filterable(): void
+    {
+        $holder = $this->makeCommercial();
+        $colleague = $this->makeCommercial();
+        $admin = $this->makeAdmin();
+
+        [$client, $reservation] = $this->reservedClientFor($holder);
+
+        // Note libre saisie → journalisée, prospect tenu.
+        Sanctum::actingAs($holder);
+        $this->postJson("/api/v1/clients/{$client->id}/outcome", [
+            'outcome' => Note::TYPE_AUTRE,
+            'note' => 'Rappel plus tard, cas particulier',
+        ])->assertOk()
+            ->assertJsonPath('data.client_status', Client::STATUS_AUTRE)
+            ->assertJsonPath('data.blacklisted', false);
+
+        $fresh = $client->fresh();
+        $this->assertSame(Client::STATUS_AUTRE, $fresh->status);
+        $this->assertSame(Reservation::STATUS_AUTRE, $reservation->fresh()->status);
+        $this->assertNull($fresh->returned_at, 'Prospect tenu : aucun compte à rebours.');
+        $this->assertDatabaseHas('notes', [
+            'client_id' => $client->id,
+            'type' => Note::TYPE_AUTRE,
+            'description' => 'Rappel plus tard, cas particulier',
+        ]);
+
+        // Note **facultative** : un « Autre » sans note passe aussi.
+        [$noNoteClient] = $this->reservedClientFor($holder);
+        $this->postJson("/api/v1/clients/{$noNoteClient->id}/outcome", [
+            'outcome' => Note::TYPE_AUTRE,
+        ])->assertOk()->assertJsonPath('data.client_status', Client::STATUS_AUTRE);
+
+        // Visibilité Grande liste commerciale : que le titulaire (le
+        // privilège §7.1 ne concerne plus que la libération de la liste, il
+        // n'exclut aucune ligne « Autre » / « Double »).
+        $this->assertContains($client->id, $this->listIds('/api/v1/clients', $holder));
+        $this->assertNotContains($client->id, $this->listIds('/api/v1/clients', $colleague));
+
+        // Badge + filtre admin (invariant compteur ⇄ lignes).
+        Sanctum::actingAs($admin);
+        $badges = $this->getJson('/api/v1/clients/overview')
+            ->assertOk()
+            ->json('data.by_display_status');
+        $this->assertSame(2, $badges[Reservation::STATUS_AUTRE], 'Deux « Autre » tenus par le titulaire.');
+
+        $autreIds = $this->listIds('/api/v1/commercials/clients?reservation_status=AUTRE', $admin);
+        $this->assertContains($client->id, $autreIds);
+        $this->assertContains($noNoteClient->id, $autreIds);
     }
 }

@@ -30,6 +30,7 @@ export function useCommercialCreateModal(props) {
     ringcentral_extension_id: '',
     ringcentral_device_id: '', ringcentral_from_number: '',
     has_permission: false,
+    gps_bypass: false,
   })
   // Nom d'utilisateur saisi à la main : on ne le recalcule plus depuis
   // l'e-mail (l'auto-détection ne s'applique que s'il n'a pas été touché).
@@ -66,6 +67,7 @@ export function useCommercialCreateModal(props) {
         ringcentral_extension_id: '',
         ringcentral_device_id: '', ringcentral_from_number: '',
         has_permission: false,
+        gps_bypass: false,
       })
       setUsernameTouched(false)
       setError(null)
@@ -203,8 +205,11 @@ export function useCommercialCreateModal(props) {
         ringcentral_device_id: form.ringcentral_device_id || undefined,
         ringcentral_from_number: form.ringcentral_device_id ? fromNumber : undefined,
         // Switch « Privilège commercial » (docs/RULES.md §7.1, colonne
-        // `users.has_permission`).
+        // `users.has_permission`) — ne protège que la libération de la liste.
         has_permission: form.has_permission,
+        // Switch « Connexion hors zones » (dérogation GPS,
+        // `users.gps_bypass`).
+        gps_bypass: form.gps_bypass,
       }),
     }
     mutation.mutate(payload)

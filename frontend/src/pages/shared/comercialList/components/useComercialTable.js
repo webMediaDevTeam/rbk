@@ -1,6 +1,6 @@
-import { normalizeRcNumber } from '../useComercialList.js'
+import { normalizeRcNumber, gpsBypassHint } from '../useComercialList.js'
 
-export function useComercialTable({ commerciaux, statsById = {}, sortBy, sortOrder, onSort, onToggleStatus, onToggleGpsBypass, onDelete, canDelete, onAvatarClick, onEdit, duplicateRingCentralNumbers = new Set() }) {
+export function useComercialTable({ commerciaux, statsById = {}, sortBy, sortOrder, onSort, onToggleStatus, onToggleGpsBypass, onTogglePrivilege, onDelete, canDelete, onAvatarClick, onEdit, duplicateRingCentralNumbers = new Set() }) {
   const rows = commerciaux.map((c) => {
     const profil = c.profil
     const name = profil ? `${profil.prenom ?? ''} ${profil.nom ?? ''}`.trim() || c.email : (c.first_name ? `${c.first_name} ${c.last_name ?? ''}`.trim() : c.email)
@@ -12,11 +12,16 @@ export function useComercialTable({ commerciaux, statsById = {}, sortBy, sortOrd
     const rcKey = normalizeRcNumber(rcNumber)
     const rcDuplicate = rcKey !== '' && duplicateRingCentralNumbers.has(rcKey)
     const toggleLabel = c.status === 'ACTIVE' ? 'Désactiver' : 'Activer'
-    // Privilège de libération (`users.has_permission`) : 1 = « Oui », sinon « - ».
+    // Privilège commercial (`users.has_permission`) — switch inline comme la
+    // colonne « Hors zones ». §7.1 : ne protège que la libération de la liste ;
+    // seul un COMERCIAL peut le recevoir (le serveur refuse les autres rôles).
     const hasPermission = Number(c.has_permission) === 1
     // Dérogation GPS (`users.gps_bypass`, déjà formaté en bool serveur) :
     // activée = ce compte contraint peut se connecter **hors** de toute zone.
+    // Limitée à 24 h : le serveur renvoie l'état effectif + son échéance, le
+    // libellé rappel le temps restant avant retour automatique à `off`.
     const gpsBypass = Boolean(c.gps_bypass)
+    const gpsBypassHintText = gpsBypassHint(gpsBypass, c.gps_bypass_expires_at ?? null)
     // Opérateur : pas de fiche employé — ni RingCentral, ni entreprise, ni
     // privilège (les cellules affichent leurs dashes par absence de données),
     // et pas de page de détail employé (`GET commercials/{id}` ne liste que
@@ -36,6 +41,7 @@ export function useComercialTable({ commerciaux, statsById = {}, sortBy, sortOrd
       closeMenu()
     }
     const handleToggleGpsBypass = (value) => onToggleGpsBypass?.(c.id, value)
+    const handleTogglePrivilege = (value) => onTogglePrivilege?.(c.id, value)
     const handleDelete = (closeMenu) => {
       onDelete(c.id)
       closeMenu()
@@ -52,6 +58,7 @@ export function useComercialTable({ commerciaux, statsById = {}, sortBy, sortOrd
       rcDuplicate,
       hasPermission,
       gpsBypass,
+      gpsBypassHint: gpsBypassHintText,
       isOperator,
       stats,
       toggleLabel,
@@ -59,6 +66,7 @@ export function useComercialTable({ commerciaux, statsById = {}, sortBy, sortOrd
       handleEdit,
       handleToggleStatus,
       handleToggleGpsBypass,
+      handleTogglePrivilege,
       handleDelete,
     }
   })

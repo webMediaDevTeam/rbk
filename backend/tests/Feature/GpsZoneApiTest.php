@@ -10,7 +10,8 @@ use Tests\TestCase;
 
 /**
  * CRUD des zones GPS (page admin « GPS ») + bascule de dérogation
- * « Connexion hors zones » (`PATCH /users/{id}/gps-bypass`).
+ * « Connexion hors zones » (`PATCH /users/{id}/gps-bypass`), accordée pour
+ * **24 h** seulement (`gps_bypass_expires_at`, cron `gps:expire-bypass`).
  *
  * Périmètre : routes ADMIN / SUPER_ADMIN uniquement ; le bypass ne s'applique
  * qu'aux rôles contraints (COMERCIAL / OPERATOR).
@@ -175,5 +176,100 @@ class GpsZoneApiTest extends TestCase
         $this->getJson('/api/v1/users?role=COMERCIAL')
             ->assertOk()
             ->assertJsonPath('data.utilisateurs.0.gps_bypass', true);
+    }
+
+    // --------------------------- dérogation **limitée à 24 h** (auto-retirée)
+
+    /**
+     * Clic sur le switch « Hors zones » = **24 h** : l'échéance
+     * (`gps_bypass_expires_at`) est posée à `now + 24 h`, la dérogation reste
+     * effective jusqu'à là, puis le serveur la refuse et l'API rend le switch
+     * éteint (état *effectif*, jamais le drapeau brut).
+     */
+    public function test_gps_bypass_is_granted_for_24_hours_only(): void
+    {
+        Sanctum::actingAs($this->admin());
+        $commercial = User::factory()->create(['role' => 'COMERCIAL']);
+
+        $this->patchJson("/api/v1/users/{$commercial->id}/gps-bypass", ['gps_bypass' => true])
+            ->assertOk()
+            ->assertJsonPath('data.utilisateur.gps_bypass', true);
+
+        $granted = $commercial->fresh();
+        $this->assertNotNull($granted->gps_bypass_expires_at);
+        $this->assertTrue(
+            $granted->gps_bypass_expires_at->between(now(), now()->addMinutes(User::GPS_BYPASS_TTL_HOURS * 60 + 1)),
+            'L\'échéance posée vaut 24 h.'
+        );
+        $this->assertTrue($granted->isGpsBypassActive());
+
+        // 23 h 59 : encore accordée.
+        $this->travel(23 * 60 + 59)->minutes();
+        $this->assertTrue($commercial->fresh()->isGpsBypassActive());
+
+        // Échéance dépassée : refusée, et la liste Employés montre un switch off.
+        $this->travel(2)->minutes();
+        $this->assertFalse($commercial->fresh()->isGpsBypassActive());
+
+        $this->getJson('/api/v1/users?role=COMERCIAL')
+            ->assertOk()
+            ->assertJsonPath('data.utilisateurs.0.gps_bypass', false);
+
+        $this->travelBack();
+    }
+
+    /**
+     * Le drapeau reste `true` tant que le cron n'est pas passé : cliquer de
+     * nouveau sur un switch affiché « éteint » doit **reposer 24 h** (sinon le
+     * clic ne guérirait jamais l'échéance passée).
+     */
+    public function test_reactivating_an_expired_bypass_grants_a_fresh_24_hours(): void
+    {
+        Sanctum::actingAs($this->admin());
+        $commercial = User::factory()->create(['role' => 'COMERCIAL']);
+
+        $this->patchJson("/api/v1/users/{$commercial->id}/gps-bypass", ['gps_bypass' => true])->assertOk();
+
+        $this->travel(25)->hours();
+        $expired = $commercial->fresh();
+        $this->assertTrue($expired->gps_bypass, 'Drapeau encore posé avant passage du cron.');
+        $this->assertFalse($expired->isGpsBypassActive());
+
+        $this->patchJson("/api/v1/users/{$commercial->id}/gps-bypass", ['gps_bypass' => true])
+            ->assertOk()
+            ->assertJsonPath('data.utilisateur.gps_bypass', true);
+
+        $renewed = $commercial->fresh();
+        $this->assertTrue($renewed->isGpsBypassActive());
+        $this->assertTrue(
+            $renewed->gps_bypass_expires_at->greaterThan(now()->addHours(User::GPS_BYPASS_TTL_HOURS - 1)),
+            'Une nouvelle échéance de 24 h est repartie du clic.'
+        );
+
+        $this->travelBack();
+    }
+
+    /**
+     * `gps:expire-bypass` (cron) range la base : drapeau à `false`, échéance à
+     * `null`. Les dérogations **sans échéance** (accordées avant la limitation)
+     * ne sont pas touchées.
+     */
+    public function test_command_clears_expired_bypasses_only(): void
+    {
+        $commercial = User::factory()->create(['role' => 'COMERCIAL']);
+        $commercial->setGpsBypass(true);
+        $legacy = User::factory()->create(['role' => 'COMERCIAL', 'gps_bypass' => true]);
+
+        $this->travel(25)->hours();
+        $this->artisan('gps:expire-bypass')->assertExitCode(0);
+
+        $cleared = $commercial->fresh();
+        $this->assertFalse($cleared->gps_bypass);
+        $this->assertNull($cleared->gps_bypass_expires_at);
+        $this->assertFalse($cleared->isGpsBypassActive());
+
+        $this->assertTrue($legacy->fresh()->gps_bypass, 'Sans échéance connue : non touchée.');
+
+        $this->travelBack();
     }
 }

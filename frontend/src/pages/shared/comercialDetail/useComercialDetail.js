@@ -5,15 +5,16 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value.js'
 import { api } from '@/api/client.js'
 import { useAuth } from '@/context/AuthContext.jsx'
 import { CLIENT_STATUS_KEYS, STATUS_FILTER_KEYS } from '@/pages/shared/components/ProspectKpis/status-pills.js'
+import { usePeriodFilters } from '@/pages/shared/components/PeriodFilterBar/usePeriodFilters.js'
 
 const BASE_TABS = [
   { value: 'details', label: 'Détails employé' },
   { value: 'historique', label: 'Historique' },
 ]
 
-export function useComercialDetail(id, { page = 1, search, status, reservationStatus, rowsPerPage } = {}) {
+export function useComercialDetail(id, { page = 1, search, status, reservationStatus, rowsPerPage, period = {} } = {}) {
   return useQuery({
-    queryKey: ['comercialDetail', id, page, search, status, reservationStatus, rowsPerPage],
+    queryKey: ['comercialDetail', id, page, search, status, reservationStatus, rowsPerPage, period],
     queryFn: () => api.get(`/commercials/${id}`, {
       params: {
         page,
@@ -23,6 +24,10 @@ export function useComercialDetail(id, { page = 1, search, status, reservationSt
         // paramètres que la grande liste admin (RULES §9 / §10).
         status,
         reservation_status: reservationStatus,
+        // Période de l'historique (`year` / `month` / `week` / `day` / `range`)
+        // — vide tant qu'aucune fenêtre n'est posée : la liste garde alors tout
+        // l'historique (comportement d'avant le filtre).
+        ...period,
       },
     }),
     enabled: !!id,
@@ -50,6 +55,11 @@ export function useComercialDetailPage() {
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(50)
   const [search, setSearch] = useState('')
+  // Période de l'onglet Historique : la fenêtre borne la **date de la note
+  // d'appel** de cet employé, donc la liste ET ses badges (`historique.badges`)
+  // se recalculent ensemble — l'invariant §9 tient sous période. Chaque
+  // réglage ramène à la 1re page, comme tous les filtres de la liste.
+  const period = usePeriodFilters({ onChange: () => setPage(1) })
   // Barre de badges de statut (onglet Historique) : **sélection unique** —
   // `null` = « Tous », sinon une seule valeur active à la fois.
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -71,6 +81,7 @@ export function useComercialDetailPage() {
     status: statusParam,
     reservationStatus: reservationStatusParam,
     rowsPerPage,
+    period: period.params,
   })
   const commercial = data?.user
   const employee = data?.employee
@@ -78,9 +89,18 @@ export function useComercialDetailPage() {
   const analytics = data?.analytics
   const historique = data?.historique
   const clients = historique?.clients ?? []
+  // Cible de la modale « Modifier » : `show()` rend `user` **à la forme des
+  // lignes de la page « Employés »** (`EmployeeProfile::forCommercial()`), donc
+  // `CommercialUpdateModal` consomme la fiche sans adaptation. `null` tant que
+  // la requête n'a pas répondu → le bouton reste inactif.
+  const updateTarget = commercial?.id ? commercial : null
   // Compteurs des 10 badges, sur le périmètre de cet employé.
   const badges = historique?.badges ?? null
   const statusFilters = statusFilter ? [statusFilter] : []
+  // Années où cet employé a réellement appelé (menu « Année » de la barre de
+  // période) — absentes tant que la requête n'a pas répondu : l'année courante
+  // suffit pour ne pas rendre un menu vide.
+  const periodYears = historique?.years ?? [new Date().getFullYear()]
 
   const firstName = employee?.prenom || commercial?.first_name || ''
   const lastName = employee?.nom || commercial?.last_name || ''
@@ -123,7 +143,10 @@ export function useComercialDetailPage() {
     statusFilters,
     handleStatusToggle,
     badges,
+    period,
+    periodYears,
     commercial,
+    updateTarget,
     employee,
     entreprise,
     analytics,

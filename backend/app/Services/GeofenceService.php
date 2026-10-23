@@ -11,9 +11,14 @@ use App\Models\User;
  *
  * La décision se prend **côté serveur** : le frontend ne fait que transmettre
  * la position fournie par le navigateur. Un rôle contraint
- * (`config('geofence.enforced_roles')`) dont `gps_bypass` est `false` doit
- * fournir une position précise (`accuracy <= max_accuracy_m`) tombant dans au
- * moins une zone active (`distance <= radius_m`, Haversine).
+ * (`config('geofence.enforced_roles')`) sans dérogation active doit fournir
+ * une position précise (`accuracy <= max_accuracy_m`) tombant dans au moins
+ * une zone active (`distance <= radius_m`, Haversine).
+ *
+ * La dérogation (`users.gps_bypass`) est **limitée à 24 h** : seule
+ * `User::isGpsBypassActive()` (drapeau posé ET échéance non atteinte) ouvre la
+ * connexion hors zone — une dérogation expirée bloque donc immédiatement, sans
+ * attendre le cron `gps:expire-bypass` qui remet le drapeau à `false`.
  */
 class GeofenceService
 {
@@ -56,8 +61,9 @@ class GeofenceService
             return ['allowed' => true];
         }
 
-        // Dérogation accordée par un gestionnaire : connexion de n'importe où.
-        if ($user->gps_bypass) {
+        // Dérogation accordée par un gestionnaire : connexion de n'importe où,
+        // **tant qu'elle n'a pas expiré** (24 h après l'activation).
+        if ($user->isGpsBypassActive()) {
             return ['allowed' => true];
         }
 

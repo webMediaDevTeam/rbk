@@ -267,9 +267,10 @@ class DashboardStatsTest extends TestCase
      */
     public function test_commercial_work_cards_expose_list_counts_bv_and_rappel(): void
     {
-        // Privilège de libération accordé : sans lui (§7.1), les « Double »
-        // détenus sortent de la liste — vérifié plus bas.
-        $commercial = $this->makeCommercial(['has_permission' => true]);
+        // Le privilège (§7.1) ne porte **que** sur la libération de la liste :
+        // un commercial **sans** `has_permission` compte bien le « Double »
+        // qu'il détient dans ses cartes (carte = lignes rendues).
+        $commercial = $this->makeCommercial();
         $employee = $this->makeEmployee($commercial);
 
         $enterprise = Enterprise::create(['name' => 'Ent. source', 'source' => 'Francais']);
@@ -340,16 +341,6 @@ class DashboardStatsTest extends TestCase
             ->assertJsonPath('data.stats.info', 0)
             ->assertJsonPath('data.stats.bv', 1)
             ->assertJsonPath('data.stats.rappel', 1);
-
-        // Sans le privilège (§7.1) : le « Double » détenu disparaît de la liste
-        // **et** des compteurs — la carte vaut toujours lignes rendues.
-        $commercial->update(['has_permission' => false]);
-
-        $this->getJson('/api/v1/dashboard/stats')
-            ->assertOk()
-            ->assertJsonPath('data.stats.prospects', 2)
-            ->assertJsonPath('data.stats.libre', 2)
-            ->assertJsonPath('data.stats.double', 0);
     }
 
     /**

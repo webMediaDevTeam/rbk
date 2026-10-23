@@ -2,6 +2,7 @@ import { Eye } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import ProspectStatus from '@/pages/shared/components/ProspectStatus/index.jsx'
 import UserAvatar from '@/pages/shared/components/UserAvatar/index.jsx'
+import RowLink from '@/pages/shared/components/RowLink/index.jsx'
 import { useHistoryTable } from './useHistoryTable.js'
 
 export default function HistoryTable(props) {
@@ -32,7 +33,16 @@ export default function HistoryTable(props) {
                 <div className="flex items-center gap-2.5">
                   <UserAvatar user={row.c} size="sm" />
                   <div>
-                    <span className="font-medium">{row.c.name}</span>
+                    {/* Nom = fiche client, même cible que l'œil « Voir » (la ligne
+                        entière navigue aussi, sans conflit : le lien stoppe la
+                        propagation) et rend l'ouverture en onglet possible. */}
+                    <RowLink
+                      to={`/prospects/${row.c.id}`}
+                      title={`Voir la fiche de ${row.c.name ?? 'ce prospect'}`}
+                      className="font-medium"
+                    >
+                      {row.c.name}
+                    </RowLink>
                     <p className="text-xs text-muted-foreground">{row.c.enterprise_name}</p>
                   </div>
                 </div>
